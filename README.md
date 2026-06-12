@@ -139,7 +139,7 @@ npm run build --prefix frontend
 
 仓库内置 GitHub Actions 工作流:
 
-- `.github/workflows/ci.yml`: 在 Pull Request、任意分支推送和手动触发时运行后端测试、前端构建和 API smoke test
+- `.github/workflows/ai-painting-ci.yml`: 在 Pull Request、任意分支推送和手动触发时运行后端测试、前端构建和 API smoke test
 - CI 还会校验 Docker Compose 配置并构建备用部署镜像
 - `.github/workflows/cd.yml`: 在 `main` 推送、`v*` tag 和手动触发时构建发布包, tag 触发时自动创建 GitHub Release
 
