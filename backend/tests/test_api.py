@@ -25,6 +25,54 @@ def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     assert body["metrics"]["total_ms"] >= body["metrics"]["planner_total_ms"]
 
 
+def test_latency_metrics_api_summarizes_voice_command_logs(client: TestClient) -> None:
+    from app.database import connect_db
+    from app.repositories import record_voice_log
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    latency_samples = [100, 200, 300, 400]
+
+    with connect_db(os.environ["AI_PAINTING_DB"]) as connection:
+        for index, total_ms in enumerate(latency_samples):
+            record_voice_log(
+                connection,
+                artwork_id=artwork_id,
+                raw_transcript=f"样本 {index}",
+                normalized_text=f"样本 {index}",
+                parse_result={},
+                confidence=0.9,
+                status="success" if index < 3 else "failed",
+                error_message=None if index < 3 else "测试失败样本",
+                latency={
+                    "rule_parse_ms": 10 + index,
+                    "planner_total_ms": total_ms / 2,
+                    "execute_ms": total_ms / 4,
+                    "total_ms": total_ms,
+                    "planner_source": "rules",
+                },
+            )
+
+    response = client.get(f"/api/metrics/latency?artwork_id={artwork_id}&limit=10")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["artwork_id"] == artwork_id
+    assert body["sample_count"] == 4
+    assert body["success_count"] == 3
+    assert body["failed_count"] == 1
+    assert body["planner_sources"] == {"rules": 4}
+    assert body["metrics"]["total_ms"]["average_ms"] == 250
+    assert body["metrics"]["total_ms"]["p50_ms"] == 200
+    assert body["metrics"]["total_ms"]["p75_ms"] == 300
+    assert body["metrics"]["total_ms"]["p95_ms"] == 400
+
+
+def test_latency_metrics_api_returns_404_for_missing_artwork(client: TestClient) -> None:
+    response = client.get("/api/metrics/latency?artwork_id=missing-artwork")
+
+    assert response.status_code == 404
+
+
 def test_voice_noise_command_requires_clarification_without_mimo(client: TestClient, monkeypatch) -> None:
     from app import main
 

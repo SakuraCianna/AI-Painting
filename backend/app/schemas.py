@@ -133,6 +133,28 @@ class CommandExecutionMetrics(BaseModel):
     planner_source: str | None = None
 
 
+class LatencyMetricStats(BaseModel):
+    count: int = 0
+    average_ms: float | None = None
+    p50_ms: float | None = None
+    p75_ms: float | None = None
+    p95_ms: float | None = None
+    max_ms: float | None = None
+
+
+class LatencyMetricsSummary(BaseModel):
+    artwork_id: str | None = None
+    limit: int = 200
+    sample_count: int = 0
+    success_count: int = 0
+    failed_count: int = 0
+    needs_confirmation_count: int = 0
+    canceled_count: int = 0
+    planner_sources: dict[str, int] = Field(default_factory=dict)
+    metrics: dict[str, LatencyMetricStats] = Field(default_factory=dict)
+    latest_created_at: str | None = None
+
+
 class CommandExecutionResponse(BaseModel):
     message: str
     plan: CommandPlan

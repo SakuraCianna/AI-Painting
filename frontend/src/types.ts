@@ -114,6 +114,28 @@ export interface CommandExecutionMetrics {
   planner_source?: string | null;
 }
 
+export interface LatencyMetricStats {
+  count: number;
+  average_ms?: number | null;
+  p50_ms?: number | null;
+  p75_ms?: number | null;
+  p95_ms?: number | null;
+  max_ms?: number | null;
+}
+
+export interface LatencyMetricsSummary {
+  artwork_id?: string | null;
+  limit: number;
+  sample_count: number;
+  success_count: number;
+  failed_count: number;
+  needs_confirmation_count: number;
+  canceled_count: number;
+  planner_sources: Record<string, number>;
+  metrics: Record<string, LatencyMetricStats>;
+  latest_created_at?: string | null;
+}
+
 export interface TtsSynthesisResponse {
   audio_data_url: string;
   provider: string;

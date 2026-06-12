@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from time import perf_counter
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlite3 import Connection
 
@@ -15,10 +15,12 @@ from .config import load_env_file
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
 from .llm_planner import LlmPlannerError, plan_with_mimo, should_use_llm_planner
+from .metrics import summarize_latency_rows
 from .repositories import (
     create_artwork,
     get_artwork,
     get_latest_voice_log_by_status,
+    list_voice_latency_logs,
     list_artworks,
     mark_voice_log_status,
     record_voice_log,
@@ -33,6 +35,7 @@ from .schemas import (
     CommandExecutionResponse,
     CommandParseRequest,
     CommandPlan,
+    LatencyMetricsSummary,
     OperationResponse,
     TtsSynthesisRequest,
     TtsSynthesisResponse,
@@ -226,6 +229,21 @@ async def api_synthesize_speech(request: TtsSynthesisRequest) -> TtsSynthesisRes
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TtsProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/metrics/latency", response_model=LatencyMetricsSummary)
+def api_latency_metrics(
+    artwork_id: str | None = None,
+    limit: int = Query(200, ge=1, le=1000),
+    db: Connection = Depends(get_db),
+) -> LatencyMetricsSummary:
+    if artwork_id:
+        try:
+            get_artwork(db, artwork_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    rows = list_voice_latency_logs(db, artwork_id, limit=limit)
+    return summarize_latency_rows(rows, artwork_id=artwork_id, limit=limit)
 
 
 @app.post("/api/artworks/{artwork_id}/commands", response_model=CommandExecutionResponse)

@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      AI_PAINTING_DB: /app/backend/data/ai_painting.sqlite3
+      AI_PAINTING_ASR_PROVIDERS: ${AI_PAINTING_ASR_PROVIDERS:-xiaomi,local}
+      AI_PAINTING_ASR_LANGUAGE: ${AI_PAINTING_ASR_LANGUAGE:-zh}
+      AI_PAINTING_LOCAL_ASR_URL: ${AI_PAINTING_LOCAL_ASR_URL:-}
+      AI_PAINTING_LOCAL_ASR_LABEL: ${AI_PAINTING_LOCAL_ASR_LABEL:-Qwen3-ASR 本地服务}
+      AI_PAINTING_ENABLE_LLM_PLANNER: ${AI_PAINTING_ENABLE_LLM_PLANNER:-false}
+      AI_PAINTING_MIMO_LLM_MODEL: ${AI_PAINTING_MIMO_LLM_MODEL:-mimo-v2.5-pro}
+      AI_PAINTING_MIMO_TTS_MODEL: ${AI_PAINTING_MIMO_TTS_MODEL:-mimo-v2-tts}
+      AI_PAINTING_MIMO_TTS_VOICE: ${AI_PAINTING_MIMO_TTS_VOICE:-default_zh}
+      AI_PAINTING_MIMO_TTS_STYLE: ${AI_PAINTING_MIMO_TTS_STYLE:-自然 清晰}
+      MIMO_API_KEY: ${MIMO_API_KEY:-}
+    ports:
+      - "${AI_PAINTING_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ai-painting-backend-data:/app/backend/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    depends_on:
+      - backend
+    ports:
+      - "${AI_PAINTING_FRONTEND_PORT:-5173}:80"
+    restart: unless-stopped
+
+volumes:
+  ai-painting-backend-data:
