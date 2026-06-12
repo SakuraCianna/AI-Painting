@@ -1,0 +1,18 @@
+{
+  "samples": [
+    {
+      "id": "circle-basic",
+      "audio_path": "samples/circle-basic.wav",
+      "expected_text": "画一个蓝色圆形在中间",
+      "language": "zh",
+      "notes": "示例清单不包含真实音频, 请把 samples 目录替换为本机录制样本"
+    },
+    {
+      "id": "house-complex",
+      "audio_path": "samples/house-complex.wav",
+      "expected_text": "画一个房子, 红色屋顶, 蓝色门, 两扇窗户",
+      "language": "zh",
+      "notes": "用于评测复杂绘图词汇识别"
+    }
+  ]
+}

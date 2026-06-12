@@ -129,9 +129,10 @@
 
 ### 阶段 1: 真实 ASR 与延迟评测
 
-- 建立 30 到 50 条中文音频样本。
+- 已新增 `backend\evaluate_asr_samples.py` 和 ASR 样本 manifest 脚手架。
+- 下一步建立 30 到 50 条中文音频样本。
 - 分别评测小米 ASR、本地 Qwen3-ASR、Web Speech API 的成功率和延迟。
-- 使用 `GET /api/metrics/latency` 汇总命令日志, 后续再补真实音频样本回放。
+- 使用 `GET /api/metrics/latency` 汇总命令日志, 并用 ASR 样本评测输出 CER、成功率和延迟。
 - 前端明确展示正在录音、正在识别、正在规划、正在执行。
 
 ### 阶段 2: 复杂规划器 2.0
