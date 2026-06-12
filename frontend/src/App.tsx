@@ -35,7 +35,6 @@ const OPERATION_LABELS: Record<string, string> = {
   scale_object: "缩放对象",
   scale_many: "批量缩放",
   delete_object: "删除对象",
-  delete_many: "批量删除",
   clear_canvas: "清空画布",
   save_artwork: "保存作品",
   export_artwork: "导出作品",
