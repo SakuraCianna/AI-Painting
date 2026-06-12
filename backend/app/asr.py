@@ -4,6 +4,7 @@ import asyncio
 import base64
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ XIAOMI_ASR_URL = "https://api.xiaomimimo.com/v1/chat/completions"
 XIAOMI_ASR_MODEL = "mimo-v2.5-asr"
 WEB_SPEECH_PROVIDER = "web_speech"
 DATA_URL_PATTERN = re.compile(r"^data:(?P<mime>[-\w.+/]+);base64,(?P<data>.+)$", re.DOTALL)
+LANGUAGE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,20}$")
 SUPPORTED_AUDIO_TYPES = {
     "audio/wav": ".wav",
     "audio/x-wav": ".wav",
@@ -75,6 +77,13 @@ def provider_label(provider: str) -> str:
     return PROVIDER_LABELS.get(provider, provider)
 
 
+def normalize_asr_language(language: str | None) -> str:
+    normalized = (language or os.getenv("AI_PAINTING_ASR_LANGUAGE", "zh")).strip()
+    if not LANGUAGE_PATTERN.fullmatch(normalized):
+        raise ValueError("ASR 语种只能包含字母、数字、下划线或连字符")
+    return normalized
+
+
 def get_asr_provider_chain() -> list[str]:
     providers = _read_csv_env("AI_PAINTING_ASR_PROVIDERS", "xiaomi,local")
     return [provider for provider in providers if provider in {"xiaomi", "local"}]
@@ -126,6 +135,7 @@ def parse_audio_data_url(audio_data_url: str) -> AudioPayload:
 
 
 def build_xiaomi_payload(audio_data_url: str, language: str, model: str | None = None) -> dict[str, Any]:
+    normalized_language = normalize_asr_language(language)
     return {
         "model": model or os.getenv("AI_PAINTING_XIAOMI_ASR_MODEL", XIAOMI_ASR_MODEL),
         "messages": [
@@ -142,7 +152,7 @@ def build_xiaomi_payload(audio_data_url: str, language: str, model: str | None =
             }
         ],
         "asr_options": {
-            "language": language or os.getenv("AI_PAINTING_ASR_LANGUAGE", "zh"),
+            "language": normalized_language,
         },
     }
 
@@ -241,10 +251,11 @@ async def _transcribe_with_local_command(audio: AudioPayload, language: str) -> 
         audio_path = Path(tmp_dir) / f"voice-command{audio.extension}"
         audio_path.write_bytes(audio.audio_bytes)
         command = command_template.format(audio=str(audio_path), language=language, workdir=tmp_dir)
+        command_args = command if os.name == "nt" else shlex.split(command)
         process = await asyncio.to_thread(
             subprocess.run,
-            command,
-            shell=True,
+            command_args,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -266,6 +277,7 @@ async def _transcribe_with_local(audio: AudioPayload, language: str) -> str:
 
 async def transcribe_audio_data_url(audio_data_url: str, language: str = "zh") -> AsrTranscriptionResponse:
     request_started_at = perf_counter()
+    normalized_language = normalize_asr_language(language)
     audio = parse_audio_data_url(audio_data_url)
     attempts: list[AsrProviderAttempt] = []
 
@@ -279,9 +291,9 @@ async def transcribe_audio_data_url(audio_data_url: str, language: str = "zh") -
         started_at = perf_counter()
         try:
             if provider == "xiaomi":
-                text = await _transcribe_with_xiaomi(audio, language)
+                text = await _transcribe_with_xiaomi(audio, normalized_language)
             elif provider == "local":
-                text = await _transcribe_with_local(audio, language)
+                text = await _transcribe_with_local(audio, normalized_language)
             else:
                 continue
         except (AsrProviderError, httpx.HTTPError, subprocess.SubprocessError, TimeoutError) as exc:
