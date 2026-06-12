@@ -1,14 +1,13 @@
 import { Icon } from "@iconify/react";
 import categoryRounded from "@iconify-icons/material-symbols/category-rounded";
 import downloadRounded from "@iconify-icons/material-symbols/download-rounded";
-import gestureRounded from "@iconify-icons/material-symbols/gesture-rounded";
 import graphicEqRounded from "@iconify-icons/material-symbols/graphic-eq-rounded";
 import micRounded from "@iconify-icons/material-symbols/mic-rounded";
 import pauseCircleRounded from "@iconify-icons/material-symbols/pause-circle-rounded";
 import radioButtonUnchecked from "@iconify-icons/material-symbols/radio-button-unchecked";
 import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createArtwork, submitVoiceCommand } from "./api";
+import { createArtwork, submitVoiceCommand, synthesizeSpeech } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
@@ -58,6 +57,7 @@ export default function App() {
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
   const hasCreatedArtworkRef = useRef(false);
+  const feedbackAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (hasCreatedArtworkRef.current) {
@@ -72,6 +72,18 @@ export default function App() {
       .catch((error: unknown) => {
         setStatusMessage(error instanceof Error ? error.message : "创建画布失败");
       });
+  }, []);
+
+  const playFeedback = useCallback(async (message: string) => {
+    try {
+      const speech = await synthesizeSpeech(message);
+      feedbackAudioRef.current?.pause();
+      const audio = new Audio(speech.audio_data_url);
+      feedbackAudioRef.current = audio;
+      await audio.play();
+    } catch {
+      feedbackAudioRef.current = null;
+    }
   }, []);
 
   const handleFinalTranscript = useCallback(
@@ -102,12 +114,7 @@ export default function App() {
           ...items
         ].slice(0, 12));
         setStatusMessage(response.message);
-        if ("speechSynthesis" in window) {
-          const utterance = new SpeechSynthesisUtterance(response.message);
-          utterance.lang = "zh-CN";
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(utterance);
-        }
+        void playFeedback(response.message);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "语音指令执行失败";
         setLatestPlan(null);
@@ -121,11 +128,12 @@ export default function App() {
           ...items
         ].slice(0, 12));
         setStatusMessage(message);
+        void playFeedback(message);
       } finally {
         setIsBusy(false);
       }
     },
-    [artwork, isBusy]
+    [artwork, isBusy, playFeedback]
   );
 
   const voice = useVoiceRecognition({ onFinalTranscript: handleFinalTranscript });
@@ -139,89 +147,80 @@ export default function App() {
   const liveTranscript = voice.interimTranscript || voice.lastFinalTranscript;
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
-  const listeningLabel = voice.isListening ? voice.providerLabel : "待机";
+  const listeningLabel = voice.isListening ? voice.providerLabel : `待机: ${voice.providerLabel}`;
 
   return (
     <main className="workspace">
       <section className="stage-panel">
-        <header className="topbar" aria-live="polite">
-          <div className="product-lockup">
-            <div className="app-mark" aria-hidden="true">
-              <Icon icon={gestureRounded} width={22} height={22} />
-            </div>
-            <div>
-              <p className="eyebrow">Voice Canvas</p>
-              <h1>{artwork?.title ?? "语音绘图作品"}</h1>
-            </div>
-          </div>
-          <div className="status-cluster">
-            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>
-              <Icon icon={voice.isListening ? graphicEqRounded : radioButtonUnchecked} width={16} height={16} />
-              {listeningLabel}
-            </span>
-            <span className="status-pill">
-              <Icon icon={categoryRounded} width={16} height={16} />
-              {objectCountText}
-            </span>
-            <div className="toolbar" aria-label="语音画布工具">
-              <button
-                aria-label="开始监听"
-                className="icon-button"
-                data-tooltip="开始监听"
-                disabled={!voice.isSupported || voice.isListening}
-                onClick={voice.start}
-                title="开始监听"
-                type="button"
-              >
-                <Icon icon={micRounded} width={20} height={20} />
-              </button>
-              <button
-                aria-label="暂停监听"
-                className="icon-button"
-                data-tooltip="暂停监听"
-                disabled={!voice.isListening}
-                onClick={voice.stop}
-                title="暂停监听"
-                type="button"
-              >
-                <Icon icon={pauseCircleRounded} width={20} height={20} />
-              </button>
-              <button
-                aria-label="重新监听"
-                className="icon-button"
-                data-tooltip="重新监听"
-                disabled={!voice.isSupported}
-                onClick={() => {
-                  voice.stop();
-                  window.setTimeout(() => voice.start(), 160);
-                }}
-                title="重新监听"
-                type="button"
-              >
-                <Icon icon={refreshRounded} width={20} height={20} />
-              </button>
-              <button
-                aria-label="导出 PNG"
-                className="icon-button"
-                data-tooltip="导出 PNG"
-                disabled={!artwork}
-                onClick={handleManualExport}
-                title="导出 PNG"
-                type="button"
-              >
-                <Icon icon={downloadRounded} width={20} height={20} />
-              </button>
-            </div>
-          </div>
-        </header>
-
         <CanvasStage artwork={artwork} />
       </section>
 
       <aside className="side-panel" aria-live="polite">
         <div className="panel-heading">
-          <p className="eyebrow">Workspace</p>
-          <h2>控制台</h2>
+          <div>
+            <p className="eyebrow">Workspace</p>
+            <h2>控制台</h2>
+          </div>
+          <div className="toolbar" aria-label="语音画布工具">
+            <button
+              aria-label="开始监听"
+              className="icon-button"
+              data-tooltip="开始监听"
+              disabled={!voice.isSupported || voice.isListening}
+              onClick={voice.start}
+              title="开始监听"
+              type="button"
+            >
+              <Icon icon={micRounded} width={20} height={20} />
+            </button>
+            <button
+              aria-label="暂停监听"
+              className="icon-button"
+              data-tooltip="暂停监听"
+              disabled={!voice.isListening}
+              onClick={voice.stop}
+              title="暂停监听"
+              type="button"
+            >
+              <Icon icon={pauseCircleRounded} width={20} height={20} />
+            </button>
+            <button
+              aria-label="重新监听"
+              className="icon-button"
+              data-tooltip="重新监听"
+              disabled={!voice.isSupported}
+              onClick={() => {
+                voice.stop();
+                window.setTimeout(() => voice.start(), 160);
+              }}
+              title="重新监听"
+              type="button"
+            >
+              <Icon icon={refreshRounded} width={20} height={20} />
+            </button>
+            <button
+              aria-label="导出 PNG"
+              className="icon-button"
+              data-tooltip="导出 PNG"
+              disabled={!artwork}
+              onClick={handleManualExport}
+              title="导出 PNG"
+              type="button"
+            >
+              <Icon icon={downloadRounded} width={20} height={20} />
+            </button>
+          </div>
+        </div>
+
+        <div className="side-status-row">
+          <span className={voice.isListening ? "status-pill listening" : "status-pill"}>
+            <Icon icon={voice.isListening ? graphicEqRounded : radioButtonUnchecked} width={16} height={16} />
+            {listeningLabel}
+          </span>
+          <span className="status-pill">
+            <Icon icon={categoryRounded} width={16} height={16} />
+            {objectCountText}
+          </span>
         </div>
 
         <div className="voice-card status-card">

@@ -57,9 +57,9 @@ interface UseVoiceRecognitionOptions {
 }
 
 const TARGET_SAMPLE_RATE = 16000;
-const SPEECH_THRESHOLD = 0.018;
+const SPEECH_THRESHOLD = 0.045;
 const SILENCE_MS = 850;
-const MIN_SPEECH_MS = 320;
+const MIN_SPEECH_MS = 480;
 const MAX_SPEECH_MS = 8000;
 
 function mergeChunks(chunks: Float32Array[]): Float32Array {
@@ -149,7 +149,7 @@ function getAudioErrorMessage(error: unknown): string {
 export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOptions) {
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const shouldListenRef = useRef(true);
+  const shouldListenRef = useRef(false);
   const providerRef = useRef<VoiceProvider>("none");
   const isUploadingRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -167,7 +167,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   const [lastFinalTranscript, setLastFinalTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<VoiceProvider>("none");
-  const [providerLabel, setProviderLabel] = useState("后端 ASR");
+  const [providerLabel, setProviderLabel] = useState("小米 MiMo ASR");
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript;
@@ -417,13 +417,32 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   }, [stopBackendAudio]);
 
   useEffect(() => {
-    void startPreferredRecognition();
+    fetchAsrProviders()
+      .then((status) => {
+        const primaryProvider = status.primary_provider ?? status.providers[0];
+        if (primaryProvider) {
+          setProviderLabel(status.provider_labels[primaryProvider] ?? "后端 ASR");
+          setIsSupported(true);
+          return;
+        }
+        const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+        setProviderLabel("Web Speech API");
+        setIsSupported(Boolean(Recognition));
+        if (!Recognition) {
+          setError("当前没有可用的语音识别");
+        }
+      })
+      .catch(() => {
+        const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+        setProviderLabel("Web Speech API");
+        setIsSupported(Boolean(Recognition));
+      });
     return () => {
       shouldListenRef.current = false;
       recognitionRef.current?.stop();
       stopBackendAudio();
     };
-  }, [startPreferredRecognition, stopBackendAudio]);
+  }, [stopBackendAudio]);
 
   return {
     isSupported,
