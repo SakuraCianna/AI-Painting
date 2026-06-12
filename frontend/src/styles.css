@@ -382,6 +382,48 @@ h2 {
   line-height: 1.5;
 }
 
+.metrics-card {
+  padding: 10px 12px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metrics-grid span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-container);
+}
+
+.metrics-grid small {
+  color: var(--on-surface-variant);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.metrics-grid strong {
+  overflow: hidden;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metrics-note {
+  margin: 8px 0 0;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .timeline {
   flex: 1;
   min-height: 0;

@@ -16,6 +16,10 @@ def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     body = command_response.json()
     assert body["artwork"]["objects"][0]["type"] == "circle"
     assert body["artwork"]["objects"][0]["style"]["fill"] == "#2563eb"
+    assert body["metrics"]["planner_source"] == body["plan"]["planner_source"]
+    assert body["metrics"]["planner_total_ms"] >= 0
+    assert body["metrics"]["execute_ms"] >= 0
+    assert body["metrics"]["total_ms"] >= body["metrics"]["planner_total_ms"]
 
 
 def test_voice_noise_command_requires_clarification_without_mimo(client: TestClient, monkeypatch) -> None:
@@ -171,3 +175,5 @@ def test_complex_scene_requires_clarification_without_partial_execution(client: 
     assert body["plan"]["operations"] == []
     assert body["plan"]["planner_source"] in {"rules", "rules_fallback"}
     assert body["artwork"]["objects"] == []
+    assert body["metrics"]["execute_ms"] == 0
+    assert body["metrics"]["planner_total_ms"] >= 0

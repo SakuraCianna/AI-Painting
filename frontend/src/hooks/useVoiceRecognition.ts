@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchAsrProviders, transcribeAudio } from "../api";
+import type { AsrTranscriptionMetrics } from "../types";
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
@@ -53,7 +54,7 @@ declare global {
 }
 
 interface UseVoiceRecognitionOptions {
-  onFinalTranscript: (text: string) => void;
+  onFinalTranscript: (text: string, asrMetrics: AsrTranscriptionMetrics | null) => void;
 }
 
 const TARGET_SAMPLE_RATE = 16000;
@@ -168,6 +169,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<VoiceProvider>("none");
   const [providerLabel, setProviderLabel] = useState("小米 MiMo ASR");
+  const [lastAsrMetrics, setLastAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript;
@@ -235,7 +237,8 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         if (result.isFinal) {
           setLastFinalTranscript(transcript);
           setInterimTranscript("");
-          onFinalTranscriptRef.current(transcript);
+          setLastAsrMetrics(null);
+          onFinalTranscriptRef.current(transcript, null);
         } else {
           interim += transcript;
         }
@@ -275,9 +278,10 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
           throw new Error("ASR 没有返回文本");
         }
         setProviderLabel(response.provider_label);
+        setLastAsrMetrics(response.metrics);
         setLastFinalTranscript(text);
         setInterimTranscript("");
-        onFinalTranscriptRef.current(text);
+        onFinalTranscriptRef.current(text, response.metrics);
       } catch (backendError) {
         setError(`后端 ASR 不可用, 已切换到 Web Speech API: ${getAudioErrorMessage(backendError)}`);
         stopBackendAudio();
@@ -452,6 +456,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     error,
     provider,
     providerLabel,
+    lastAsrMetrics,
     start,
     stop,
   };

@@ -76,3 +76,4 @@ def test_transcribe_endpoint_returns_text(client: TestClient, monkeypatch) -> No
     assert response.status_code == 200
     assert response.json()["text"] == "画一个蓝色圆形"
     assert response.json()["provider"] == "xiaomi"
+    assert response.json()["metrics"]["attempt_count"] == 0

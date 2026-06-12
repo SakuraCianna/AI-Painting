@@ -92,6 +92,14 @@ class AsrProviderAttempt(BaseModel):
     latency_ms: float | None = None
 
 
+class AsrTranscriptionMetrics(BaseModel):
+    total_ms: float | None = None
+    audio_bytes: int | None = None
+    attempt_count: int = 0
+    successful_provider: str | None = None
+    fallback_count: int = 0
+
+
 class AsrProvidersResponse(BaseModel):
     providers: list[str] = Field(default_factory=list)
     provider_labels: dict[str, str] = Field(default_factory=dict)
@@ -104,6 +112,7 @@ class AsrTranscriptionResponse(BaseModel):
     provider: str
     provider_label: str
     attempts: list[AsrProviderAttempt] = Field(default_factory=list)
+    metrics: AsrTranscriptionMetrics = Field(default_factory=AsrTranscriptionMetrics)
 
 
 class TtsSynthesisRequest(BaseModel):
@@ -119,10 +128,23 @@ class TtsSynthesisResponse(BaseModel):
     format: str = "wav"
 
 
+class CommandExecutionMetrics(BaseModel):
+    rule_parse_ms: float | None = None
+    llm_planner_ms: float | None = None
+    planner_total_ms: float | None = None
+    execute_ms: float | None = None
+    total_ms: float | None = None
+    llm_attempted: bool = False
+    llm_succeeded: bool = False
+    fallback_used: bool = False
+    planner_source: str | None = None
+
+
 class CommandExecutionResponse(BaseModel):
     message: str
     plan: CommandPlan
     artwork: ArtworkResponse | None = None
+    metrics: CommandExecutionMetrics = Field(default_factory=CommandExecutionMetrics)
 
 
 class OperationResponse(BaseModel):

@@ -72,9 +72,26 @@ def test_build_command_plan_skips_mimo_for_voice_noise(monkeypatch) -> None:
     monkeypatch.setenv("MIMO_API_KEY", "test-key")
     monkeypatch.setattr(main, "plan_with_mimo", fake_plan_with_mimo)
 
-    plan = asyncio.run(main.build_command_plan("然后。"))
+    result = asyncio.run(main.build_command_plan_with_metrics("然后。"))
 
     assert called is False
-    assert plan.requires_confirmation is True
-    assert plan.operations == []
-    assert plan.planner_source == "rules"
+    assert result.plan.requires_confirmation is True
+    assert result.plan.operations == []
+    assert result.plan.planner_source == "rules"
+    assert result.metrics.llm_attempted is False
+    assert result.metrics.planner_source == "rules"
+
+
+def test_build_command_plan_metrics_track_rule_parser(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+    monkeypatch.setenv("AI_PAINTING_ENABLE_LLM_PLANNER", "false")
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个蓝色圆形"))
+
+    assert result.plan.planner_source == "rules"
+    assert result.metrics.planner_source == "rules"
+    assert result.metrics.rule_parse_ms is not None
+    assert result.metrics.planner_total_ms is not None
+    assert result.metrics.llm_attempted is False

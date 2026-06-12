@@ -101,6 +101,39 @@
   - progress.md
   - findings.md
 
+### 阶段 D：CI/CD 与 ASR/规划延迟指标
+- **状态：** complete
+- **开始时间：** 2026-06-12
+- 执行的操作：
+  - 创建 GitHub Actions CI 工作流，覆盖后端测试、前端构建和 API health smoke test。
+  - 创建 GitHub Actions CD 工作流，覆盖 main/tag 发布包构建、产物上传和 tag 自动 GitHub Release。
+  - 创建 PR 模板、Bug 报告模板和 `.github` 协作说明。
+  - 调整 CI 为任意分支 push 都自动运行检查。
+  - 为 ASR 响应增加总耗时、音频大小、Provider 尝试次数和成功 Provider 指标。
+  - 为命令执行响应增加规则解析、MiMo 规划、执行、总耗时、LLM 命中和兜底状态指标。
+  - 将命令延迟指标写入 `voice_command_logs.latency_json`。
+  - 前端控制台新增最近一次 ASR、规划、执行和端到端延迟指标卡片。
+  - 同步 README 和设计文档。
+- 创建/修改的文件：
+  - .github/workflows/ci.yml
+  - .github/workflows/cd.yml
+  - .github/PULL_REQUEST_TEMPLATE.md
+  - .github/ISSUE_TEMPLATE/bug_report.md
+  - .github/ISSUE_TEMPLATE/config.yml
+  - .github/README.md
+  - backend/app/schemas.py
+  - backend/app/asr.py
+  - backend/app/main.py
+  - backend/tests/test_api.py
+  - backend/tests/test_asr.py
+  - backend/tests/test_llm_planner.py
+  - frontend/src/types.ts
+  - frontend/src/hooks/useVoiceRecognition.ts
+  - frontend/src/App.tsx
+  - frontend/src/styles.css
+  - README.md
+  - 设计文档.md
+
 ## 测试结果
 | 测试 | 输入 | 预期结果 | 实际结果 | 状态 |
 |------|------|---------|---------|------|
@@ -110,6 +143,9 @@
 | pytest | backend/tests | 后端测试通过 | 34 passed | passed |
 | npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
 | pytest | backend/tests | 后端测试通过 | 37 passed | passed |
+| npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
+| git diff --check | CI/CD 与指标变更 | 无空白错误 | 通过, 仅有 Git 提示 LF 将被 CRLF 替换 | passed |
+| pytest | backend/tests | 后端测试通过 | 38 passed | passed |
 | npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
 
 ## 错误日志
@@ -121,8 +157,8 @@
 ## 五问重启检查
 | 问题 | 答案 |
 |------|------|
-| 我在哪里？ | 阶段 C 完成 |
-| 我要去哪里？ | 下一轮可进入复合撤销、ASR/规划延迟指标或生图素材层 |
+| 我在哪里？ | 阶段 D 完成 |
+| 我要去哪里？ | 下一轮可进入复合撤销/分组或延迟指标统计看板 |
 | 目标是什么？ | 明确 AI Painting 的长期产品目标和技术演进路径 |
 | 我学到了什么？ | 见 findings.md |
 | 我做了什么？ | 见上方记录 |

@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from .schemas import AsrProviderAttempt, AsrProvidersResponse, AsrTranscriptionResponse
+from .schemas import AsrProviderAttempt, AsrProvidersResponse, AsrTranscriptionMetrics, AsrTranscriptionResponse
 
 
 XIAOMI_ASR_URL = "https://api.xiaomimimo.com/v1/chat/completions"
@@ -263,6 +263,7 @@ async def _transcribe_with_local(audio: AudioPayload, language: str) -> str:
 
 
 async def transcribe_audio_data_url(audio_data_url: str, language: str = "zh") -> AsrTranscriptionResponse:
+    request_started_at = perf_counter()
     audio = parse_audio_data_url(audio_data_url)
     attempts: list[AsrProviderAttempt] = []
 
@@ -305,6 +306,13 @@ async def transcribe_audio_data_url(audio_data_url: str, language: str = "zh") -
             provider=provider,
             provider_label=provider_label(provider),
             attempts=attempts,
+            metrics=AsrTranscriptionMetrics(
+                total_ms=round((perf_counter() - request_started_at) * 1000, 2),
+                audio_bytes=len(audio.audio_bytes),
+                attempt_count=len(attempts),
+                successful_provider=provider,
+                fallback_count=max(0, len(attempts) - 1),
+            ),
         )
 
     raise AsrProvidersUnavailable(attempts)
