@@ -306,8 +306,8 @@ AI Painting 的长期目标不是做一个普通文生图工具, 而是做一款
 
 ### P2
 
-- 增加图片对象和素材库
-- 增加生图 Provider 抽象
+- 增加图片对象和素材库 - 已完成 `image` 对象第一版
+- 增加生图 Provider 抽象 - 已完成 `placeholder/http` 第一版
 - 增加导出 SVG 和项目 JSON
 - 调研画布底座迁移成本
 

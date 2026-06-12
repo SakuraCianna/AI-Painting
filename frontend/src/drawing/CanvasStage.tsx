@@ -196,6 +196,22 @@ function renderObject(object: DrawingObject) {
     );
   }
 
+  if (object.type === "image") {
+    const href = typeof object.geometry.src === "string" ? object.geometry.src : "";
+    return (
+      <image
+        key={object.id}
+        href={href}
+        x={numeric(object.geometry.x, 256)}
+        y={numeric(object.geometry.y, 128)}
+        width={numeric(object.geometry.width, 512)}
+        height={numeric(object.geometry.height, 512)}
+        opacity={opacity}
+        preserveAspectRatio={String(object.geometry.preserveAspectRatio ?? "xMidYMid slice")}
+      />
+    );
+  }
+
   return (
     <text
       key={object.id}

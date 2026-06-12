@@ -96,6 +96,13 @@ SEMANTIC_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("小路", "road"),
     ("多边形", "polygon"),
     ("星星", "star"),
+    ("眼睛", "portrait.eye"),
+    ("头发", "portrait.hair"),
+    ("嘴巴", "portrait.mouth"),
+    ("鼻子", "portrait.nose"),
+    ("头像", "portrait"),
+    ("肖像", "portrait"),
+    ("人物", "portrait"),
 )
 SCENE_OBJECT_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("小屋", "house"),
@@ -336,6 +343,14 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
         colors = _find_all_colors(text)
         if colors and many_hint:
             target["color"] = colors[0][1]
+    if "左边" in text or "左侧" in text:
+        target["position"] = "leftmost"
+    elif "右边" in text or "右侧" in text:
+        target["position"] = "rightmost"
+    elif "上方" in text or "顶部" in text:
+        target["position"] = "topmost"
+    elif "下方" in text or "底部" in text:
+        target["position"] = "bottommost"
     return target
 
 
@@ -700,6 +715,129 @@ def _sun_cloud_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     )
 
 
+def _portrait_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    skin = "#fde68a" if "暖" in normalized_text else "#f8d7b3"
+    hair = "#111827" if "黑" in normalized_text else "#7c2d12"
+    operations = [
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "ellipse", "name": "肩膀", "layer_id": "middle", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.shoulder"], "geometry": {"cx": 512, "cy": 600, "rx": 220, "ry": 92}, "style": {"fill": "#dbeafe", "stroke": "#1e3a8a", "strokeWidth": 3, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "rect", "name": "脖子", "layer_id": "middle", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.neck"], "geometry": {"x": 462, "y": 455, "width": 100, "height": 112, "radius": 24}, "style": {"fill": skin, "stroke": "#7c2d12", "strokeWidth": 2, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "ellipse", "name": "脸部", "layer_id": "middle", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.face"], "geometry": {"cx": 512, "cy": 340, "rx": 132, "ry": 162}, "style": {"fill": skin, "stroke": "#7c2d12", "strokeWidth": 3, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "path", "name": "头发", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.hair"], "geometry": {"commands": [{"cmd": "M", "x": 380, "y": 330}, {"cmd": "C", "x1": 395, "y1": 160, "x2": 620, "y2": 125, "x": 650, "y": 320}, {"cmd": "C", "x1": 610, "y1": 245, "x2": 540, "y2": 235, "x": 505, "y": 245}, {"cmd": "C", "x1": 455, "y1": 240, "x2": 420, "y2": 270, "x": 380, "y": 330}, {"cmd": "Z"}]}, "style": {"fill": hair, "stroke": "#111827", "strokeWidth": 3, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "circle", "name": "左眼", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.eye"], "geometry": {"cx": 462, "cy": 340, "radius": 12}, "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 2, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "circle", "name": "右眼", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.eye"], "geometry": {"cx": 562, "cy": 340, "radius": 12}, "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 2, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "path", "name": "鼻子", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.nose"], "geometry": {"commands": [{"cmd": "M", "x": 512, "y": 358}, {"cmd": "C", "x1": 500, "y1": 392, "x2": 535, "y2": 398, "x": 516, "y": 418}]}, "style": {"fill": "transparent", "stroke": "#92400e", "strokeWidth": 4, "opacity": 1}}},
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={"object": {"type": "path", "name": "嘴巴", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.mouth"], "geometry": {"commands": [{"cmd": "M", "x": 462, "y": 435}, {"cmd": "C", "x1": 492, "y1": 468, "x2": 542, "y2": 468, "x": 572, "y": 435}]}, "style": {"fill": "transparent", "stroke": "#dc2626", "strokeWidth": 5, "opacity": 1}}},
+        ),
+    ]
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="compose_scene",
+            summary="绘制一个可继续编辑的人物头像",
+            steps=[
+                ScenePlanStep(step_id="portrait-base", title="绘制头像轮廓", intent="add_group", operation_indexes=[0, 1, 2, 3]),
+                ScenePlanStep(step_id="portrait-details", title="绘制五官细节", intent="add_details", operation_indexes=[4, 5, 6, 7]),
+            ],
+            expected_object_count=len(operations),
+        ),
+        confidence=0.86,
+    )
+
+
+def _generated_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    prompt = normalized_text
+    for prefix in ("生成一张", "生成一个", "生成", "生图", "画一张"):
+        prompt = prompt.replace(prefix, "")
+    prompt = prompt.strip() or normalized_text
+    width, height = (1024, 768) if "背景" in normalized_text else (512, 512)
+    layer_id = "background" if "背景" in normalized_text else "middle"
+    payload = {
+        "prompt": prompt,
+        "width": width,
+        "height": height,
+        "x": 0 if layer_id == "background" else 256,
+        "y": 0 if layer_id == "background" else 128,
+        "name": "生成背景" if layer_id == "background" else "生成图片",
+        "layer_id": layer_id,
+        "semantic_tags": ["generated.image", "image"],
+    }
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=[OperationRequest(operation_type="generate_image_asset", payload=payload)],
+        scene_plan=ScenePlan(
+            intent="generate_asset",
+            summary="调用文字转图片 Provider 生成图片对象",
+            steps=[ScenePlanStep(step_id="generate-image", title="生成图片素材", intent="generate_asset", operation_indexes=[0])],
+            expected_object_count=1,
+        ),
+        confidence=0.78,
+        explanation="准备生成图片素材并作为可编辑图片对象加入画布",
+    )
+
+
+def _cozy_cabin_scene_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    operations = [
+        OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "浅蓝天空", "layer_id": "background", "group_id": "cabin-scene", "semantic_tags": ["scene", "sky"], "geometry": {"x": 0, "y": 0, "width": 1024, "height": 768, "radius": 0}, "style": {"fill": "#dbeafe", "stroke": "#dbeafe", "strokeWidth": 0, "opacity": 1}}}),
+        OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "太阳", "layer_id": "background", "group_id": "cabin-scene", "semantic_tags": ["sun", "shape.circle"], "geometry": {"cx": 820, "cy": 130, "radius": 58}, "style": {"fill": "#facc15", "stroke": "#f97316", "strokeWidth": 3, "opacity": 1}}}),
+        OperationRequest(operation_type="add_object", payload={"object": {"type": "path", "name": "云朵1", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["cloud", "path"], "geometry": {"commands": _path_commands_for_text("云", 260, 140)}, "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 3, "opacity": 1}}}),
+        OperationRequest(operation_type="add_object", payload={"object": {"type": "path", "name": "云朵2", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["cloud", "path"], "geometry": {"commands": _path_commands_for_text("云", 520, 105)}, "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 3, "opacity": 1}}}),
+        OperationRequest(operation_type="add_object", payload={"object": {"type": "path", "name": "弯曲小路", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["road", "path"], "geometry": {"commands": _path_commands_for_text("小路", 690, 610)}, "style": {"fill": "transparent", "stroke": "#a16207", "strokeWidth": 18, "opacity": 1}}}),
+    ]
+    operations.extend(_house_plan(raw_text, normalized_text).operations)
+    operations.extend(
+        [
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "左树树干", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.trunk"], "geometry": {"x": 180, "y": 450, "width": 38, "height": 120, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "左树树冠", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.crown"], "geometry": {"cx": 200, "cy": 405, "radius": 76}, "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 3, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "远处小树树干", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.trunk"], "geometry": {"x": 105, "y": 485, "width": 28, "height": 86, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "远处小树树冠", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.crown"], "geometry": {"cx": 120, "cy": 452, "radius": 54}, "style": {"fill": "#22c55e", "stroke": "#15803d", "strokeWidth": 3, "opacity": 1}}}),
+        ]
+    )
+    for operation in operations[5:10]:
+        operation.payload["object"]["group_id"] = "cabin-scene"
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="compose_scene",
+            summary="绘制包含天空、云朵、小屋、树和小路的温馨场景",
+            steps=[
+                ScenePlanStep(step_id="scene-background", title="铺设天空和云朵", intent="add_background", operation_indexes=[0, 1, 2, 3]),
+                ScenePlanStep(step_id="scene-house", title="绘制小屋主体和门窗", intent="add_group", operation_indexes=[5, 6, 7, 8, 9]),
+                ScenePlanStep(step_id="scene-details", title="添加树和小路", intent="add_details", operation_indexes=[4, 10, 11, 12, 13]),
+            ],
+            expected_object_count=len(operations),
+        ),
+        confidence=0.84,
+    )
+
+
 def parse_command(text: str) -> CommandPlan:
     normalized = normalize_text(text)
     operations: list[OperationRequest] = []
@@ -737,8 +875,14 @@ def parse_command(text: str) -> CommandPlan:
                 payload={"width": width, "height": height, "background": _find_color(normalized, "#ffffff")},
             )
         )
+    elif any(keyword in normalized for keyword in ("生成", "生图")) and any(keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材")):
+        return _generated_image_plan(text, normalized)
+    elif any(keyword in normalized for keyword in ("人物肖像", "肖像", "头像")) and any(keyword in normalized for keyword in ("画", "创建", "添加")):
+        return _portrait_plan(text, normalized)
     elif "太阳" in normalized and "云" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _sun_cloud_plan(text, normalized)
+    elif any(keyword in normalized for keyword in ("温馨的小屋", "温馨小屋")) and "树" in normalized and ("路" in normalized or "小路" in normalized):
+        return _cozy_cabin_scene_plan(text, normalized)
     elif _needs_scene_planner(normalized):
         return _scene_clarification_plan(text, normalized)
     elif "房子" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
@@ -774,15 +918,20 @@ def parse_command(text: str) -> CommandPlan:
             dx = amount if "右" in normalized else -amount if "左" in normalized else 0
             dy = amount if "下" in normalized else -amount if "上" in normalized else 0
             operations.append(OperationRequest(operation_type="move_many", payload={"target": {"selector": "all"}, "dx": dx, "dy": dy}))
+    elif any(keyword in normalized for keyword in ("改成", "换成")) and (replacement_shape := _find_shape(normalized)) and "画" not in normalized:
+        target = _target_selector(normalized, include_color=False)
+        operation_type = "replace_shape_many" if _is_many_target(target) else "replace_shape"
+        operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "shape": replacement_shape}))
     elif any(keyword in normalized for keyword in ("改成", "换成", "加粗")):
         style: dict[str, Any] = {}
         if any(color in normalized for color in COLOR_MAP):
             style["fill"] = _find_color(normalized)
         if "加粗" in normalized:
             style["strokeWidth"] = 5
-        target = _target_selector(normalized)
-        operation_type = "set_style_many" if _is_many_target(target) else "set_style"
-        operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "style": style}))
+        if style:
+            target = _target_selector(normalized)
+            operation_type = "set_style_many" if _is_many_target(target) else "set_style"
+            operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "style": style}))
     elif "移动" in normalized or "往" in normalized or "向" in normalized:
         amount = _extract_movement_amount(normalized)
         dx = amount if "右" in normalized else -amount if "左" in normalized else 0
@@ -790,9 +939,9 @@ def parse_command(text: str) -> CommandPlan:
         target = _target_selector(normalized)
         operation_type = "move_many" if _is_many_target(target) else "move_object"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "dx": dx, "dy": dy}))
-    elif "放大" in normalized or "缩小" in normalized or "变大" in normalized or "变小" in normalized:
+    elif "放大" in normalized or "缩小" in normalized or "变大" in normalized or "变小" in normalized or "改大" in normalized or "改小" in normalized:
         factor = 2 if "一倍" in normalized or "两倍" in normalized else 1.2
-        if "缩小" in normalized or "变小" in normalized:
+        if "缩小" in normalized or "变小" in normalized or "改小" in normalized:
             factor = 0.5 if "一半" in normalized or "一倍" in normalized else 0.8
         target = _target_selector(normalized)
         operation_type = "scale_many" if _is_many_target(target) else "scale_object"

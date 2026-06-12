@@ -175,6 +175,16 @@ def test_object_metadata_and_semantic_batch_scale(client: TestClient) -> None:
     assert all(obj["geometry"]["width"] == 76.8 for obj in scaled_windows)
     assert all(obj["geometry"]["height"] == 76.8 for obj in scaled_windows)
 
+    replace_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把窗户改成圆形"})
+    assert replace_response.status_code == 200
+    replaced_windows = [obj for obj in replace_response.json()["artwork"]["objects"] if "house.window" in obj["semantic_tags"]]
+    assert [obj["type"] for obj in replaced_windows] == ["circle", "circle"]
+
+    undo_replace_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_replace_response.status_code == 200
+    restored_windows = [obj for obj in undo_replace_response.json()["artwork"]["objects"] if "house.window" in obj["semantic_tags"]]
+    assert [obj["type"] for obj in restored_windows] == ["rect", "rect"]
+
 
 def test_rename_latest_and_move_layer(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
@@ -222,12 +232,35 @@ def test_complex_scene_requires_clarification_without_partial_execution(client: 
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["plan"]["requires_confirmation"] is True
-    assert body["plan"]["operations"] == []
-    assert body["plan"]["planner_source"] in {"rules", "rules_fallback"}
-    assert body["artwork"]["objects"] == []
-    assert body["metrics"]["execute_ms"] == 0
+    assert body["plan"]["requires_confirmation"] is False
+    assert len(body["plan"]["operations"]) == 14
+    assert len(body["artwork"]["objects"]) == 14
+    assert body["plan"]["planner_source"] == "rules"
     assert body["metrics"]["planner_total_ms"] >= 0
+
+
+def test_text_to_image_placeholder_generates_editable_image_object(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "生成一张人物肖像画"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "add_object"
+    image_object = body["artwork"]["objects"][0]
+    assert image_object["type"] == "image"
+    assert image_object["geometry"]["src"].startswith("data:image/svg+xml;base64,")
+    assert image_object["geometry"]["provider"] == "placeholder"
+
+
+def test_left_window_spatial_selector_scales_only_one_window(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子 红色屋顶 蓝色门 两扇窗户"})
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把左边窗户改大一点"})
+
+    assert response.status_code == 200
+    windows = [obj for obj in response.json()["artwork"]["objects"] if "house.window" in obj["semantic_tags"]]
+    assert [obj["geometry"]["width"] for obj in windows] == [76.8, 64]
 
 
 def test_clear_canvas_confirmation_executes_and_preserves_undo_redo_history(client: TestClient) -> None:

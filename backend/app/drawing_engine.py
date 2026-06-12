@@ -116,6 +116,75 @@ def _scale_geometry(geometry: dict[str, Any], factor: float) -> dict[str, Any]:
     return scaled
 
 
+def _bounds_for_object(object_type: str, geometry: dict[str, Any]) -> tuple[float, float, float, float]:
+    if object_type == "rect" or "width" in geometry or "height" in geometry:
+        x = float(geometry.get("x", 0))
+        y = float(geometry.get("y", 0))
+        return x, y, x + float(geometry.get("width", 100)), y + float(geometry.get("height", 100))
+    if object_type == "circle":
+        radius = float(geometry.get("radius", 50))
+        cx = float(geometry.get("cx", 0))
+        cy = float(geometry.get("cy", 0))
+        return cx - radius, cy - radius, cx + radius, cy + radius
+    if object_type == "ellipse":
+        rx = float(geometry.get("rx", 60))
+        ry = float(geometry.get("ry", 40))
+        cx = float(geometry.get("cx", 0))
+        cy = float(geometry.get("cy", 0))
+        return cx - rx, cy - ry, cx + rx, cy + ry
+    if object_type == "triangle":
+        size = float(geometry.get("size", 100))
+        x = float(geometry.get("x", 0))
+        y = float(geometry.get("y", 0))
+        height = size * 0.86
+        return x - size / 2, y - height / 2, x + size / 2, y + height / 2
+    if object_type == "star":
+        radius = float(geometry.get("outerRadius", 50))
+        cx = float(geometry.get("cx", 0))
+        cy = float(geometry.get("cy", 0))
+        return cx - radius, cy - radius, cx + radius, cy + radius
+    coordinates: list[dict[str, Any]] = []
+    if isinstance(geometry.get("points"), list):
+        coordinates.extend(item for item in geometry["points"] if isinstance(item, dict))
+    if isinstance(geometry.get("commands"), list):
+        coordinates.extend(item for item in geometry["commands"] if isinstance(item, dict))
+    xs, ys = _collect_coordinates(coordinates)
+    if xs and ys:
+        return min(xs), min(ys), max(xs), max(ys)
+    return 462, 334, 562, 434
+
+
+def _geometry_for_shape(shape: str, bounds: tuple[float, float, float, float]) -> dict[str, Any]:
+    left, top, right, bottom = bounds
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    cx = left + width / 2
+    cy = top + height / 2
+    if shape == "circle":
+        return {"cx": round(cx, 2), "cy": round(cy, 2), "radius": round(min(width, height) / 2, 2)}
+    if shape == "ellipse":
+        return {"cx": round(cx, 2), "cy": round(cy, 2), "rx": round(width / 2, 2), "ry": round(height / 2, 2)}
+    if shape == "triangle":
+        return {"x": round(cx, 2), "y": round(cy, 2), "size": round(min(width, height) * 1.1, 2)}
+    if shape == "star":
+        outer_radius = round(min(width, height) / 2, 2)
+        return {"cx": round(cx, 2), "cy": round(cy, 2), "outerRadius": outer_radius, "innerRadius": round(outer_radius * 0.45, 2), "points": 5}
+    return {"x": round(left, 2), "y": round(top, 2), "width": round(width, 2), "height": round(height, 2), "radius": 8}
+
+
+def _replace_object_shape(
+    connection: sqlite3.Connection,
+    artwork_id: str,
+    object_id: str,
+    new_type: str,
+    *,
+    commit: bool,
+) -> None:
+    current = _target_object(connection, artwork_id, {"object_id": object_id})
+    geometry = _geometry_for_shape(new_type, _bounds_for_object(current.type, current.geometry))
+    update_object(connection, artwork_id, object_id, object_type=new_type, geometry=geometry, replace_geometry=True, commit=commit)
+
+
 def _metadata_snapshot(obj) -> dict[str, Any]:
     return {
         "name": obj.name,
@@ -253,6 +322,26 @@ def apply_operation(
         for obj in targets:
             update_object(connection, artwork_id, obj.id, geometry=_scale_geometry(obj.geometry, factor), commit=commit)
         message = f"已缩放 {len(targets)} 个对象"
+    elif operation_type == "replace_shape":
+        object_id = _target_object_id(connection, artwork_id, payload.get("target"))
+        current = _target_object(connection, artwork_id, {"object_id": object_id})
+        new_type = str(payload.get("shape") or payload.get("type"))
+        inverse_payload = {"target": {"object_id": object_id}, "shape": current.type, "geometry": current.geometry}
+        payload["target"] = {"object_id": object_id}
+        _replace_object_shape(connection, artwork_id, object_id, new_type, commit=commit)
+        message = "已替换对象形状"
+    elif operation_type == "replace_shape_many":
+        targets = find_objects(connection, artwork_id, payload.get("target"))
+        if not targets:
+            raise KeyError("No matching drawing objects exist")
+        new_type = str(payload.get("shape") or payload.get("type"))
+        payload["target"] = {"object_ids": [obj.id for obj in targets]}
+        inverse_payload = {
+            "items": [{"object_id": obj.id, "shape": obj.type, "geometry": obj.geometry} for obj in targets]
+        }
+        for obj in targets:
+            _replace_object_shape(connection, artwork_id, obj.id, new_type, commit=commit)
+        message = f"已替换 {len(targets)} 个对象形状"
     elif operation_type == "delete_object":
         object_id = _target_object_id(connection, artwork_id, payload.get("target"))
         removed = delete_object(connection, artwork_id, object_id, commit=commit)
@@ -333,6 +422,18 @@ def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> Artw
         apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload=inverse_payload), record=False)
     elif operation_type == "scale_many":
         apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False)
+    elif operation_type == "replace_shape":
+        update_object(
+            connection,
+            artwork_id,
+            inverse_payload["target"]["object_id"],
+            object_type=inverse_payload["shape"],
+            geometry=inverse_payload["geometry"],
+            replace_geometry=True,
+        )
+    elif operation_type == "replace_shape_many":
+        for item in inverse_payload["items"]:
+            update_object(connection, artwork_id, item["object_id"], object_type=item["shape"], geometry=item["geometry"], replace_geometry=True)
     elif operation_type == "delete_object":
         add_object(connection, artwork_id, inverse_payload["object"])
     elif operation_type == "clear_canvas":

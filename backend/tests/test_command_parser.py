@@ -91,7 +91,7 @@ def test_parse_sun_and_cloud_as_two_step_plan() -> None:
 
 
 def test_parse_multi_object_scene_requires_planner_clarification() -> None:
-    plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
+    plan = parse_command("把画面改成夜晚 保留房子的形状 给窗户加暖黄色灯光")
     assert plan.requires_confirmation is True
     assert plan.operations == []
     assert plan.confidence == 0.42
@@ -144,6 +144,45 @@ def test_parse_semantic_scale_many() -> None:
     assert plan.operations[0].operation_type == "scale_many"
     assert plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
     assert plan.operations[0].payload["factor"] == 1.2
+
+
+def test_parse_portrait_scene_as_vector_group() -> None:
+    plan = parse_command("画一个人物肖像")
+    assert len(plan.operations) == 8
+    assert [operation.operation_type for operation in plan.operations] == ["add_object"] * 8
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.expected_object_count == 8
+    assert any("portrait.eye" in operation.payload["object"]["semantic_tags"] for operation in plan.operations)
+
+
+def test_parse_text_to_image_asset_generation() -> None:
+    plan = parse_command("生成一张人物肖像画")
+    assert plan.operations[0].operation_type == "generate_image_asset"
+    assert plan.operations[0].payload["width"] == 512
+    assert plan.operations[0].payload["semantic_tags"] == ["generated.image", "image"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "generate_asset"
+
+
+def test_parse_window_shape_replacement_and_spatial_scale() -> None:
+    replace_plan = parse_command("把窗户改成圆形")
+    assert replace_plan.operations[0].operation_type == "replace_shape_many"
+    assert replace_plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
+    assert replace_plan.operations[0].payload["shape"] == "circle"
+
+    scale_plan = parse_command("把左边窗户改大一点")
+    assert scale_plan.operations[0].operation_type == "scale_many"
+    assert scale_plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
+    assert scale_plan.operations[0].payload["target"]["position"] == "leftmost"
+
+
+def test_parse_cozy_cabin_scene_as_executable_plan() -> None:
+    plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
+    assert plan.requires_confirmation is False
+    assert len(plan.operations) == 14
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.expected_object_count == 14
+    assert [operation.operation_type for operation in plan.operations] == ["add_object"] * 14
 
 
 def test_parse_layer_move_many() -> None:
