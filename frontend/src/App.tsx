@@ -7,11 +7,11 @@ import pauseCircleRounded from "@iconify-icons/material-symbols/pause-circle-rou
 import radioButtonUnchecked from "@iconify-icons/material-symbols/radio-button-unchecked";
 import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createArtwork, submitVoiceCommand, synthesizeSpeech } from "./api";
+import { createArtwork, fetchLatencyMetrics, submitVoiceCommand, synthesizeSpeech } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
-import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan } from "./types";
+import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan, LatencyMetricsSummary } from "./types";
 import { exportSvgAsPng } from "./utils/exportPng";
 
 interface TimelineItem {
@@ -94,6 +94,10 @@ function getEndToEndLatency(commandMetrics: CommandExecutionMetrics | null, asrM
   return commandMs + (asrMs ?? 0);
 }
 
+function getHistoricalLatency(summary: LatencyMetricsSummary | null, percentileName: "p75_ms" | "p95_ms"): number | null {
+  return summary?.metrics.total_ms?.[percentileName] ?? null;
+}
+
 export default function App() {
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
@@ -102,6 +106,7 @@ export default function App() {
   const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
   const [latestCommandMetrics, setLatestCommandMetrics] = useState<CommandExecutionMetrics | null>(null);
   const [latestAsrMetrics, setLatestAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
+  const [latencySummary, setLatencySummary] = useState<LatencyMetricsSummary | null>(null);
   const hasCreatedArtworkRef = useRef(false);
   const feedbackAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -119,6 +124,15 @@ export default function App() {
         setStatusMessage(error instanceof Error ? error.message : "创建画布失败");
       });
   }, []);
+
+  useEffect(() => {
+    if (!artwork) {
+      return;
+    }
+    fetchLatencyMetrics(artwork.id)
+      .then(setLatencySummary)
+      .catch(() => setLatencySummary(null));
+  }, [artwork?.id]);
 
   const playFeedback = useCallback(async (message: string) => {
     try {
@@ -148,6 +162,7 @@ export default function App() {
         if (response.artwork) {
           setArtwork(response.artwork);
         }
+        void fetchLatencyMetrics(artwork.id).then(setLatencySummary).catch(() => setLatencySummary(null));
         const containsExport = response.plan.operations.some((operation) => operation.operation_type === "export_artwork");
         if (containsExport) {
           await exportSvgAsPng("voice-canvas-svg", `${response.artwork?.title ?? artwork.title}.png`);
@@ -202,6 +217,8 @@ export default function App() {
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
   const listeningLabel = voice.isListening ? voice.providerLabel : `待机: ${voice.providerLabel}`;
   const endToEndLatency = getEndToEndLatency(latestCommandMetrics, latestAsrMetrics);
+  const historicalP75 = getHistoricalLatency(latencySummary, "p75_ms");
+  const historicalP95 = getHistoricalLatency(latencySummary, "p95_ms");
 
   return (
     <main className="workspace">
@@ -344,6 +361,14 @@ export default function App() {
             <span>
               <small>端到端</small>
               <strong>{formatLatency(endToEndLatency)}</strong>
+            </span>
+            <span>
+              <small>历史 P75</small>
+              <strong>{formatLatency(historicalP75)}</strong>
+            </span>
+            <span>
+              <small>历史 P95</small>
+              <strong>{formatLatency(historicalP95)}</strong>
             </span>
           </div>
           <p className="metrics-note">

@@ -1,9 +1,9 @@
-name: CI
+name: AI Painting CI
 
-on:
-  pull_request:
-  push:
-  workflow_dispatch:
+"on":
+  pull_request: {}
+  push: {}
+  workflow_dispatch: {}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -93,3 +93,16 @@ jobs:
           kill "$api_pid" || true
           wait "$api_pid" || true
           exit 1
+
+  docker-backup-build:
+    name: Docker backup build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose config
+        run: docker compose -f docker-compose.yml config
+
+      - name: Build Docker backup images
+        run: docker compose -f docker-compose.yml build

@@ -140,6 +140,7 @@ npm run build --prefix frontend
 仓库内置 GitHub Actions 工作流:
 
 - `.github/workflows/ci.yml`: 在 Pull Request、任意分支推送和手动触发时运行后端测试、前端构建和 API smoke test
+- CI 还会校验 Docker Compose 配置并构建备用部署镜像
 - `.github/workflows/cd.yml`: 在 `main` 推送、`v*` tag 和手动触发时构建发布包, tag 触发时自动创建 GitHub Release
 
 CI 使用 Python `3.12.10` 和 Node.js `22`。CD 产物包含后端源码、前端 `dist`、项目文档和 `快速启动.bat`。
@@ -225,6 +226,8 @@ $env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio
 
 本地 Qwen3-ASR 备用服务详见 [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md)。
 
+Docker 备用部署方案详见 [docs/docker-deploy.md](docs/docker-deploy.md)。本机开发仍默认使用 `快速启动.bat`, 不要求 Docker。
+
 语音识别优先级:
 
 1. 后端小米 MiMo ASR
@@ -239,6 +242,7 @@ $env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio
 2. 命令执行响应会返回规则解析、MiMo 规划、绘图执行和命令总耗时
 3. 前端控制台会显示最近一次 ASR、规划、执行和端到端耗时
 4. 后端会把命令延迟指标写入 `voice_command_logs.latency_json`, 方便后续做统计看板
+5. `GET /api/metrics/latency` 会返回最近语音命令的平均值、P50、P75、P95 和最大耗时
 
 复杂任务规划:
 
@@ -262,6 +266,7 @@ $env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio
 │   │   ├── repositories.py
 │   │   └── schemas.py
 │   ├── local_asr_qwen3.py
+│   ├── Dockerfile
 │   ├── requirements-local-asr.txt
 │   ├── requirements.txt
 │   └── tests
@@ -274,6 +279,8 @@ $env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio
 │   │   ├── api.ts
 │   │   ├── main.tsx
 │   │   └── types.ts
+│   ├── Dockerfile
+│   ├── nginx.conf
 │   └── package.json
 ├── docs
 │   ├── archive
@@ -282,6 +289,7 @@ $env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio
 │   └── superpowers
 ├── README.md
 ├── ROADMAP.md
+├── docker-compose.yml
 ├── 快速启动.bat
 ├── 设计文档.md
 └── 需求文档.md

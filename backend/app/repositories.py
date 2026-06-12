@@ -447,3 +447,26 @@ def record_voice_log(
         ),
     )
     connection.commit()
+
+
+def list_voice_latency_logs(connection: sqlite3.Connection, artwork_id: str | None = None, *, limit: int = 200) -> list[sqlite3.Row]:
+    if artwork_id:
+        return connection.execute(
+            """
+            SELECT status, latency_json, created_at
+            FROM voice_command_logs
+            WHERE artwork_id = ?
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT ?
+            """,
+            (artwork_id, limit),
+        ).fetchall()
+    return connection.execute(
+        """
+        SELECT status, latency_json, created_at
+        FROM voice_command_logs
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
