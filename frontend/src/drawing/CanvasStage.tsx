@@ -4,7 +4,7 @@ interface CanvasStageProps {
   artwork: Artwork | null;
 }
 
-function numeric(value: number | string | undefined, fallback: number): number {
+function numeric(value: unknown, fallback: number): number {
   if (typeof value === "number") {
     return value;
   }
@@ -27,6 +27,58 @@ function starPoints(cx: number, cy: number, outerRadius: number, innerRadius: nu
 function trianglePoints(x: number, y: number, size: number): string {
   const height = Math.round(size * 0.86);
   return `${x},${y - height / 2} ${x - size / 2},${y + height / 2} ${x + size / 2},${y + height / 2}`;
+}
+
+function pointList(value: unknown, fallback: string): string {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return value
+    .map((point) => {
+      if (!point || typeof point !== "object") {
+        return null;
+      }
+      const source = point as Record<string, number | string>;
+      return `${numeric(source.x, 0)},${numeric(source.y, 0)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+function commandValue(command: Record<string, number | string>, key: string): string {
+  return String(numeric(command[key], 0));
+}
+
+function pathData(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim() !== "") {
+    return value;
+  }
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return "";
+      }
+      const command = item as Record<string, number | string>;
+      const cmd = String(command.cmd ?? "").toUpperCase();
+      if (cmd === "M" || cmd === "L") {
+        return `${cmd} ${commandValue(command, "x")} ${commandValue(command, "y")}`;
+      }
+      if (cmd === "C") {
+        return `C ${commandValue(command, "x1")} ${commandValue(command, "y1")} ${commandValue(command, "x2")} ${commandValue(command, "y2")} ${commandValue(command, "x")} ${commandValue(command, "y")}`;
+      }
+      if (cmd === "Q") {
+        return `Q ${commandValue(command, "x1")} ${commandValue(command, "y1")} ${commandValue(command, "x")} ${commandValue(command, "y")}`;
+      }
+      if (cmd === "Z") {
+        return "Z";
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join(" ");
 }
 
 function renderObject(object: DrawingObject) {
@@ -115,6 +167,31 @@ function renderObject(object: DrawingObject) {
           numeric(object.geometry.points, 5)
         )}
         {...common}
+      />
+    );
+  }
+
+  if (object.type === "polygon") {
+    return (
+      <polygon
+        key={object.id}
+        points={pointList(object.geometry.points, "512,284 607,353 571,465 453,465 417,353")}
+        {...common}
+      />
+    );
+  }
+
+  if (object.type === "path" || object.type === "bezier") {
+    return (
+      <path
+        key={object.id}
+        d={pathData(object.geometry.commands ?? object.geometry.d, "M 332 424 C 432 254 597 534 692 344")}
+        fill={object.type === "bezier" ? "none" : fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     );
   }

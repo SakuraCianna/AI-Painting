@@ -6,6 +6,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
+DRAWING_OBJECT_COLUMNS: dict[str, str] = {
+    "layer_id": "TEXT NOT NULL DEFAULT 'base'",
+    "group_id": "TEXT",
+    "semantic_tags_json": "TEXT NOT NULL DEFAULT '[]'",
+    "transform_json": "TEXT NOT NULL DEFAULT '{}'",
+}
+
+
 def get_database_path() -> str:
     return os.environ.get("AI_PAINTING_DB", str(Path("backend") / "data" / "ai_painting.sqlite3"))
 
@@ -46,6 +54,10 @@ def init_db(path: str | None = None) -> None:
                 artwork_id TEXT NOT NULL REFERENCES artworks(id) ON DELETE CASCADE,
                 type TEXT NOT NULL,
                 name TEXT,
+                layer_id TEXT NOT NULL DEFAULT 'base',
+                group_id TEXT,
+                semantic_tags_json TEXT NOT NULL DEFAULT '[]',
+                transform_json TEXT NOT NULL DEFAULT '{}',
                 geometry_json TEXT NOT NULL,
                 style_json TEXT NOT NULL,
                 z_index INTEGER NOT NULL,
@@ -87,6 +99,25 @@ def init_db(path: str | None = None) -> None:
                 ON voice_command_logs (artwork_id, created_at);
             """
         )
+        _ensure_drawing_object_columns(connection)
+        connection.executescript(
+            """
+            CREATE INDEX IF NOT EXISTS idx_drawing_objects_artwork_layer
+                ON drawing_objects (artwork_id, layer_id, z_index);
+            CREATE INDEX IF NOT EXISTS idx_drawing_objects_artwork_group
+                ON drawing_objects (artwork_id, group_id, z_index);
+            """
+        )
+
+
+def _ensure_drawing_object_columns(connection: sqlite3.Connection) -> None:
+    existing_columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(drawing_objects)").fetchall()
+    }
+    for column_name, column_definition in DRAWING_OBJECT_COLUMNS.items():
+        if column_name not in existing_columns:
+            connection.execute(f"ALTER TABLE drawing_objects ADD COLUMN {column_name} {column_definition}")
 
 
 def get_db() -> Iterator[sqlite3.Connection]:

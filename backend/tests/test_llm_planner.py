@@ -33,9 +33,11 @@ def test_build_command_plan_uses_mimo_for_unclear_complex_command(monkeypatch) -
     monkeypatch.setenv("MIMO_API_KEY", "test-key")
     monkeypatch.setattr(main, "plan_with_mimo", fake_plan_with_mimo)
 
-    plan = asyncio.run(main.build_command_plan("画一个太阳然后在下面加一片云"))
+    plan = asyncio.run(main.build_command_plan("画一个森林场景然后加一些层次"))
 
     assert plan.operations[0].payload["object"]["name"] == "太阳"
+    assert plan.planner_source == "mimo"
+    assert plan.explanation == "准备执行 1 个绘图步骤"
 
 
 def test_build_command_plan_falls_back_when_mimo_fails(monkeypatch) -> None:
@@ -48,7 +50,9 @@ def test_build_command_plan_falls_back_when_mimo_fails(monkeypatch) -> None:
     monkeypatch.setenv("MIMO_API_KEY", "test-key")
     monkeypatch.setattr(main, "plan_with_mimo", fake_plan_with_mimo)
 
-    plan = asyncio.run(main.build_command_plan("画一个太阳然后在下面加一片云"))
+    plan = asyncio.run(main.build_command_plan("画一个森林场景然后加一些层次"))
 
     assert plan.requires_confirmation is True
     assert plan.operations == []
+    assert plan.planner_source == "rules_fallback"
+    assert plan.explanation is not None

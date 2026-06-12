@@ -12,6 +12,10 @@ class DrawingObject(BaseModel):
     geometry: dict[str, Any] = Field(default_factory=dict)
     style: dict[str, Any] = Field(default_factory=dict)
     z_index: int = 0
+    layer_id: str = "base"
+    group_id: str | None = None
+    semantic_tags: list[str] = Field(default_factory=list)
+    transform: dict[str, Any] = Field(default_factory=dict)
 
 
 class ArtworkCreateRequest(BaseModel):
@@ -44,14 +48,32 @@ class OperationRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ScenePlanStep(BaseModel):
+    step_id: str
+    title: str
+    intent: str
+    target: dict[str, Any] = Field(default_factory=dict)
+    operation_indexes: list[int] = Field(default_factory=list)
+
+
+class ScenePlan(BaseModel):
+    intent: str = "edit_scene"
+    summary: str = ""
+    steps: list[ScenePlanStep] = Field(default_factory=list)
+    expected_object_count: int | None = None
+
+
 class CommandPlan(BaseModel):
     raw_text: str
     normalized_text: str
     operations: list[OperationRequest]
+    scene_plan: ScenePlan | None = None
     confidence: float = 0.85
     requires_confirmation: bool = False
     clarification_question: str | None = None
     risk_level: str = "low"
+    explanation: str | None = None
+    planner_source: str = "rules"
 
 
 class CommandParseRequest(BaseModel):

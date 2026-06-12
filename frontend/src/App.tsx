@@ -26,26 +26,50 @@ const OPERATION_LABELS: Record<string, string> = {
   add_object: "添加对象",
   set_style: "修改样式",
   set_style_many: "批量改色",
+  set_metadata: "更新对象信息",
+  set_metadata_many: "批量更新对象信息",
   move_object: "移动对象",
   move_many: "批量移动",
   scale_object: "缩放对象",
+  scale_many: "批量缩放",
   delete_object: "删除对象",
+  delete_many: "批量删除",
+  clear_canvas: "清空画布",
   save_artwork: "保存作品",
   export_artwork: "导出作品",
   undo: "撤销",
   redo: "恢复"
 };
 
+const PLANNER_SOURCE_LABELS: Record<string, string> = {
+  rules: "规则解析",
+  mimo: "MiMo 规划",
+  rules_fallback: "规则兜底"
+};
+
 function getOperationLabel(operationType: string): string {
   return OPERATION_LABELS[operationType] ?? operationType;
+}
+
+function getPlannerSourceLabel(source: string | undefined): string {
+  if (!source) {
+    return "本地解析";
+  }
+  return PLANNER_SOURCE_LABELS[source] ?? source;
 }
 
 function getPlanSummary(plan: CommandPlan | null): string {
   if (!plan) {
     return "未生成计划";
   }
+  if (plan.explanation) {
+    return plan.explanation;
+  }
   if (plan.clarification_question) {
     return plan.clarification_question;
+  }
+  if (plan.scene_plan?.summary) {
+    return plan.scene_plan.summary;
   }
   return plan.operations.map((operation) => getOperationLabel(operation.operation_type)).join(" -> ");
 }
@@ -234,19 +258,38 @@ export default function App() {
           <p className="transcript">{liveTranscript || "等待语音输入"}</p>
         </div>
 
-        <div className="voice-card plan-card">
+        <div className={latestPlan?.requires_confirmation ? "voice-card plan-card needs-confirmation" : "voice-card plan-card"}>
           <p className="panel-label">执行计划</p>
           {latestPlan ? (
             <>
               <div className="plan-meta">
                 <span>{latestPlan.operations.length} 个步骤</span>
                 <span>置信度 {planConfidenceText}</span>
+                <span>{getPlannerSourceLabel(latestPlan.planner_source)}</span>
+                {latestPlan.requires_confirmation ? <span className="warning-chip">需确认</span> : null}
               </div>
-              <ol className="plan-list">
-                {latestPlan.operations.map((operation, index) => (
-                  <li key={`${operation.operation_type}-${index}`}>{getOperationLabel(operation.operation_type)}</li>
-                ))}
-              </ol>
+              <p className="plan-summary">{getPlanSummary(latestPlan)}</p>
+              {latestPlan.scene_plan?.steps.length ? (
+                <ol className="scene-step-list">
+                  {latestPlan.scene_plan.steps.slice(0, 4).map((step) => (
+                    <li key={step.step_id}>
+                      <strong>{step.title}</strong>
+                      <span>{step.intent}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : latestPlan.operations.length ? (
+                <ol className="plan-list">
+                  {latestPlan.operations.map((operation, index) => (
+                    <li key={`${operation.operation_type}-${index}`}>{getOperationLabel(operation.operation_type)}</li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="empty-text">暂无可执行步骤</p>
+              )}
+              {latestPlan.requires_confirmation && latestPlan.clarification_question && latestPlan.clarification_question !== getPlanSummary(latestPlan) ? (
+                <p className="clarification-note">{latestPlan.clarification_question}</p>
+              ) : null}
             </>
           ) : (
             <p className="empty-text">等待指令计划</p>

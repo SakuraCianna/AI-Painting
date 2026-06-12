@@ -1,8 +1,19 @@
+export type DrawingGeometryValue =
+  | number
+  | string
+  | Array<Record<string, number | string>>
+  | Record<string, number | string>
+  | undefined;
+
 export interface DrawingObject {
   id: string;
-  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text";
+  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text" | "polygon" | "path" | "bezier";
   name?: string | null;
-  geometry: Record<string, number | string>;
+  layer_id: string;
+  group_id?: string | null;
+  semantic_tags: string[];
+  transform: Record<string, unknown>;
+  geometry: Record<string, DrawingGeometryValue>;
   style: {
     fill?: string;
     stroke?: string;
@@ -28,14 +39,32 @@ export interface OperationPlanItem {
   payload: Record<string, unknown>;
 }
 
+export interface ScenePlanStep {
+  step_id: string;
+  title: string;
+  intent: string;
+  target: Record<string, unknown>;
+  operation_indexes: number[];
+}
+
+export interface ScenePlan {
+  intent: string;
+  summary: string;
+  steps: ScenePlanStep[];
+  expected_object_count?: number | null;
+}
+
 export interface CommandPlan {
   raw_text: string;
   normalized_text: string;
   operations: OperationPlanItem[];
+  scene_plan?: ScenePlan | null;
   confidence: number;
   requires_confirmation: boolean;
   clarification_question?: string | null;
   risk_level: string;
+  explanation?: string | null;
+  planner_source: string;
 }
 
 export interface CommandExecutionResponse {

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "canvas-horizontal-white",
+    "text": "新建一张横向白色画布",
+    "tier": "rules",
+    "expected_operation_types": ["create_canvas"]
+  },
+  {
+    "id": "scene-house-basic",
+    "text": "画一个房子 红色屋顶 蓝色门 两扇窗户",
+    "tier": "rules",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "triangle", "rect", "rect", "rect"]
+  },
+  {
+    "id": "repeated-stars-shrinking",
+    "text": "画三颗黄色星星 从左到右变小",
+    "tier": "rules",
+    "expected_operation_types": ["add_object", "add_object", "add_object"],
+    "expected_object_types": ["star", "star", "star"]
+  },
+  {
+    "id": "batch-recolor-move",
+    "text": "把所有蓝色图形改成绿色 然后整体向上移动一点",
+    "tier": "rules",
+    "expected_operation_types": ["set_style_many", "move_many"]
+  },
+  {
+    "id": "named-layered-sun",
+    "text": "画一个黄色圆形 命名为太阳 放到前景层",
+    "tier": "rules",
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["circle"],
+    "expected_semantic_tag": "sun",
+    "expected_layer_id": "foreground"
+  },
+  {
+    "id": "semantic-window-scale",
+    "text": "把房子的窗户都变大",
+    "tier": "rules",
+    "expected_operation_types": ["scale_many"],
+    "expected_target_semantic_tag": "house.window"
+  },
+  {
+    "id": "foreground-layer-move",
+    "text": "把前景层所有对象向右移动一点",
+    "tier": "rules",
+    "expected_operation_types": ["move_many"],
+    "expected_target_layer_id": "foreground"
+  },
+  {
+    "id": "polygon-pentagon",
+    "text": "画一个绿色五边形在左边",
+    "tier": "rules",
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["polygon"]
+  },
+  {
+    "id": "path-road",
+    "text": "画一条弯曲小路",
+    "tier": "rules",
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["path"],
+    "expected_semantic_tag": "road"
+  },
+  {
+    "id": "bezier-curve",
+    "text": "画一条棕色贝塞尔曲线在中间",
+    "tier": "rules",
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["bezier"]
+  },
+  {
+    "id": "cloud-path",
+    "text": "画一朵云在顶部",
+    "tier": "rules",
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["path"],
+    "expected_semantic_tag": "cloud"
+  },
+  {
+    "id": "sun-cloud-two-step",
+    "text": "画一个太阳然后在下面加一片云",
+    "tier": "rules",
+    "expected_operation_types": ["add_object", "add_object"],
+    "expected_object_types": ["circle", "path"]
+  },
+  {
+    "id": "scene-cabin-road-clouds",
+    "text": "画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云",
+    "tier": "planner_expected",
+    "reason": "需要多主体构图和数量约束, 交给 ScenePlan 和 LLM 规划器后续评测"
+  },
+  {
+    "id": "night-scene-refine",
+    "text": "把画面改成夜晚 保留房子的形状 给窗户加暖黄色灯光",
+    "tier": "planner_expected",
+    "reason": "需要跨对象语义保持、全局风格变更和局部样式修改"
+  }
+]
