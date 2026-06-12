@@ -1,3 +1,12 @@
+import { Icon } from "@iconify/react";
+import categoryRounded from "@iconify-icons/material-symbols/category-rounded";
+import downloadRounded from "@iconify-icons/material-symbols/download-rounded";
+import gestureRounded from "@iconify-icons/material-symbols/gesture-rounded";
+import graphicEqRounded from "@iconify-icons/material-symbols/graphic-eq-rounded";
+import micRounded from "@iconify-icons/material-symbols/mic-rounded";
+import pauseCircleRounded from "@iconify-icons/material-symbols/pause-circle-rounded";
+import radioButtonUnchecked from "@iconify-icons/material-symbols/radio-button-unchecked";
+import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArtwork, submitVoiceCommand } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
@@ -120,6 +129,13 @@ export default function App() {
   );
 
   const voice = useVoiceRecognition({ onFinalTranscript: handleFinalTranscript });
+  const handleManualExport = useCallback(async () => {
+    if (!artwork) {
+      return;
+    }
+    await exportSvgAsPng("voice-canvas-svg", `${artwork.title}.png`);
+    setStatusMessage("已导出 PNG");
+  }, [artwork]);
   const liveTranscript = voice.interimTranscript || voice.lastFinalTranscript;
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
@@ -131,7 +147,7 @@ export default function App() {
         <header className="topbar" aria-live="polite">
           <div className="product-lockup">
             <div className="app-mark" aria-hidden="true">
-              <span />
+              <Icon icon={gestureRounded} width={22} height={22} />
             </div>
             <div>
               <p className="eyebrow">Voice Canvas</p>
@@ -139,8 +155,63 @@ export default function App() {
             </div>
           </div>
           <div className="status-cluster">
-            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>{listeningLabel}</span>
-            <span className="status-pill">{objectCountText}</span>
+            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>
+              <Icon icon={voice.isListening ? graphicEqRounded : radioButtonUnchecked} width={16} height={16} />
+              {listeningLabel}
+            </span>
+            <span className="status-pill">
+              <Icon icon={categoryRounded} width={16} height={16} />
+              {objectCountText}
+            </span>
+            <div className="toolbar" aria-label="语音画布工具">
+              <button
+                aria-label="开始监听"
+                className="icon-button"
+                data-tooltip="开始监听"
+                disabled={!voice.isSupported || voice.isListening}
+                onClick={voice.start}
+                title="开始监听"
+                type="button"
+              >
+                <Icon icon={micRounded} width={20} height={20} />
+              </button>
+              <button
+                aria-label="暂停监听"
+                className="icon-button"
+                data-tooltip="暂停监听"
+                disabled={!voice.isListening}
+                onClick={voice.stop}
+                title="暂停监听"
+                type="button"
+              >
+                <Icon icon={pauseCircleRounded} width={20} height={20} />
+              </button>
+              <button
+                aria-label="重新监听"
+                className="icon-button"
+                data-tooltip="重新监听"
+                disabled={!voice.isSupported}
+                onClick={() => {
+                  voice.stop();
+                  window.setTimeout(() => voice.start(), 160);
+                }}
+                title="重新监听"
+                type="button"
+              >
+                <Icon icon={refreshRounded} width={20} height={20} />
+              </button>
+              <button
+                aria-label="导出 PNG"
+                className="icon-button"
+                data-tooltip="导出 PNG"
+                disabled={!artwork}
+                onClick={handleManualExport}
+                title="导出 PNG"
+                type="button"
+              >
+                <Icon icon={downloadRounded} width={20} height={20} />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -150,7 +221,7 @@ export default function App() {
       <aside className="side-panel" aria-live="polite">
         <div className="panel-heading">
           <p className="eyebrow">Workspace</p>
-          <h2>语音控制台</h2>
+          <h2>控制台</h2>
         </div>
 
         <div className="voice-card status-card">
