@@ -130,3 +130,17 @@ def test_path_shapes_execute_and_move(client: TestClient) -> None:
     assert move_response.status_code == 200
     moved_path = move_response.json()["artwork"]["objects"][1]
     assert moved_path["geometry"]["commands"][0]["x"] == path["geometry"]["commands"][0]["x"] + 20
+
+
+def test_complex_scene_requires_clarification_without_partial_execution(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["requires_confirmation"] is True
+    assert body["plan"]["operations"] == []
+    assert body["plan"]["planner_source"] in {"rules", "rules_fallback"}
+    assert body["artwork"]["objects"] == []

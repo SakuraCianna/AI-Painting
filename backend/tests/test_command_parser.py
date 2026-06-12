@@ -70,6 +70,16 @@ def test_parse_sun_and_cloud_as_two_step_plan() -> None:
     assert plan.scene_plan.expected_object_count == 2
 
 
+def test_parse_multi_object_scene_requires_planner_clarification() -> None:
+    plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
+    assert plan.requires_confirmation is True
+    assert plan.operations == []
+    assert plan.confidence == 0.42
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "clarify_scene"
+    assert plan.explanation == "识别到多主体或全局改造指令, 需要先确认拆解方案"
+
+
 def test_parse_undo_synonym() -> None:
     plan = parse_command("退回一步")
     assert plan.operations[0].operation_type == "undo"

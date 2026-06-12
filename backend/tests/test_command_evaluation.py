@@ -38,3 +38,14 @@ def test_rules_tier_complex_voice_commands_match_expected_plans() -> None:
             assert plan.operations[0].payload["target"]["semantic_tag"] == case["expected_target_semantic_tag"], case["id"]
         if case.get("expected_target_layer_id"):
             assert plan.operations[0].payload["target"]["layer_id"] == case["expected_target_layer_id"], case["id"]
+
+
+def test_planner_expected_commands_require_clarification_in_rules_layer() -> None:
+    cases = json.loads(EVALUATION_PATH.read_text(encoding="utf-8"))
+    for case in cases:
+        if case["tier"] != "planner_expected":
+            continue
+        plan = parse_command(case["text"])
+        assert plan.requires_confirmation is True, case["id"]
+        assert plan.operations == [], case["id"]
+        assert plan.scene_plan is not None, case["id"]

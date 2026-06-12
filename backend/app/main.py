@@ -79,14 +79,31 @@ async def api_parse_command(request: CommandParseRequest) -> CommandPlan:
     return await build_command_plan(request.text)
 
 
+def _default_plan_explanation(plan: CommandPlan) -> str:
+    if plan.requires_confirmation and plan.clarification_question:
+        return plan.clarification_question
+    if plan.scene_plan and plan.scene_plan.summary:
+        return plan.scene_plan.summary
+    if plan.operations:
+        return f"准备执行 {len(plan.operations)} 个绘图步骤"
+    return "没有生成可执行绘图步骤"
+
+
+def _with_plan_metadata(plan: CommandPlan, planner_source: str) -> CommandPlan:
+    plan.planner_source = planner_source
+    if not plan.explanation:
+        plan.explanation = _default_plan_explanation(plan)
+    return plan
+
+
 async def build_command_plan(text: str) -> CommandPlan:
-    rule_plan = parse_command(text)
+    rule_plan = _with_plan_metadata(parse_command(text), "rules")
     if not should_use_llm_planner(text, rule_plan):
         return rule_plan
     try:
-        return await plan_with_mimo(text)
+        return _with_plan_metadata(await plan_with_mimo(text), "mimo")
     except LlmPlannerError:
-        return rule_plan
+        return _with_plan_metadata(rule_plan, "rules_fallback")
 
 
 @app.get("/api/asr/providers", response_model=AsrProvidersResponse)

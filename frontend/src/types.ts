@@ -63,6 +63,8 @@ export interface CommandPlan {
   requires_confirmation: boolean;
   clarification_question?: string | null;
   risk_level: string;
+  explanation?: string | null;
+  planner_source: string;
 }
 
 export interface CommandExecutionResponse {

@@ -71,6 +71,36 @@
   - ROADMAP.md
   - 设计文档.md
 
+### 阶段 C：低置信度追问与计划解释展示
+- **状态：** complete
+- **开始时间：** 2026-06-12
+- 执行的操作：
+  - 读取规划文件、README、设计文档、路线图、后端解析器、MiMo 规划器、API 入口、前端控制台和相关测试。
+  - 扩展 `CommandPlan`, 增加计划解释和计划来源字段。
+  - 增加多主体场景和全局改造指令的规则层追问策略, 避免误执行半成品计划。
+  - 为 MiMo 规划和规则兜底统一补充前端可展示的计划解释。
+  - 前端执行计划卡片新增计划来源、摘要、`ScenePlan` 步骤和确认状态。
+  - 补充解析器、API、MiMo 规划器和复杂指令评测集测试。
+  - 同步 README、ROADMAP、设计文档和规划文件。
+- 创建/修改的文件：
+  - backend/app/schemas.py
+  - backend/app/command_parser.py
+  - backend/app/main.py
+  - backend/app/llm_planner.py
+  - backend/tests/test_command_parser.py
+  - backend/tests/test_command_evaluation.py
+  - backend/tests/test_api.py
+  - backend/tests/test_llm_planner.py
+  - frontend/src/types.ts
+  - frontend/src/App.tsx
+  - frontend/src/styles.css
+  - README.md
+  - ROADMAP.md
+  - 设计文档.md
+  - task_plan.md
+  - progress.md
+  - findings.md
+
 ## 测试结果
 | 测试 | 输入 | 预期结果 | 实际结果 | 状态 |
 |------|------|---------|---------|------|
@@ -79,17 +109,20 @@
 | npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
 | pytest | backend/tests | 后端测试通过 | 34 passed | passed |
 | npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
+| pytest | backend/tests | 后端测试通过 | 37 passed | passed |
+| npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
 
 ## 错误日志
 | 时间戳 | 错误 | 尝试次数 | 解决方案 |
 |--------|------|---------|---------|
 | 2026-06-12 | 首次读取 planning-with-files-zh 技能路径错误 | 1 | 改用正确的 .agents 技能目录 |
+| 2026-06-12 | 项目根目录没有 AGENTS.md 文件 | 1 | 使用用户在对话中提供的仓库规范继续执行 |
 
 ## 五问重启检查
 | 问题 | 答案 |
 |------|------|
-| 我在哪里？ | 阶段 B 完成 |
-| 我要去哪里？ | 下一轮可进入复合撤销、低置信度追问或生图素材层 |
+| 我在哪里？ | 阶段 C 完成 |
+| 我要去哪里？ | 下一轮可进入复合撤销、ASR/规划延迟指标或生图素材层 |
 | 目标是什么？ | 明确 AI Painting 的长期产品目标和技术演进路径 |
 | 我学到了什么？ | 见 findings.md |
 | 我做了什么？ | 见上方记录 |

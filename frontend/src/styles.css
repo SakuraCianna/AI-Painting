@@ -315,6 +315,23 @@ h2 {
   font-weight: 600;
 }
 
+.plan-meta .warning-chip {
+  background: #fce8e6;
+  color: var(--error);
+}
+
+.plan-card.needs-confirmation {
+  border-color: #f4b4ae;
+}
+
+.plan-summary {
+  margin: 0 0 10px;
+  color: var(--on-surface);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .plan-list {
   display: grid;
   gap: 6px;
@@ -325,6 +342,44 @@ h2 {
 .plan-list li {
   color: var(--on-surface);
   line-height: 1.45;
+}
+
+.scene-step-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scene-step-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-container);
+}
+
+.scene-step-list strong {
+  color: var(--on-surface);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.scene-step-list span {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.clarification-note {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--outline-variant);
+  color: var(--error);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .timeline {

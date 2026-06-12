@@ -27,6 +27,7 @@ ALLOWED_OPERATION_TYPES = {
     "scale_object",
     "scale_many",
     "delete_object",
+    "clear_canvas",
     "save_artwork",
     "export_artwork",
     "undo",
@@ -99,6 +100,12 @@ def _validate_plan(plan: CommandPlan) -> CommandPlan:
     if not plan.operations and not plan.requires_confirmation:
         raise LlmPlannerError("MiMo 规划没有可执行操作")
     plan.confidence = min(plan.confidence, 0.82)
+    plan.planner_source = "mimo"
+    if not plan.explanation:
+        if plan.scene_plan and plan.scene_plan.summary:
+            plan.explanation = plan.scene_plan.summary
+        elif plan.requires_confirmation and plan.clarification_question:
+            plan.explanation = plan.clarification_question
     return plan
 
 
@@ -133,6 +140,8 @@ def _build_prompt(text: str) -> list[dict[str, str]]:
         "requires_confirmation": False,
         "clarification_question": None,
         "risk_level": "low",
+        "explanation": "把语音指令拆成一个可执行的圆形绘制步骤",
+        "planner_source": "mimo",
     }
     return [
         {
@@ -140,7 +149,7 @@ def _build_prompt(text: str) -> list[dict[str, str]]:
             "content": (
                 "你是语音绘图工具的指令规划器。只输出 JSON, 不输出 Markdown。"
                 "画布尺寸默认 1024x768。你只能使用这些对象类型: rect,circle,ellipse,triangle,line,arrow,star,text,polygon,path,bezier。"
-                "你只能使用这些操作: create_canvas,add_object,set_style,set_style_many,set_metadata,set_metadata_many,move_object,move_many,scale_object,scale_many,delete_object,save_artwork,export_artwork,undo,redo。"
+                "你只能使用这些操作: create_canvas,add_object,set_style,set_style_many,set_metadata,set_metadata_many,move_object,move_many,scale_object,scale_many,delete_object,clear_canvas,save_artwork,export_artwork,undo,redo。"
                 "对象可以带 layer_id, group_id, semantic_tags 和 transform。target 可以按 selector,type,color,layer_id,group_id,semantic_tag 选择对象。"
                 "如果用户要求清空或删除大量内容, requires_confirmation 必须为 true。"
                 "无法安全理解时返回 requires_confirmation true 和 clarification_question。"

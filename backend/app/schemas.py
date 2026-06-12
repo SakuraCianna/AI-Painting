@@ -72,6 +72,8 @@ class CommandPlan(BaseModel):
     requires_confirmation: bool = False
     clarification_question: str | None = None
     risk_level: str = "low"
+    explanation: str | None = None
+    planner_source: str = "rules"
 
 
 class CommandParseRequest(BaseModel):

@@ -96,6 +96,21 @@ SEMANTIC_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("多边形", "polygon"),
     ("星星", "star"),
 )
+SCENE_OBJECT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("小屋", "house"),
+    ("房子", "house"),
+    ("树", "tree"),
+    ("小路", "road"),
+    ("道路", "road"),
+    ("云朵", "cloud"),
+    ("云", "cloud"),
+    ("天空", "sky"),
+    ("太阳", "sun"),
+    ("夜晚", "night"),
+    ("灯光", "light"),
+)
+SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方", "天空", "前景", "背景", "中间", "后面", "前面")
+SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
 
 
 def chinese_number_to_int(text: str) -> int | None:
@@ -182,6 +197,58 @@ def _target_semantic_tag(text: str) -> str | None:
         if keyword in text:
             return tag
     return None
+
+
+def _scene_semantic_tags(text: str) -> list[str]:
+    return sorted({tag for keyword, tag in SCENE_OBJECT_KEYWORDS if keyword in text})
+
+
+def _needs_scene_planner(text: str) -> bool:
+    scene_tags = _scene_semantic_tags(text)
+    layout_count = sum(1 for keyword in SCENE_LAYOUT_HINTS if keyword in text)
+    has_quantity_constraint = re.search(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|座|棵|朵|条|片)", text) is not None
+    has_scene_refinement = any(keyword in text for keyword in SCENE_REFINEMENT_HINTS) and any(
+        keyword in text for keyword in ("改成", "变成", "加", "保持", "保留", "不要")
+    )
+    if "场景" in text and any(keyword in text for keyword in ("画", "创建", "添加", "改成")):
+        return True
+    if has_scene_refinement and ("画面" in text or len(scene_tags) >= 2):
+        return True
+    if layout_count >= 2 and len(scene_tags) >= 3:
+        return True
+    return bool(has_quantity_constraint and len(scene_tags) >= 3 and any(keyword in text for keyword in ("小屋", "房子", "场景", "画面")))
+
+
+def _scene_clarification_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    scene_tags = _scene_semantic_tags(normalized_text)
+    question = (
+        "这是一条多元素场景指令, 我需要先拆成对象计划。"
+        "请补充主要对象数量、位置或风格, 例如先说“确认按小屋、树、小路和云朵生成”。"
+    )
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=[],
+        scene_plan=ScenePlan(
+            intent="clarify_scene",
+            summary="识别到多主体场景, 当前规则解析器不会直接执行以避免误画",
+            steps=[
+                ScenePlanStep(
+                    step_id="clarify-scene",
+                    title="确认场景对象和布局",
+                    intent="ask_clarification",
+                    target={"semantic_tags": scene_tags},
+                    operation_indexes=[],
+                )
+            ],
+            expected_object_count=None,
+        ),
+        confidence=0.42,
+        requires_confirmation=True,
+        clarification_question=question,
+        risk_level="medium",
+        explanation="识别到多主体或全局改造指令, 需要先确认拆解方案",
+    )
 
 
 def _target_selector(text: str, *, include_layer: bool = True, include_color: bool = True) -> dict[str, Any]:
@@ -603,6 +670,8 @@ def parse_command(text: str) -> CommandPlan:
         )
     elif "太阳" in normalized and "云" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _sun_cloud_plan(text, normalized)
+    elif _needs_scene_planner(normalized):
+        return _scene_clarification_plan(text, normalized)
     elif "房子" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _house_plan(text, normalized)
     elif "星" in normalized and _extract_count(normalized, 1) > 1:
