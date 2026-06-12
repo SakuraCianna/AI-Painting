@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import math
 from typing import Any
 
 from .schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
@@ -12,6 +13,8 @@ COLOR_MAP: dict[str, str] = {
     "浅蓝色": "#7dd3fc",
     "绿色": "#16a34a",
     "黄色": "#facc15",
+    "橙色": "#f97316",
+    "棕色": "#92400e",
     "黑色": "#111827",
     "白色": "#ffffff",
     "米白色": "#faf7ed",
@@ -33,6 +36,17 @@ SHAPE_MAP: dict[str, str] = {
     "箭头": "arrow",
     "星星": "star",
     "星形": "star",
+    "多边形": "polygon",
+    "五边形": "polygon",
+    "六边形": "polygon",
+    "路径": "path",
+    "曲线": "bezier",
+    "贝塞尔曲线": "bezier",
+    "贝塞尔": "bezier",
+    "云朵": "path",
+    "云": "path",
+    "小路": "path",
+    "道路": "path",
     "文字": "text",
     "文本": "text",
 }
@@ -74,8 +88,12 @@ SEMANTIC_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("太阳", "sun"),
     ("云", "cloud"),
     ("树", "tree"),
+    ("曲线", "curve"),
+    ("贝塞尔", "curve.bezier"),
+    ("路径", "path"),
     ("道路", "road"),
     ("小路", "road"),
+    ("多边形", "polygon"),
     ("星星", "star"),
 )
 
@@ -247,6 +265,45 @@ def _position(text: str) -> tuple[int, int]:
     return 512, 384
 
 
+def _polygon_points(cx: int, cy: int, radius: int, sides: int) -> list[dict[str, float]]:
+    return [
+        {
+            "x": round(cx + radius * math.cos(-math.pi / 2 + index * 2 * math.pi / sides), 2),
+            "y": round(cy + radius * math.sin(-math.pi / 2 + index * 2 * math.pi / sides), 2),
+        }
+        for index in range(sides)
+    ]
+
+
+def _path_commands_for_text(text: str, x: int, y: int) -> list[dict[str, Any]]:
+    if "云" in text:
+        return [
+            {"cmd": "M", "x": x - 150, "y": y + 35},
+            {"cmd": "C", "x1": x - 145, "y1": y - 35, "x2": x - 75, "y2": y - 75, "x": x - 20, "y": y - 35},
+            {"cmd": "C", "x1": x + 10, "y1": y - 105, "x2": x + 115, "y2": y - 85, "x": x + 125, "y": y - 15},
+            {"cmd": "C", "x1": x + 185, "y1": y - 5, "x2": x + 175, "y2": y + 70, "x": x + 95, "y": y + 70},
+            {"cmd": "L", "x": x - 110, "y": y + 70},
+            {"cmd": "C", "x1": x - 180, "y1": y + 70, "x2": x - 205, "y2": y + 10, "x": x - 150, "y": y + 35},
+            {"cmd": "Z"},
+        ]
+    if "路" in text or "道路" in text:
+        return [
+            {"cmd": "M", "x": x - 210, "y": y + 130},
+            {"cmd": "C", "x1": x - 120, "y1": y + 20, "x2": x + 95, "y2": y + 25, "x": x + 210, "y": y - 120},
+        ]
+    return [
+        {"cmd": "M", "x": x - 180, "y": y + 40},
+        {"cmd": "C", "x1": x - 80, "y1": y - 130, "x2": x + 85, "y2": y + 150, "x": x + 180, "y": y - 40},
+    ]
+
+
+def _bezier_commands(x: int, y: int) -> list[dict[str, Any]]:
+    return [
+        {"cmd": "M", "x": x - 220, "y": y + 70},
+        {"cmd": "C", "x1": x - 90, "y1": y - 145, "x2": x + 95, "y2": y + 145, "x": x + 220, "y": y - 70},
+    ]
+
+
 def _make_object(text: str, shape: str) -> dict[str, Any]:
     x, y = _position(text)
     style = _base_style(text)
@@ -275,6 +332,44 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
         })
     if shape == "star":
         return _decorate_object(text, {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style})
+    if shape == "polygon":
+        sides = 6 if "六边形" in text else 5 if "五边形" in text else 5
+        return _decorate_object(
+            text,
+            {
+                "type": "polygon",
+                "name": "多边形",
+                "geometry": {"points": _polygon_points(x, y, _extract_number(text, "半径", 92), sides)},
+                "style": style,
+            },
+        )
+    if shape == "path":
+        is_cloud = "云" in text
+        is_road = "路" in text or "道路" in text
+        path_style = (
+            {"fill": "#e0f2fe", "stroke": "#0284c7", "strokeWidth": 3, "opacity": 1}
+            if is_cloud
+            else {**style, "fill": "transparent", "stroke": "#92400e" if is_road else style["stroke"], "strokeWidth": 10 if is_road else 4}
+        )
+        return _decorate_object(
+            text,
+            {
+                "type": "path",
+                "name": "云朵" if is_cloud else "小路" if is_road else "路径",
+                "geometry": {"commands": _path_commands_for_text(text, x, y)},
+                "style": path_style,
+            },
+        )
+    if shape == "bezier":
+        return _decorate_object(
+            text,
+            {
+                "type": "bezier",
+                "name": "贝塞尔曲线",
+                "geometry": {"commands": _bezier_commands(x, y)},
+                "style": {**style, "fill": "transparent", "strokeWidth": 5},
+            },
+        )
     content_match = CONTENT_PATTERN.search(text)
     content = content_match.group(1).strip() if content_match else "语音文字"
     return _decorate_object(text, {
@@ -429,6 +524,49 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     )
 
 
+def _sun_cloud_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    operations = [
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "circle",
+                    "name": "太阳",
+                    "layer_id": "background",
+                    "semantic_tags": ["shape.circle", "sun"],
+                    "geometry": {"cx": 512, "cy": 180, "radius": 72},
+                    "style": {"fill": "#facc15", "stroke": "#f97316", "strokeWidth": 3, "opacity": 1},
+                }
+            },
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "云朵",
+                    "layer_id": "middle",
+                    "semantic_tags": ["cloud", "path"],
+                    "geometry": {"commands": _path_commands_for_text("云", 512, 330)},
+                    "style": {"fill": "#e0f2fe", "stroke": "#0284c7", "strokeWidth": 3, "opacity": 1},
+                }
+            },
+        ),
+    ]
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="compose_scene",
+            summary="绘制太阳和云朵",
+            steps=[ScenePlanStep(step_id="sun-cloud", title="绘制天空元素", intent="add_related_objects", operation_indexes=[0, 1])],
+            expected_object_count=2,
+        ),
+        confidence=0.82,
+    )
+
+
 def parse_command(text: str) -> CommandPlan:
     normalized = normalize_text(text)
     operations: list[OperationRequest] = []
@@ -463,6 +601,8 @@ def parse_command(text: str) -> CommandPlan:
                 payload={"width": width, "height": height, "background": _find_color(normalized, "#ffffff")},
             )
         )
+    elif "太阳" in normalized and "云" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
+        return _sun_cloud_plan(text, normalized)
     elif "房子" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _house_plan(text, normalized)
     elif "星" in normalized and _extract_count(normalized, 1) > 1:

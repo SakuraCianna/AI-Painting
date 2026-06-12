@@ -1,12 +1,19 @@
+export type DrawingGeometryValue =
+  | number
+  | string
+  | Array<Record<string, number | string>>
+  | Record<string, number | string>
+  | undefined;
+
 export interface DrawingObject {
   id: string;
-  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text";
+  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text" | "polygon" | "path" | "bezier";
   name?: string | null;
   layer_id: string;
   group_id?: string | null;
   semantic_tags: string[];
   transform: Record<string, unknown>;
-  geometry: Record<string, number | string>;
+  geometry: Record<string, DrawingGeometryValue>;
   style: {
     fill?: string;
     stroke?: string;

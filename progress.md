@@ -45,11 +45,39 @@
   - ROADMAP.md
   - 设计文档.md
 
+### 阶段 B：路径图形与复杂指令评测集
+- **状态：** complete
+- **开始时间：** 2026-06-12
+- 执行的操作：
+  - 读取规划文件, 确认阶段 A 已完成。
+  - 读取 command_parser、llm_planner、CanvasStage、前端类型和相关后端测试。
+  - 准备新增 polygon、path、bezier 类型和复杂指令评测集。
+  - 新增 polygon、path、bezier 解析和 SVG 渲染。
+  - 扩展移动和缩放逻辑, 支持点列和结构化路径命令。
+  - 新增复杂语音指令评测集, 并区分 rules 与 planner_expected。
+  - 补强“太阳然后云”规则兜底, 避免 LLM 失败时只执行半条复杂指令。
+  - 同步 README、ROADMAP 和设计文档。
+- 创建/修改的文件：
+  - backend/app/command_parser.py
+  - backend/app/drawing_engine.py
+  - backend/app/llm_planner.py
+  - backend/tests/test_command_parser.py
+  - backend/tests/test_api.py
+  - backend/tests/test_command_evaluation.py
+  - docs/evaluation/complex_voice_commands.json
+  - frontend/src/drawing/CanvasStage.tsx
+  - frontend/src/types.ts
+  - README.md
+  - ROADMAP.md
+  - 设计文档.md
+
 ## 测试结果
 | 测试 | 输入 | 预期结果 | 实际结果 | 状态 |
 |------|------|---------|---------|------|
 | git diff --check | 文档变更 | 无空白错误 | 通过, 仅有 Git 提示 LF 将被 CRLF 替换 | passed |
 | pytest | backend/tests | 后端测试通过 | 29 passed | passed |
+| npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
+| pytest | backend/tests | 后端测试通过 | 34 passed | passed |
 | npm run build | frontend | TypeScript 和 Vite 构建通过 | build passed | passed |
 
 ## 错误日志
@@ -60,8 +88,8 @@
 ## 五问重启检查
 | 问题 | 答案 |
 |------|------|
-| 我在哪里？ | 阶段 A 完成 |
-| 我要去哪里？ | 下一轮可进入复杂指令评测集或路径图形能力 |
+| 我在哪里？ | 阶段 B 完成 |
+| 我要去哪里？ | 下一轮可进入复合撤销、低置信度追问或生图素材层 |
 | 目标是什么？ | 明确 AI Painting 的长期产品目标和技术演进路径 |
 | 我学到了什么？ | 见 findings.md |
 | 我做了什么？ | 见上方记录 |

@@ -41,7 +41,52 @@ def _move_geometry(geometry: dict[str, Any], dx: int, dy: int) -> dict[str, Any]
     for key in ("y", "cy", "y1", "y2"):
         if key in moved:
             moved[key] = moved[key] + dy
+    if isinstance(moved.get("points"), list):
+        moved["points"] = [_move_coordinate_dict(point, dx, dy) for point in moved["points"]]
+    if isinstance(moved.get("commands"), list):
+        moved["commands"] = [_move_coordinate_dict(command, dx, dy) for command in moved["commands"]]
     return moved
+
+
+def _move_coordinate_dict(item: Any, dx: float, dy: float) -> Any:
+    if not isinstance(item, dict):
+        return item
+    moved = dict(item)
+    for key in ("x", "x1", "x2"):
+        if key in moved:
+            moved[key] = round(float(moved[key]) + dx, 2)
+    for key in ("y", "y1", "y2"):
+        if key in moved:
+            moved[key] = round(float(moved[key]) + dy, 2)
+    return moved
+
+
+def _collect_coordinates(items: list[Any]) -> tuple[list[float], list[float]]:
+    xs: list[float] = []
+    ys: list[float] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for key in ("x", "x1", "x2"):
+            if key in item:
+                xs.append(float(item[key]))
+        for key in ("y", "y1", "y2"):
+            if key in item:
+                ys.append(float(item[key]))
+    return xs, ys
+
+
+def _scale_coordinate_dict(item: Any, factor: float, center_x: float, center_y: float) -> Any:
+    if not isinstance(item, dict):
+        return item
+    scaled = dict(item)
+    for key in ("x", "x1", "x2"):
+        if key in scaled:
+            scaled[key] = round(center_x + (float(scaled[key]) - center_x) * factor, 2)
+    for key in ("y", "y1", "y2"):
+        if key in scaled:
+            scaled[key] = round(center_y + (float(scaled[key]) - center_y) * factor, 2)
+    return scaled
 
 
 def _scale_geometry(geometry: dict[str, Any], factor: float) -> dict[str, Any]:
@@ -55,6 +100,18 @@ def _scale_geometry(geometry: dict[str, Any], factor: float) -> dict[str, Any]:
         scaled["x"] = round(float(scaled["x"]) - ((float(scaled["width"]) - original_width) / 2), 2)
     if original_height is not None and "y" in scaled:
         scaled["y"] = round(float(scaled["y"]) - ((float(scaled["height"]) - original_height) / 2), 2)
+    if isinstance(scaled.get("points"), list):
+        xs, ys = _collect_coordinates(scaled["points"])
+        if xs and ys:
+            center_x = (min(xs) + max(xs)) / 2
+            center_y = (min(ys) + max(ys)) / 2
+            scaled["points"] = [_scale_coordinate_dict(point, factor, center_x, center_y) for point in scaled["points"]]
+    if isinstance(scaled.get("commands"), list):
+        xs, ys = _collect_coordinates(scaled["commands"])
+        if xs and ys:
+            center_x = (min(xs) + max(xs)) / 2
+            center_y = (min(ys) + max(ys)) / 2
+            scaled["commands"] = [_scale_coordinate_dict(command, factor, center_x, center_y) for command in scaled["commands"]]
     return scaled
 
 

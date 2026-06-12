@@ -36,12 +36,38 @@ def test_parse_object_name_layer_and_semantic_tags() -> None:
     assert "shape.circle" in obj["semantic_tags"]
 
 
+def test_parse_polygon_path_and_bezier_shapes() -> None:
+    polygon_plan = parse_command("画一个绿色五边形在左边")
+    polygon = polygon_plan.operations[0].payload["object"]
+    assert polygon["type"] == "polygon"
+    assert len(polygon["geometry"]["points"]) == 5
+
+    path_plan = parse_command("画一条弯曲小路")
+    path = path_plan.operations[0].payload["object"]
+    assert path["type"] == "path"
+    assert path["name"] == "小路"
+    assert path["style"]["strokeWidth"] == 10
+
+    bezier_plan = parse_command("画一条棕色贝塞尔曲线在中间")
+    bezier = bezier_plan.operations[0].payload["object"]
+    assert bezier["type"] == "bezier"
+    assert bezier["style"]["fill"] == "transparent"
+
+
 def test_parse_complex_house_plan() -> None:
     plan = parse_command("画一个房子 红色屋顶 蓝色门 两扇窗户")
     assert [op.payload["object"]["name"] for op in plan.operations] == ["房子主体", "红色屋顶", "蓝色门", "窗户1", "窗户2"]
     assert plan.scene_plan is not None
     assert plan.scene_plan.expected_object_count == 5
     assert plan.operations[3].payload["object"]["semantic_tags"] == ["house", "house.window", "shape.rect"]
+
+
+def test_parse_sun_and_cloud_as_two_step_plan() -> None:
+    plan = parse_command("画一个太阳然后在下面加一片云")
+    assert [op.operation_type for op in plan.operations] == ["add_object", "add_object"]
+    assert [op.payload["object"]["type"] for op in plan.operations] == ["circle", "path"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.expected_object_count == 2
 
 
 def test_parse_undo_synonym() -> None:

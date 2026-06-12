@@ -110,3 +110,23 @@ def test_rename_latest_and_move_layer(client: TestClient) -> None:
     moved_objects = move_response.json()["artwork"]["objects"]
     assert moved_objects[0]["geometry"]["cx"] == 532
     assert moved_objects[1]["geometry"]["x"] == 422
+
+
+def test_path_shapes_execute_and_move(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    polygon_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个绿色五边形在左边"})
+    assert polygon_response.status_code == 200
+    polygon = polygon_response.json()["artwork"]["objects"][0]
+    assert polygon["type"] == "polygon"
+    assert len(polygon["geometry"]["points"]) == 5
+
+    path_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一条弯曲小路"})
+    assert path_response.status_code == 200
+    path = path_response.json()["artwork"]["objects"][1]
+    assert path["type"] == "path"
+    assert path["style"]["strokeWidth"] == 10
+
+    move_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "向右移动二十像素"})
+    assert move_response.status_code == 200
+    moved_path = move_response.json()["artwork"]["objects"][1]
+    assert moved_path["geometry"]["commands"][0]["x"] == path["geometry"]["commands"][0]["x"] + 20
