@@ -9,8 +9,10 @@ from sqlite3 import Connection
 
 from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_audio_data_url
 from .command_parser import parse_command
+from .config import load_env_file
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
+from .llm_planner import LlmPlannerError, plan_with_mimo, should_use_llm_planner
 from .repositories import create_artwork, get_artwork, list_artworks, record_voice_log
 from .schemas import (
     AsrProvidersResponse,
@@ -23,6 +25,9 @@ from .schemas import (
     CommandPlan,
     OperationResponse,
 )
+
+
+load_env_file()
 
 
 @asynccontextmanager
@@ -67,8 +72,18 @@ def api_get_artwork(artwork_id: str, db: Connection = Depends(get_db)) -> Artwor
 
 
 @app.post("/api/commands/parse", response_model=CommandPlan)
-def api_parse_command(request: CommandParseRequest) -> CommandPlan:
-    return parse_command(request.text)
+async def api_parse_command(request: CommandParseRequest) -> CommandPlan:
+    return await build_command_plan(request.text)
+
+
+async def build_command_plan(text: str) -> CommandPlan:
+    rule_plan = parse_command(text)
+    if not should_use_llm_planner(text, rule_plan):
+        return rule_plan
+    try:
+        return await plan_with_mimo(text)
+    except LlmPlannerError:
+        return rule_plan
 
 
 @app.get("/api/asr/providers", response_model=AsrProvidersResponse)
@@ -93,7 +108,7 @@ async def api_transcribe_audio(request: AsrTranscriptionRequest) -> AsrTranscrip
 
 
 @app.post("/api/artworks/{artwork_id}/commands", response_model=CommandExecutionResponse)
-def api_execute_command(
+async def api_execute_command(
     artwork_id: str,
     request: CommandParseRequest,
     db: Connection = Depends(get_db),
@@ -104,7 +119,7 @@ def api_execute_command(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    plan = parse_command(request.text)
+    plan = await build_command_plan(request.text)
     parse_finished_at = perf_counter()
 
     if plan.requires_confirmation:

@@ -182,11 +182,25 @@ async def _transcribe_with_xiaomi(audio: AudioPayload, language: str) -> str:
         "Content-Type": "application/json",
     }
     payload = build_xiaomi_payload(audio.data_url, language)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(url, headers=headers, json=payload)
-    if response.status_code >= 400:
-        raise AsrProviderError(f"小米 ASR 请求失败: HTTP {response.status_code}")
-    return _extract_text_from_json(response.json())
+    retries = max(0, _read_int_env("AI_PAINTING_XIAOMI_ASR_RETRIES", 1))
+    last_error: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, headers=headers, json=payload)
+            if response.status_code >= 500 and attempt < retries:
+                last_error = AsrProviderError(f"小米 ASR 请求失败: HTTP {response.status_code}")
+                await asyncio.sleep(0.25 * (attempt + 1))
+                continue
+            if response.status_code >= 400:
+                raise AsrProviderError(f"小米 ASR 请求失败: HTTP {response.status_code}")
+            return _extract_text_from_json(response.json())
+        except httpx.HTTPError as exc:
+            last_error = exc
+            if attempt >= retries:
+                break
+            await asyncio.sleep(0.25 * (attempt + 1))
+    raise AsrProviderError(f"小米 ASR 请求失败: {last_error}") from last_error
 
 
 async def _transcribe_with_local_url(audio: AudioPayload, language: str) -> str:
