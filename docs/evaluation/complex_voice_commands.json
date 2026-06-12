@@ -100,6 +100,13 @@
     "expected_object_types": ["ellipse", "rect", "ellipse", "path", "circle", "circle", "path", "path"]
   },
   {
+    "id": "agent-living-room",
+    "text": "画一个温馨客厅，有沙发、茶几、窗户和落地灯",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "rect", "ellipse", "rect", "rect", "rect", "rect", "ellipse", "rect", "line", "line", "line", "triangle", "ellipse"]
+  },
+  {
     "id": "portrait-image-generation",
     "text": "生成一张人物肖像画",
     "tier": "rules",

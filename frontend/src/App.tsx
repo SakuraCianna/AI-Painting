@@ -48,6 +48,7 @@ const OPERATION_LABELS: Record<string, string> = {
 
 const PLANNER_SOURCE_LABELS: Record<string, string> = {
   rules: "规则解析",
+  agent: "Drawing Agent",
   mimo: "MiMo 规划",
   rules_fallback: "规则兜底"
 };

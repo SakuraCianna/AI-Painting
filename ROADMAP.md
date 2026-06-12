@@ -126,7 +126,7 @@ AI Painting 的长期目标不是做一个普通文生图工具, 而是做一款
 技术任务:
 
 - 新增 `ScenePlan` schema
-- 为 MiMo 规划器增加严格 JSON 输出模板
+- 为 Drawing Agent 增加严格 SceneGraph JSON 输出模板
 - 增加计划修复器, 自动补全缺失字段
 - 增加计划解释文本
 - 增加复杂指令评测集

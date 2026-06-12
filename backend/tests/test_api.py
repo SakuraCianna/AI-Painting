@@ -84,14 +84,14 @@ def test_voice_noise_command_requires_clarification_without_mimo(client: TestCli
 
     called = False
 
-    async def fake_plan_with_mimo(_: str):
+    async def fake_plan_with_drawing_agent(_: str, *, rule_plan=None):
         nonlocal called
         called = True
         raise AssertionError("voice noise should not call MiMo")
 
-    monkeypatch.setenv("AI_PAINTING_ENABLE_LLM_PLANNER", "true")
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.setenv("MIMO_API_KEY", "test-key")
-    monkeypatch.setattr(main, "plan_with_mimo", fake_plan_with_mimo)
+    monkeypatch.setattr(main, "plan_with_drawing_agent", fake_plan_with_drawing_agent)
 
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "嗯。"})
@@ -104,6 +104,23 @@ def test_voice_noise_command_requires_clarification_without_mimo(client: TestCli
     assert body["plan"]["operations"] == []
     assert body["plan"]["planner_source"] == "rules"
     assert body["artwork"]["objects"] == []
+
+
+def test_agent_living_room_command_executes_complex_scene(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个温馨客厅，有沙发、茶几、窗户和落地灯"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert len(body["artwork"]["objects"]) == 14
+    semantic_tags = [tag for item in body["artwork"]["objects"] for tag in item["semantic_tags"]]
+    assert "sofa" in semantic_tags
+    assert "coffee_table" in semantic_tags
+    assert "floor_lamp" in semantic_tags
 
 
 def test_undo_and_redo(client: TestClient) -> None:
