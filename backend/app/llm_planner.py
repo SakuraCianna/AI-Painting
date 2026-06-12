@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from .command_parser import normalize_text
+from .command_parser import is_voice_noise_input, normalize_text
 from .schemas import CommandPlan
 
 
@@ -46,6 +46,8 @@ def is_llm_planner_enabled() -> bool:
 
 
 def should_use_llm_planner(text: str, rule_plan: CommandPlan) -> bool:
+    if is_voice_noise_input(text):
+        return False
     if not is_llm_planner_enabled() or not os.getenv("MIMO_API_KEY"):
         return False
     normalized = normalize_text(text)

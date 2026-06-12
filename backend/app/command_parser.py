@@ -68,6 +68,7 @@ CHINESE_DIGITS: dict[str, int] = {
 SORTED_COLOR_NAMES = sorted(COLOR_MAP, key=len, reverse=True)
 SORTED_SHAPE_NAMES = sorted(SHAPE_MAP, key=len, reverse=True)
 WHITESPACE_PATTERN = re.compile(r"\s+")
+VOICE_NOISE_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_]+")
 CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
 TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
 OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
@@ -111,6 +112,43 @@ SCENE_OBJECT_KEYWORDS: tuple[tuple[str, str], ...] = (
 )
 SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方", "天空", "前景", "背景", "中间", "后面", "前面")
 SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
+VOICE_NOISE_EXACT_TOKENS = {
+    "",
+    "嗯",
+    "嗯嗯",
+    "嗯哼",
+    "呃",
+    "呃呃",
+    "呃嗯",
+    "啊",
+    "啊啊",
+    "哦",
+    "噢",
+    "唔",
+    "唔嗯",
+    "哎",
+    "诶",
+    "欸",
+    "那个",
+    "这个",
+    "然后",
+    "接着",
+    "卡",
+    "需要漏",
+    "hmm",
+    "hm",
+    "um",
+    "umm",
+    "uh",
+    "uhh",
+    "er",
+    "err",
+    "em",
+    "emm",
+    "eh",
+    "ah",
+    "oh",
+}
 
 
 def chinese_number_to_int(text: str) -> int | None:
@@ -151,6 +189,34 @@ def normalize_text(text: str) -> str:
         normalized = normalized.replace(source, target)
     normalized = WHITESPACE_PATTERN.sub(" ", normalized)
     return normalized
+
+
+def compact_voice_text(text: str) -> str:
+    return VOICE_NOISE_STRIP_PATTERN.sub("", normalize_text(text))
+
+
+def is_voice_noise_input(text: str) -> bool:
+    compact = compact_voice_text(text)
+    if compact in VOICE_NOISE_EXACT_TOKENS:
+        return True
+    if re.fullmatch(r"[嗯呃啊哦噢唔哎诶欸]+", compact):
+        return True
+    if re.fullmatch(r"(?:h+m+|u+h+|u+m+|e+r+|e+m+|a+h+|o+h+)", compact):
+        return True
+    return False
+
+
+def _voice_noise_clarification_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=[],
+        confidence=0.12,
+        requires_confirmation=True,
+        clarification_question="我听到的是口头语或噪声, 请直接说要画什么、怎么改或要执行的操作。",
+        risk_level="low",
+        explanation="识别到口头语或噪声输入, 已跳过复杂规划",
+    )
 
 
 def _find_color(text: str, default: str = "#2563eb") -> str:
@@ -639,6 +705,9 @@ def parse_command(text: str) -> CommandPlan:
     operations: list[OperationRequest] = []
     requires_confirmation = False
     risk_level = "low"
+
+    if is_voice_noise_input(normalized):
+        return _voice_noise_clarification_plan(text, normalized)
 
     if "清空" in normalized:
         return CommandPlan(
