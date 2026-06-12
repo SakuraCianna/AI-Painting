@@ -20,9 +20,12 @@ ALLOWED_OPERATION_TYPES = {
     "add_object",
     "set_style",
     "set_style_many",
+    "set_metadata",
+    "set_metadata_many",
     "move_object",
     "move_many",
     "scale_object",
+    "scale_many",
     "delete_object",
     "save_artwork",
     "export_artwork",
@@ -110,6 +113,10 @@ def _build_prompt(text: str) -> list[dict[str, str]]:
                     "object": {
                         "type": "circle",
                         "name": "圆形",
+                        "layer_id": "base",
+                        "group_id": None,
+                        "semantic_tags": ["shape.circle"],
+                        "transform": {},
                         "geometry": {"cx": 512, "cy": 384, "radius": 80},
                         "style": {"fill": "#2563eb", "stroke": "#2563eb", "strokeWidth": 2, "opacity": 1},
                     }
@@ -117,6 +124,12 @@ def _build_prompt(text: str) -> list[dict[str, str]]:
             }
         ],
         "confidence": 0.72,
+        "scene_plan": {
+            "intent": "compose_scene",
+            "summary": "绘制一个圆形",
+            "steps": [{"step_id": "step-1", "title": "添加圆形", "intent": "add_object", "target": {}, "operation_indexes": [0]}],
+            "expected_object_count": 1,
+        },
         "requires_confirmation": False,
         "clarification_question": None,
         "risk_level": "low",
@@ -127,7 +140,8 @@ def _build_prompt(text: str) -> list[dict[str, str]]:
             "content": (
                 "你是语音绘图工具的指令规划器。只输出 JSON, 不输出 Markdown。"
                 "画布尺寸默认 1024x768。你只能使用这些对象类型: rect,circle,ellipse,triangle,line,arrow,star,text。"
-                "你只能使用这些操作: create_canvas,add_object,set_style,set_style_many,move_object,move_many,scale_object,delete_object,save_artwork,export_artwork,undo,redo。"
+                "你只能使用这些操作: create_canvas,add_object,set_style,set_style_many,set_metadata,set_metadata_many,move_object,move_many,scale_object,scale_many,delete_object,save_artwork,export_artwork,undo,redo。"
+                "对象可以带 layer_id, group_id, semantic_tags 和 transform。target 可以按 selector,type,color,layer_id,group_id,semantic_tag 选择对象。"
                 "如果用户要求清空或删除大量内容, requires_confirmation 必须为 true。"
                 "无法安全理解时返回 requires_confirmation true 和 clarification_question。"
             ),

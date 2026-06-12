@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .schemas import CommandPlan, OperationRequest
+from .schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
 
 
 COLOR_MAP: dict[str, str] = {
@@ -56,6 +56,28 @@ SORTED_SHAPE_NAMES = sorted(SHAPE_MAP, key=len, reverse=True)
 WHITESPACE_PATTERN = re.compile(r"\s+")
 CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
 TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
+OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
+LAYER_MAP: dict[str, str] = {
+    "背景层": "background",
+    "底层": "background",
+    "中景层": "middle",
+    "主体层": "middle",
+    "前景层": "foreground",
+    "顶层": "foreground",
+}
+SEMANTIC_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("窗户", "house.window"),
+    ("屋顶", "house.roof"),
+    ("门", "house.door"),
+    ("房子主体", "house.body"),
+    ("房子", "house"),
+    ("太阳", "sun"),
+    ("云", "cloud"),
+    ("树", "tree"),
+    ("道路", "road"),
+    ("小路", "road"),
+    ("星星", "star"),
+)
 
 
 def chinese_number_to_int(text: str) -> int | None:
@@ -117,6 +139,71 @@ def _find_shape(text: str) -> str | None:
     return None
 
 
+def _extract_object_name(text: str) -> str | None:
+    match = OBJECT_NAME_PATTERN.search(text)
+    return match.group(1).strip() if match else None
+
+
+def _extract_layer_id(text: str) -> str | None:
+    for layer_name, layer_id in LAYER_MAP.items():
+        if layer_name in text:
+            return layer_id
+    return None
+
+
+def _semantic_tags_for_text(text: str, shape: str | None = None, object_name: str | None = None) -> list[str]:
+    source = f"{text} {object_name or ''}"
+    tags = {tag for keyword, tag in SEMANTIC_KEYWORDS if keyword in source}
+    if shape:
+        tags.add(f"shape.{shape}")
+    return sorted(tags)
+
+
+def _target_semantic_tag(text: str) -> str | None:
+    for keyword, tag in SEMANTIC_KEYWORDS:
+        if keyword in text:
+            return tag
+    return None
+
+
+def _target_selector(text: str, *, include_layer: bool = True, include_color: bool = True) -> dict[str, Any]:
+    many_hint = any(keyword in text for keyword in ("所有", "全部", "都", "整体"))
+    target: dict[str, Any] = {"selector": "all" if many_hint else "latest"}
+    shape = _find_shape(text)
+    if shape and many_hint:
+        target["type"] = shape
+    semantic_tag = _target_semantic_tag(text)
+    if semantic_tag and semantic_tag not in {"house"}:
+        target["selector"] = "all"
+        target["semantic_tag"] = semantic_tag
+    if include_layer:
+        layer_id = _extract_layer_id(text)
+        if layer_id:
+            target["selector"] = "all"
+            target["layer_id"] = layer_id
+    if include_color:
+        colors = _find_all_colors(text)
+        if colors and many_hint:
+            target["color"] = colors[0][1]
+    return target
+
+
+def _is_many_target(target: dict[str, Any]) -> bool:
+    return target.get("selector") == "all" or any(key in target for key in ("semantic_tag", "layer_id", "group_id", "color"))
+
+
+def _decorate_object(text: str, obj: dict[str, Any]) -> dict[str, Any]:
+    object_name = _extract_object_name(text)
+    if object_name:
+        obj["name"] = object_name
+    layer_id = _extract_layer_id(text)
+    obj["layer_id"] = layer_id or obj.get("layer_id", "base")
+    tags = set(obj.get("semantic_tags", []))
+    tags.update(_semantic_tags_for_text(text, obj.get("type"), obj.get("name")))
+    obj["semantic_tags"] = sorted(tags)
+    return obj
+
+
 def _extract_number(text: str, after: str, default: int) -> int:
     pattern = rf"{after}\s*([0-9]+|[零一二两三四五六七八九十百]+)"
     match = re.search(pattern, text)
@@ -165,37 +252,37 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
     style = _base_style(text)
     if shape == "circle":
         radius = _extract_number(text, "半径", 80)
-        return {"type": "circle", "name": "圆形", "geometry": {"cx": x, "cy": y, "radius": radius}, "style": style}
+        return _decorate_object(text, {"type": "circle", "name": "圆形", "geometry": {"cx": x, "cy": y, "radius": radius}, "style": style})
     if shape == "rect":
         width = _extract_number(text, "宽", 220)
         height = _extract_number(text, "高", 140)
-        return {
+        return _decorate_object(text, {
             "type": "rect",
             "name": "矩形",
             "geometry": {"x": x - width // 2, "y": y - height // 2, "width": width, "height": height, "radius": 8},
             "style": style,
-        }
+        })
     if shape == "ellipse":
-        return {"type": "ellipse", "name": "椭圆", "geometry": {"cx": x, "cy": y, "rx": 140, "ry": 80}, "style": style}
+        return _decorate_object(text, {"type": "ellipse", "name": "椭圆", "geometry": {"cx": x, "cy": y, "rx": 140, "ry": 80}, "style": style})
     if shape == "triangle":
-        return {"type": "triangle", "name": "三角形", "geometry": {"x": x, "y": y, "size": 180}, "style": style}
+        return _decorate_object(text, {"type": "triangle", "name": "三角形", "geometry": {"x": x, "y": y, "size": 180}, "style": style})
     if shape in {"line", "arrow"}:
-        return {
+        return _decorate_object(text, {
             "type": shape,
             "name": "箭头" if shape == "arrow" else "线条",
             "geometry": {"x1": x - 120, "y1": y + 80, "x2": x + 120, "y2": y - 80},
             "style": {**style, "fill": "transparent", "strokeWidth": 4},
-        }
+        })
     if shape == "star":
-        return {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style}
+        return _decorate_object(text, {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style})
     content_match = CONTENT_PATTERN.search(text)
     content = content_match.group(1).strip() if content_match else "语音文字"
-    return {
+    return _decorate_object(text, {
         "type": "text",
         "name": "文字",
         "geometry": {"x": x, "y": y, "fontSize": 48, "content": content},
         "style": {**style, "fill": style["fill"], "stroke": "transparent"},
-    }
+    })
 
 
 def _extract_count(text: str, default: int = 1) -> int:
@@ -224,6 +311,8 @@ def _multi_star_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                     "object": {
                         "type": "star",
                         "name": f"星星{index + 1}",
+                        "layer_id": "middle",
+                        "semantic_tags": ["shape.star", "star"],
                         "geometry": {
                             "cx": x,
                             "cy": 384,
@@ -236,7 +325,18 @@ def _multi_star_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                 },
             )
         )
-    return CommandPlan(raw_text=raw_text, normalized_text=normalized_text, operations=operations, confidence=0.88)
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="compose_scene",
+            summary=f"绘制 {count} 颗星星",
+            steps=[ScenePlanStep(step_id="stars", title="绘制星星序列", intent="add_repeated_objects", operation_indexes=list(range(count)))],
+            expected_object_count=count,
+        ),
+        confidence=0.88,
+    )
 
 
 def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
@@ -247,6 +347,9 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                 "object": {
                     "type": "rect",
                     "name": "房子主体",
+                    "layer_id": "middle",
+                    "group_id": "house",
+                    "semantic_tags": ["house", "house.body", "shape.rect"],
                     "geometry": {"x": 350, "y": 330, "width": 320, "height": 240, "radius": 6},
                     "style": {"fill": "#faf7ed", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
                 }
@@ -258,6 +361,9 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                 "object": {
                     "type": "triangle",
                     "name": "红色屋顶",
+                    "layer_id": "middle",
+                    "group_id": "house",
+                    "semantic_tags": ["house", "house.roof", "shape.triangle"],
                     "geometry": {"x": 510, "y": 270, "size": 380},
                     "style": {"fill": "#dc2626", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
                 }
@@ -269,6 +375,9 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                 "object": {
                     "type": "rect",
                     "name": "蓝色门",
+                    "layer_id": "middle",
+                    "group_id": "house",
+                    "semantic_tags": ["house", "house.door", "shape.rect"],
                     "geometry": {"x": 475, "y": 440, "width": 70, "height": 130, "radius": 4},
                     "style": {"fill": "#2563eb", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
                 }
@@ -280,6 +389,9 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                 "object": {
                     "type": "rect",
                     "name": "窗户1",
+                    "layer_id": "middle",
+                    "group_id": "house",
+                    "semantic_tags": ["house", "house.window", "shape.rect"],
                     "geometry": {"x": 390, "y": 380, "width": 64, "height": 64, "radius": 4},
                     "style": {"fill": "#7dd3fc", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
                 }
@@ -291,13 +403,30 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                 "object": {
                     "type": "rect",
                     "name": "窗户2",
+                    "layer_id": "middle",
+                    "group_id": "house",
+                    "semantic_tags": ["house", "house.window", "shape.rect"],
                     "geometry": {"x": 570, "y": 380, "width": 64, "height": 64, "radius": 4},
                     "style": {"fill": "#7dd3fc", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
                 }
             },
         ),
     ]
-    return CommandPlan(raw_text=raw_text, normalized_text=normalized_text, operations=operations, confidence=0.9)
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="compose_scene",
+            summary="绘制带屋顶、门和窗户的房子",
+            steps=[
+                ScenePlanStep(step_id="house-shell", title="绘制房子结构", intent="add_group", operation_indexes=[0, 1]),
+                ScenePlanStep(step_id="house-details", title="绘制门窗细节", intent="add_details", operation_indexes=[2, 3, 4]),
+            ],
+            expected_object_count=5,
+        ),
+        confidence=0.9,
+    )
 
 
 def parse_command(text: str) -> CommandPlan:
@@ -334,19 +463,32 @@ def parse_command(text: str) -> CommandPlan:
                 payload={"width": width, "height": height, "background": _find_color(normalized, "#ffffff")},
             )
         )
-    elif "房子" in normalized:
+    elif "房子" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _house_plan(text, normalized)
     elif "星" in normalized and _extract_count(normalized, 1) > 1:
         return _multi_star_plan(text, normalized)
+    elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not any(keyword in normalized for keyword in ("画", "创建", "新建", "保存")):
+        object_name = _extract_object_name(normalized)
+        if object_name:
+            target = {"selector": "latest"} if "它" in normalized else _target_selector(normalized, include_layer=False, include_color=False)
+            operation_type = "set_metadata_many" if _is_many_target(target) else "set_metadata"
+            operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "name": object_name}))
+    elif any(keyword in normalized for keyword in ("放到", "移到", "移动到", "置于")) and _extract_layer_id(normalized) and "画" not in normalized:
+        target = _target_selector(normalized, include_layer=False)
+        operation_type = "set_metadata_many" if _is_many_target(target) else "set_metadata"
+        operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "layer_id": _extract_layer_id(normalized)}))
     elif "所有" in normalized and any(keyword in normalized for keyword in ("改成", "换成")):
         colors = _find_all_colors(normalized)
         source_color = colors[0][1] if colors else None
         target_color = colors[1][1] if len(colors) > 1 else _find_color(normalized)
         if source_color:
+            target = _target_selector(normalized, include_color=False)
+            target["selector"] = "all"
+            target["color"] = source_color
             operations.append(
                 OperationRequest(
                     operation_type="set_style_many",
-                    payload={"target": {"selector": "all", "color": source_color}, "style": {"fill": target_color, "stroke": target_color}},
+                    payload={"target": target, "style": {"fill": target_color, "stroke": target_color}},
                 )
             )
         if "整体" in normalized and ("上" in normalized or "下" in normalized or "左" in normalized or "右" in normalized):
@@ -360,17 +502,23 @@ def parse_command(text: str) -> CommandPlan:
             style["fill"] = _find_color(normalized)
         if "加粗" in normalized:
             style["strokeWidth"] = 5
-        operations.append(OperationRequest(operation_type="set_style", payload={"target": {"selector": "latest"}, "style": style}))
+        target = _target_selector(normalized)
+        operation_type = "set_style_many" if _is_many_target(target) else "set_style"
+        operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "style": style}))
     elif "移动" in normalized or "往" in normalized or "向" in normalized:
         amount = _extract_movement_amount(normalized)
         dx = amount if "右" in normalized else -amount if "左" in normalized else 0
         dy = amount if "下" in normalized else -amount if "上" in normalized else 0
-        operations.append(OperationRequest(operation_type="move_object", payload={"target": {"selector": "latest"}, "dx": dx, "dy": dy}))
-    elif "放大" in normalized or "缩小" in normalized:
+        target = _target_selector(normalized)
+        operation_type = "move_many" if _is_many_target(target) else "move_object"
+        operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "dx": dx, "dy": dy}))
+    elif "放大" in normalized or "缩小" in normalized or "变大" in normalized or "变小" in normalized:
         factor = 2 if "一倍" in normalized or "两倍" in normalized else 1.2
-        if "缩小" in normalized:
+        if "缩小" in normalized or "变小" in normalized:
             factor = 0.5 if "一半" in normalized or "一倍" in normalized else 0.8
-        operations.append(OperationRequest(operation_type="scale_object", payload={"target": {"selector": "latest"}, "factor": factor}))
+        target = _target_selector(normalized)
+        operation_type = "scale_many" if _is_many_target(target) else "scale_object"
+        operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "factor": factor}))
     else:
         shape = _find_shape(normalized)
         if shape:

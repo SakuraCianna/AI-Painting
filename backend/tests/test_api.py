@@ -75,3 +75,38 @@ def test_scale_latest_object(client: TestClient) -> None:
     response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把它放大一倍"})
     assert response.status_code == 200
     assert response.json()["artwork"]["objects"][0]["geometry"]["radius"] == 200
+
+
+def test_object_metadata_and_semantic_batch_scale(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+
+    create_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子 红色屋顶 蓝色门 两扇窗户"})
+    assert create_response.status_code == 200
+    window_objects = [obj for obj in create_response.json()["artwork"]["objects"] if "house.window" in obj["semantic_tags"]]
+    assert len(window_objects) == 2
+    assert all(obj["layer_id"] == "middle" for obj in window_objects)
+    assert all(obj["group_id"] == "house" for obj in window_objects)
+
+    scale_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把房子的窗户都变大"})
+    assert scale_response.status_code == 200
+    scaled_windows = [obj for obj in scale_response.json()["artwork"]["objects"] if "house.window" in obj["semantic_tags"]]
+    assert all(obj["geometry"]["width"] == 76.8 for obj in scaled_windows)
+    assert all(obj["geometry"]["height"] == 76.8 for obj in scaled_windows)
+
+
+def test_rename_latest_and_move_layer(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色圆形 命名为太阳 放到前景层"})
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个蓝色矩形 放到前景层"})
+
+    rename_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把它命名为标记块"})
+    assert rename_response.status_code == 200
+    objects = rename_response.json()["artwork"]["objects"]
+    assert objects[-1]["name"] == "标记块"
+    assert objects[-1]["layer_id"] == "foreground"
+
+    move_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把前景层所有对象向右移动一点"})
+    assert move_response.status_code == 200
+    moved_objects = move_response.json()["artwork"]["objects"]
+    assert moved_objects[0]["geometry"]["cx"] == 532
+    assert moved_objects[1]["geometry"]["x"] == 422

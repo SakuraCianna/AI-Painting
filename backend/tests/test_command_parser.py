@@ -27,9 +27,21 @@ def test_parse_circle_with_color_and_size() -> None:
     assert op.payload["object"]["geometry"]["radius"] == 100
 
 
+def test_parse_object_name_layer_and_semantic_tags() -> None:
+    plan = parse_command("画一个黄色圆形 命名为太阳 放到前景层")
+    obj = plan.operations[0].payload["object"]
+    assert obj["name"] == "太阳"
+    assert obj["layer_id"] == "foreground"
+    assert "sun" in obj["semantic_tags"]
+    assert "shape.circle" in obj["semantic_tags"]
+
+
 def test_parse_complex_house_plan() -> None:
     plan = parse_command("画一个房子 红色屋顶 蓝色门 两扇窗户")
     assert [op.payload["object"]["name"] for op in plan.operations] == ["房子主体", "红色屋顶", "蓝色门", "窗户1", "窗户2"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.expected_object_count == 5
+    assert plan.operations[3].payload["object"]["semantic_tags"] == ["house", "house.window", "shape.rect"]
 
 
 def test_parse_undo_synonym() -> None:
@@ -60,3 +72,24 @@ def test_parse_scale_latest_object() -> None:
     plan = parse_command("把它放大一倍")
     assert plan.operations[0].operation_type == "scale_object"
     assert plan.operations[0].payload["factor"] == 2
+
+
+def test_parse_semantic_scale_many() -> None:
+    plan = parse_command("把房子的窗户都变大")
+    assert plan.operations[0].operation_type == "scale_many"
+    assert plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
+    assert plan.operations[0].payload["factor"] == 1.2
+
+
+def test_parse_layer_move_many() -> None:
+    plan = parse_command("把前景层所有对象向右移动一点")
+    assert plan.operations[0].operation_type == "move_many"
+    assert plan.operations[0].payload["target"]["layer_id"] == "foreground"
+    assert plan.operations[0].payload["dx"] == 20
+
+
+def test_parse_rename_latest_object() -> None:
+    plan = parse_command("把它命名为太阳")
+    assert plan.operations[0].operation_type == "set_metadata"
+    assert plan.operations[0].payload["target"] == {"selector": "latest"}
+    assert plan.operations[0].payload["name"] == "太阳"

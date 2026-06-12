@@ -28,6 +28,11 @@ def _target_object_id(connection: sqlite3.Connection, artwork_id: str, target: d
     return find_latest_object(connection, artwork_id, object_type).id
 
 
+def _target_object(connection: sqlite3.Connection, artwork_id: str, target: dict[str, Any] | None):
+    object_id = _target_object_id(connection, artwork_id, target)
+    return next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
+
+
 def _move_geometry(geometry: dict[str, Any], dx: int, dy: int) -> dict[str, Any]:
     moved = dict(geometry)
     for key in ("x", "cx", "x1", "x2"):
@@ -51,6 +56,25 @@ def _scale_geometry(geometry: dict[str, Any], factor: float) -> dict[str, Any]:
     if original_height is not None and "y" in scaled:
         scaled["y"] = round(float(scaled["y"]) - ((float(scaled["height"]) - original_height) / 2), 2)
     return scaled
+
+
+def _metadata_snapshot(obj) -> dict[str, Any]:
+    return {
+        "name": obj.name,
+        "layer_id": obj.layer_id,
+        "group_id": obj.group_id,
+        "semantic_tags": obj.semantic_tags,
+        "transform": obj.transform,
+    }
+
+
+def _metadata_updates(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: payload[key] for key in ("name", "layer_id", "group_id", "semantic_tags", "transform") if key in payload}
+
+
+def _apply_metadata_updates(connection: sqlite3.Connection, artwork_id: str, object_id: str, updates: dict[str, Any], *, commit: bool) -> None:
+    kwargs = {key: value for key, value in updates.items() if key in {"name", "layer_id", "group_id", "semantic_tags", "transform"}}
+    update_object(connection, artwork_id, object_id, **kwargs, commit=commit)
 
 
 def apply_operation(
@@ -95,6 +119,12 @@ def apply_operation(
         inverse_payload = {"target": {"object_id": object_id}, "style": {key: current.style.get(key) for key in style_updates}}
         update_object(connection, artwork_id, object_id, style=style_updates, commit=commit)
         message = "已更新样式"
+    elif operation_type == "set_metadata":
+        current = _target_object(connection, artwork_id, payload.get("target"))
+        updates = _metadata_updates(payload)
+        inverse_payload = {"target": {"object_id": current.id}, **{key: _metadata_snapshot(current)[key] for key in updates}}
+        _apply_metadata_updates(connection, artwork_id, current.id, updates, commit=commit)
+        message = "已更新对象信息"
     elif operation_type == "set_style_many":
         targets = find_objects(connection, artwork_id, payload.get("target"))
         if not targets:
@@ -110,6 +140,21 @@ def apply_operation(
         for obj in targets:
             update_object(connection, artwork_id, obj.id, style=style_updates, commit=commit)
         message = f"已更新 {len(targets)} 个对象的样式"
+    elif operation_type == "set_metadata_many":
+        targets = find_objects(connection, artwork_id, payload.get("target"))
+        if not targets:
+            raise KeyError("No matching drawing objects exist")
+        updates = _metadata_updates(payload)
+        inverse_payload = {
+            "items": [
+                {"object_id": obj.id, **{key: _metadata_snapshot(obj)[key] for key in updates}}
+                for obj in targets
+            ]
+        }
+        payload["target"] = {"object_ids": [obj.id for obj in targets]}
+        for obj in targets:
+            _apply_metadata_updates(connection, artwork_id, obj.id, updates, commit=commit)
+        message = f"已更新 {len(targets)} 个对象信息"
     elif operation_type == "move_object":
         object_id = _target_object_id(connection, artwork_id, payload.get("target"))
         current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
@@ -140,6 +185,16 @@ def apply_operation(
         update_object(connection, artwork_id, object_id, geometry=_scale_geometry(current.geometry, factor), commit=commit)
         inverse_payload = {"target": {"object_id": object_id}, "factor": 1 / factor if factor else 1}
         message = "已缩放对象"
+    elif operation_type == "scale_many":
+        targets = find_objects(connection, artwork_id, payload.get("target"))
+        if not targets:
+            raise KeyError("No matching drawing objects exist")
+        factor = float(payload.get("factor", 1))
+        payload["target"] = {"object_ids": [obj.id for obj in targets]}
+        inverse_payload = {"target": {"object_ids": [obj.id for obj in targets]}, "factor": 1 / factor if factor else 1}
+        for obj in targets:
+            update_object(connection, artwork_id, obj.id, geometry=_scale_geometry(obj.geometry, factor), commit=commit)
+        message = f"已缩放 {len(targets)} 个对象"
     elif operation_type == "delete_object":
         object_id = _target_object_id(connection, artwork_id, payload.get("target"))
         removed = delete_object(connection, artwork_id, object_id, commit=commit)
@@ -190,15 +245,31 @@ def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> Artw
         delete_object(connection, artwork_id, inverse_payload["object_id"])
     elif operation_type == "set_style":
         apply_operation(connection, artwork_id, OperationRequest(operation_type="set_style", payload=inverse_payload), record=False)
+    elif operation_type == "set_metadata":
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_metadata", payload=inverse_payload), record=False)
     elif operation_type == "set_style_many":
         for item in inverse_payload["items"]:
             update_object(connection, artwork_id, item["object_id"], style=item["style"])
+    elif operation_type == "set_metadata_many":
+        for item in inverse_payload["items"]:
+            update_object(
+                connection,
+                artwork_id,
+                item["object_id"],
+                name=item.get("name"),
+                layer_id=item.get("layer_id"),
+                group_id=item.get("group_id"),
+                semantic_tags=item.get("semantic_tags", []),
+                transform=item.get("transform", {}),
+            )
     elif operation_type == "move_object":
         apply_operation(connection, artwork_id, OperationRequest(operation_type="move_object", payload=inverse_payload), record=False)
     elif operation_type == "move_many":
         apply_operation(connection, artwork_id, OperationRequest(operation_type="move_many", payload=inverse_payload), record=False)
     elif operation_type == "scale_object":
         apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload=inverse_payload), record=False)
+    elif operation_type == "scale_many":
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False)
     elif operation_type == "delete_object":
         add_object(connection, artwork_id, inverse_payload["object"])
 

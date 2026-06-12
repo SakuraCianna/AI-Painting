@@ -9,6 +9,9 @@ from uuid import uuid4
 from .schemas import ArtworkCreateRequest, ArtworkResponse, DrawingObject
 
 
+_UNSET = object()
+
+
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -38,6 +41,10 @@ def row_to_object(row: sqlite3.Row) -> DrawingObject:
         geometry=_loads(row["geometry_json"]),
         style=_loads(row["style_json"]),
         z_index=row["z_index"],
+        layer_id=row["layer_id"] or "base",
+        group_id=row["group_id"],
+        semantic_tags=_loads(row["semantic_tags_json"]),
+        transform=_loads(row["transform_json"]),
     )
 
 
@@ -126,14 +133,18 @@ def add_object(connection: sqlite3.Connection, artwork_id: str, obj: dict[str, A
     connection.execute(
         """
         INSERT INTO drawing_objects
-            (id, artwork_id, type, name, geometry_json, style_json, z_index, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, artwork_id, type, name, layer_id, group_id, semantic_tags_json, transform_json, geometry_json, style_json, z_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             object_id,
             artwork_id,
             obj["type"],
             obj.get("name"),
+            obj.get("layer_id", "base"),
+            obj.get("group_id"),
+            _json(obj.get("semantic_tags", [])),
+            _json(obj.get("transform", {})),
             _json(obj.get("geometry", {})),
             _json(obj.get("style", {})),
             z_index,
@@ -224,6 +235,25 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
     color = selector.get("color")
     if color:
         objects = [obj for obj in objects if obj.style.get("fill") == color or obj.style.get("stroke") == color]
+    name = selector.get("name")
+    if name:
+        objects = [obj for obj in objects if obj.name == name]
+    name_contains = selector.get("name_contains")
+    if name_contains:
+        objects = [obj for obj in objects if obj.name and str(name_contains) in obj.name]
+    layer_id = selector.get("layer_id")
+    if layer_id:
+        objects = [obj for obj in objects if obj.layer_id == layer_id]
+    group_id = selector.get("group_id")
+    if group_id:
+        objects = [obj for obj in objects if obj.group_id == group_id]
+    semantic_tag = selector.get("semantic_tag")
+    if semantic_tag:
+        objects = [obj for obj in objects if semantic_tag in obj.semantic_tags]
+    semantic_tags = selector.get("semantic_tags")
+    if semantic_tags:
+        wanted_tags = {str(tag) for tag in semantic_tags}
+        objects = [obj for obj in objects if wanted_tags.intersection(obj.semantic_tags)]
     return objects
 
 
@@ -234,21 +264,34 @@ def update_object(
     *,
     geometry: dict[str, Any] | None = None,
     style: dict[str, Any] | None = None,
-    name: str | None = None,
+    name: str | None | object = _UNSET,
+    layer_id: str | None | object = _UNSET,
+    group_id: str | None | object = _UNSET,
+    semantic_tags: list[str] | None | object = _UNSET,
+    transform: dict[str, Any] | object = _UNSET,
     commit: bool = True,
 ) -> DrawingObject:
     current = get_object(connection, artwork_id, object_id)
     next_geometry = {**current.geometry, **(geometry or {})}
     next_style = {**current.style, **(style or {})}
+    next_name = current.name if name is _UNSET else name
+    next_layer_id = current.layer_id if layer_id is _UNSET else layer_id or "base"
+    next_group_id = current.group_id if group_id is _UNSET else group_id
+    next_semantic_tags = current.semantic_tags if semantic_tags is _UNSET else semantic_tags or []
+    next_transform = current.transform if transform is _UNSET else transform
     timestamp = now_iso()
     connection.execute(
         """
         UPDATE drawing_objects
-        SET name = ?, geometry_json = ?, style_json = ?, updated_at = ?
+        SET name = ?, layer_id = ?, group_id = ?, semantic_tags_json = ?, transform_json = ?, geometry_json = ?, style_json = ?, updated_at = ?
         WHERE artwork_id = ? AND id = ?
         """,
         (
-            name if name is not None else current.name,
+            next_name,
+            next_layer_id,
+            next_group_id,
+            _json(next_semantic_tags),
+            _json(next_transform),
             _json(next_geometry),
             _json(next_style),
             timestamp,
