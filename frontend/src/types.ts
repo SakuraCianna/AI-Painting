@@ -71,6 +71,7 @@ export interface CommandExecutionResponse {
   message: string;
   plan: CommandPlan;
   artwork: Artwork | null;
+  metrics: CommandExecutionMetrics;
 }
 
 export interface AsrProvidersResponse {
@@ -90,6 +91,27 @@ export interface AsrTranscriptionResponse {
     message: string;
     latency_ms?: number | null;
   }>;
+  metrics: AsrTranscriptionMetrics;
+}
+
+export interface AsrTranscriptionMetrics {
+  total_ms?: number | null;
+  audio_bytes?: number | null;
+  attempt_count: number;
+  successful_provider?: string | null;
+  fallback_count: number;
+}
+
+export interface CommandExecutionMetrics {
+  rule_parse_ms?: number | null;
+  llm_planner_ms?: number | null;
+  planner_total_ms?: number | null;
+  execute_ms?: number | null;
+  total_ms?: number | null;
+  llm_attempted: boolean;
+  llm_succeeded: boolean;
+  fallback_used: boolean;
+  planner_source?: string | null;
 }
 
 export interface TtsSynthesisResponse {
