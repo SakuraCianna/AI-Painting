@@ -155,6 +155,18 @@ $env:AI_PAINTING_INSTALL_LOCAL_ASR="1"
 - 未验证 CUDA、PyTorch、FlashAttention 或 vLLM 加速组合
 - 未验证方言、噪声、长音频和连续多轮语音指令的准确率
 
+## 本地命令模板安全边界
+
+`AI_PAINTING_LOCAL_ASR_COMMAND` 只建议在可信本机开发环境使用。后端会校验 `language` 只包含字母、数字、下划线或连字符, 并且不会通过 shell 执行命令模板。
+
+命令模板应直接调用可执行程序:
+
+```powershell
+$env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio}" --language "{language}"'
+```
+
+不要依赖重定向、管道、`&&` 等 shell 语法。
+
 ## 建议验收顺序
 
 1. 安装 `backend\requirements-local-asr.txt`

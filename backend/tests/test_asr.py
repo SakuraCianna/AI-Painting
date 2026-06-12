@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import base64
+import subprocess
 
 from fastapi.testclient import TestClient
 
-from app.asr import build_xiaomi_payload, get_asr_provider_status, parse_audio_data_url
+from app.asr import _transcribe_with_local_command, build_xiaomi_payload, get_asr_provider_status, parse_audio_data_url
 from app.schemas import AsrTranscriptionResponse
 
 
@@ -27,6 +29,15 @@ def test_xiaomi_payload_matches_mimo_asr_contract() -> None:
     input_audio = payload["messages"][0]["content"][0]
     assert input_audio["type"] == "input_audio"
     assert input_audio["input_audio"]["data"] == "data:audio/wav;base64,AAAA"
+
+
+def test_xiaomi_payload_rejects_unsafe_language() -> None:
+    try:
+        build_xiaomi_payload("data:audio/wav;base64,AAAA", "zh&calc")
+    except ValueError as exc:
+        assert "ASR 语种" in str(exc)
+    else:
+        raise AssertionError("unsafe language should be rejected")
 
 
 def test_provider_status_prefers_xiaomi_then_local(monkeypatch) -> None:
@@ -55,6 +66,36 @@ def test_transcribe_endpoint_returns_503_without_backend_provider(client: TestCl
 
     assert response.status_code == 503
     assert response.json()["detail"]["message"] == "后端 ASR 不可用, 请使用 Web Speech API 兜底"
+
+
+def test_transcribe_endpoint_rejects_unsafe_language(client: TestClient) -> None:
+    response = client.post(
+        "/api/asr/transcribe",
+        json={"audio_data_url": "data:audio/wav;base64,AAAA", "language": "zh&calc"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_local_asr_command_runs_without_shell(monkeypatch) -> None:
+    audio = parse_audio_data_url("data:audio/wav;base64,AAAA")
+    captured: dict[str, object] = {}
+
+    def fake_run(command, *, shell, capture_output, text, timeout):
+        captured["command"] = command
+        captured["shell"] = shell
+        captured["capture_output"] = capture_output
+        captured["text"] = text
+        captured["timeout"] = timeout
+        return subprocess.CompletedProcess(command, 0, stdout="画一个圆\n", stderr="")
+
+    monkeypatch.setenv("AI_PAINTING_LOCAL_ASR_COMMAND", 'python local_asr.py --audio "{audio}" --language "{language}"')
+    monkeypatch.setattr("app.asr.subprocess.run", fake_run)
+
+    result = asyncio.run(_transcribe_with_local_command(audio, "zh"))
+
+    assert result == "画一个圆"
+    assert captured["shell"] is False
 
 
 def test_transcribe_endpoint_returns_text(client: TestClient, monkeypatch) -> None:

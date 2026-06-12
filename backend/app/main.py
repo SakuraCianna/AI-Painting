@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from time import perf_counter
@@ -46,6 +47,10 @@ from .tts import TtsProviderError, synthesize_with_xiaomi
 load_env_file()
 
 
+def _read_csv_env(name: str, default: str) -> list[str]:
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -56,9 +61,8 @@ app = FastAPI(title="AI Painting Voice Drawing API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-    allow_credentials=True,
+    allow_origins=_read_csv_env("AI_PAINTING_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

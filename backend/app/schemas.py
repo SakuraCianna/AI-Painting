@@ -19,10 +19,10 @@ class DrawingObject(BaseModel):
 
 
 class ArtworkCreateRequest(BaseModel):
-    title: str = "未命名作品"
-    width: int = 1024
-    height: int = 768
-    background: str = "#ffffff"
+    title: str = Field("未命名作品", min_length=1, max_length=80)
+    width: int = Field(1024, ge=64, le=4096)
+    height: int = Field(768, ge=64, le=4096)
+    background: str = Field("#ffffff", min_length=1, max_length=64)
 
 
 class ArtworkResponse(BaseModel):
@@ -70,12 +70,12 @@ class CommandPlan(BaseModel):
 
 
 class CommandParseRequest(BaseModel):
-    text: str
+    text: str = Field(..., min_length=1, max_length=500)
 
 
 class AsrTranscriptionRequest(BaseModel):
-    audio_data_url: str
-    language: str = "zh"
+    audio_data_url: str = Field(..., min_length=1, max_length=10_500_000)
+    language: str = Field("zh", min_length=1, max_length=20)
 
 
 class AsrProviderAttempt(BaseModel):
@@ -109,9 +109,9 @@ class AsrTranscriptionResponse(BaseModel):
 
 
 class TtsSynthesisRequest(BaseModel):
-    text: str
-    voice: str | None = None
-    style: str | None = None
+    text: str = Field(..., min_length=1, max_length=300)
+    voice: str | None = Field(default=None, max_length=80)
+    style: str | None = Field(default=None, max_length=80)
 
 
 class TtsSynthesisResponse(BaseModel):

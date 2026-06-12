@@ -179,6 +179,7 @@ $env:AI_PAINTING_ASR_PROVIDERS="xiaomi,local"
 $env:AI_PAINTING_ASR_LANGUAGE="zh"
 $env:AI_PAINTING_LOCAL_ASR_URL="http://127.0.0.1:9001/asr"
 $env:AI_PAINTING_LOCAL_ASR_LABEL="Qwen3-ASR 本地服务"
+$env:AI_PAINTING_CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
 $env:QWEN3_ASR_MODEL="Qwen/Qwen3-ASR-0.6B"
 $env:QWEN3_ASR_DEVICE="auto"
 $env:QWEN3_ASR_DTYPE="auto"
@@ -198,6 +199,7 @@ $env:AI_PAINTING_MIMO_TTS_STYLE="自然 清晰"
 - `AI_PAINTING_ASR_LANGUAGE`: 后端 ASR 语种, 默认是 `zh`, 小米接口也支持 `auto` 和 `en`
 - `AI_PAINTING_LOCAL_ASR_URL`: 本地 ASR HTTP 服务地址, 作为小米 ASR 后的第一备用方案
 - `AI_PAINTING_LOCAL_ASR_LABEL`: 前端展示的本地 ASR Provider 名称
+- `AI_PAINTING_CORS_ORIGINS`: 后端允许的前端来源列表, 用英文逗号分隔, 默认只允许 `5173`
 - `AI_PAINTING_LOCAL_ASR_COMMAND`: 本地 ASR 命令模板, 作为本地 HTTP 服务的替代方案, 命令需要把识别文本输出到 stdout
 - `QWEN3_ASR_MODEL`: 本地 Qwen3-ASR 模型 ID 或本地模型目录, 默认是 `Qwen/Qwen3-ASR-0.6B`
 - `QWEN3_ASR_DEVICE`: 本地 Qwen3-ASR 推理设备, 默认 `auto`
@@ -222,7 +224,7 @@ $env:AI_PAINTING_MIMO_TTS_STYLE="自然 清晰"
 $env:AI_PAINTING_LOCAL_ASR_COMMAND='python E:\tools\local_asr.py --audio "{audio}" --language "{language}"'
 ```
 
-命令模板只建议在可信本机开发环境使用。可用占位符包括 `{audio}`、`{language}`、`{workdir}`。
+命令模板只建议在可信本机开发环境使用。可用占位符包括 `{audio}`、`{language}`、`{workdir}`。后端会校验 `language` 只包含字母、数字、下划线或连字符, 并且不会通过 shell 执行命令模板, 因此不要在模板里依赖重定向、管道等 shell 语法。
 
 本地 Qwen3-ASR 备用服务详见 [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md)。
 

@@ -14,6 +14,7 @@
 - `frontend`: Nginx 静态服务, 容器内监听 `80`, 默认映射到宿主机 `5173`
 - `frontend/nginx.conf`: 把 `/api/` 和 `/health` 代理到 `backend:8080`
 - `ai-painting-backend-data`: 保存 `backend/data/ai_painting.sqlite3`
+- 后端容器使用非 root 用户运行, 降低容器逃逸或误写系统路径的风险
 
 ## 3. 启动命令
 
@@ -62,6 +63,7 @@ Docker Compose 会从当前 PowerShell 环境变量或项目根目录 `.env` 读
 $env:MIMO_API_KEY="<你的 Xiaomi MiMo API Key>"
 $env:AI_PAINTING_ENABLE_LLM_PLANNER="true"
 $env:AI_PAINTING_ASR_PROVIDERS="xiaomi,local"
+$env:AI_PAINTING_CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
 $env:AI_PAINTING_FRONTEND_PORT="5173"
 $env:AI_PAINTING_BACKEND_PORT="8080"
 docker compose up -d --build
