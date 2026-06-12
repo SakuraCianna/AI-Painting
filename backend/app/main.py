@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from time import perf_counter
@@ -9,12 +10,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlite3 import Connection
 
 from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_audio_data_url
-from .command_parser import parse_command
+from .command_parser import normalize_text, parse_command
 from .config import load_env_file
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
 from .llm_planner import LlmPlannerError, plan_with_mimo, should_use_llm_planner
-from .repositories import create_artwork, get_artwork, list_artworks, record_voice_log
+from .repositories import (
+    create_artwork,
+    get_artwork,
+    get_latest_voice_log_by_status,
+    list_artworks,
+    mark_voice_log_status,
+    record_voice_log,
+)
 from .schemas import (
     AsrProvidersResponse,
     AsrTranscriptionRequest,
@@ -57,6 +65,13 @@ app.add_middleware(
 class PlannedCommand:
     plan: CommandPlan
     metrics: CommandExecutionMetrics
+
+
+@dataclass(frozen=True)
+class ConfirmationCommand:
+    plan: CommandPlan
+    metrics: CommandExecutionMetrics
+    pending_log_id: str
 
 
 @app.get("/health")
@@ -141,6 +156,47 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
         return PlannedCommand(plan, metrics)
 
 
+def _is_confirmation_text(text: str) -> bool:
+    normalized = normalize_text(text)
+    if any(keyword in normalized for keyword in ("取消", "不要", "不用", "别")):
+        return False
+    return any(keyword in normalized for keyword in ("确认", "确定", "可以", "执行", "是的", "对的"))
+
+
+def _is_cancel_confirmation_text(text: str) -> bool:
+    normalized = normalize_text(text)
+    return any(keyword in normalized for keyword in ("取消", "不要", "不用", "别清空", "不清空", "算了"))
+
+
+def _latest_pending_clear_canvas(db: Connection, artwork_id: str) -> tuple[str, CommandPlan] | None:
+    row = get_latest_voice_log_by_status(db, artwork_id, "needs_confirmation")
+    if row is None:
+        return None
+    try:
+        plan = CommandPlan.model_validate(json.loads(row["parse_result_json"]))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if len(plan.operations) != 1 or plan.operations[0].operation_type != "clear_canvas":
+        return None
+    return str(row["id"]), plan
+
+
+def _confirmed_clear_canvas_command(text: str, pending_log_id: str, pending_plan: CommandPlan) -> ConfirmationCommand:
+    plan = pending_plan.model_copy(deep=True)
+    plan.raw_text = text
+    plan.normalized_text = normalize_text(text)
+    plan.requires_confirmation = False
+    plan.clarification_question = None
+    plan.explanation = "已确认执行清空画布"
+    plan.planner_source = "confirmation"
+    metrics = CommandExecutionMetrics(
+        rule_parse_ms=0,
+        planner_total_ms=0,
+        planner_source="confirmation",
+    )
+    return ConfirmationCommand(plan=plan, metrics=metrics, pending_log_id=pending_log_id)
+
+
 @app.get("/api/asr/providers", response_model=AsrProvidersResponse)
 def api_get_asr_providers() -> AsrProvidersResponse:
     return get_asr_provider_status()
@@ -184,9 +240,52 @@ async def api_execute_command(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    planned_command = await build_command_plan_with_metrics(request.text)
-    plan = planned_command.plan
-    metrics = planned_command.metrics
+    pending_clear = _latest_pending_clear_canvas(db, artwork_id)
+    pending_confirmation_id: str | None = None
+
+    if pending_clear and _is_cancel_confirmation_text(request.text):
+        pending_log_id, pending_plan = pending_clear
+        mark_voice_log_status(db, pending_log_id, "canceled", error_message="用户取消清空画布")
+        plan = CommandPlan(
+            raw_text=request.text,
+            normalized_text=normalize_text(request.text),
+            operations=[],
+            confidence=pending_plan.confidence,
+            requires_confirmation=False,
+            risk_level="low",
+            explanation="已取消清空画布",
+            planner_source="confirmation",
+        )
+        metrics = CommandExecutionMetrics(
+            rule_parse_ms=0,
+            planner_total_ms=0,
+            execute_ms=0,
+            total_ms=round((perf_counter() - started_at) * 1000, 2),
+            planner_source="confirmation",
+        )
+        record_voice_log(
+            db,
+            artwork_id=artwork_id,
+            raw_transcript=request.text,
+            normalized_text=plan.normalized_text,
+            parse_result=plan.model_dump(),
+            confidence=plan.confidence,
+            status="canceled",
+            error_message=None,
+            latency=metrics.model_dump(exclude_none=True),
+        )
+        return CommandExecutionResponse(message="已取消清空画布", plan=plan, artwork=get_artwork(db, artwork_id), metrics=metrics)
+
+    if pending_clear and _is_confirmation_text(request.text):
+        pending_log_id, pending_plan = pending_clear
+        confirmation_command = _confirmed_clear_canvas_command(request.text, pending_log_id, pending_plan)
+        plan = confirmation_command.plan
+        metrics = confirmation_command.metrics
+        pending_confirmation_id = confirmation_command.pending_log_id
+    else:
+        planned_command = await build_command_plan_with_metrics(request.text)
+        plan = planned_command.plan
+        metrics = planned_command.metrics
 
     if plan.requires_confirmation:
         metrics.execute_ms = 0
@@ -234,6 +333,13 @@ async def api_execute_command(
     finished_at = perf_counter()
     metrics.execute_ms = round((finished_at - execute_started_at) * 1000, 2)
     metrics.total_ms = round((finished_at - started_at) * 1000, 2)
+    if pending_confirmation_id:
+        mark_voice_log_status(
+            db,
+            pending_confirmation_id,
+            "confirmed" if status == "success" else "confirmation_failed",
+            error_message="用户已确认执行" if status == "success" else message,
+        )
     record_voice_log(
         db,
         artwork_id=artwork_id,

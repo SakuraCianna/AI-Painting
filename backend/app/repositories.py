@@ -316,6 +316,15 @@ def delete_object(connection: sqlite3.Connection, artwork_id: str, object_id: st
     return current
 
 
+def delete_all_objects(connection: sqlite3.Connection, artwork_id: str, *, commit: bool = True) -> list[DrawingObject]:
+    current_objects = get_artwork(connection, artwork_id).objects
+    timestamp = now_iso()
+    connection.execute("DELETE FROM drawing_objects WHERE artwork_id = ?", (artwork_id,))
+    connection.execute("UPDATE artworks SET updated_at = ? WHERE id = ?", (timestamp, artwork_id))
+    _commit(connection, commit)
+    return current_objects
+
+
 def save_version(connection: sqlite3.Connection, artwork_id: str, *, commit: bool = True) -> None:
     artwork = get_artwork(connection, artwork_id)
     row = connection.execute(
@@ -384,6 +393,26 @@ def mark_operation_status(connection: sqlite3.Connection, operation_id: str, sta
 def clear_redo_stack(connection: sqlite3.Connection, artwork_id: str, *, commit: bool = True) -> None:
     connection.execute("DELETE FROM operations WHERE artwork_id = ? AND status = 'undone'", (artwork_id,))
     _commit(connection, commit)
+
+
+def get_latest_voice_log_by_status(connection: sqlite3.Connection, artwork_id: str, status: str) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT * FROM voice_command_logs
+        WHERE artwork_id = ? AND status = ?
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT 1
+        """,
+        (artwork_id, status),
+    ).fetchone()
+
+
+def mark_voice_log_status(connection: sqlite3.Connection, log_id: str, status: str, *, error_message: str | None = None) -> None:
+    connection.execute(
+        "UPDATE voice_command_logs SET status = ?, error_message = ? WHERE id = ?",
+        (status, error_message, log_id),
+    )
+    connection.commit()
 
 
 def record_voice_log(
