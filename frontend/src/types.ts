@@ -62,3 +62,10 @@ export interface AsrTranscriptionResponse {
     latency_ms?: number | null;
   }>;
 }
+
+export interface TtsSynthesisResponse {
+  audio_data_url: string;
+  provider: string;
+  provider_label: string;
+  format: string;
+}

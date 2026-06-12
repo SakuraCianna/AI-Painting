@@ -1,4 +1,10 @@
-import type { Artwork, AsrProvidersResponse, AsrTranscriptionResponse, CommandExecutionResponse } from "./types";
+import type {
+  Artwork,
+  AsrProvidersResponse,
+  AsrTranscriptionResponse,
+  CommandExecutionResponse,
+  TtsSynthesisResponse
+} from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
 
@@ -53,6 +59,13 @@ export function transcribeAudio(audioDataUrl: string, language = "zh"): Promise<
       audio_data_url: audioDataUrl,
       language
     })
+  });
+}
+
+export function synthesizeSpeech(text: string): Promise<TtsSynthesisResponse> {
+  return requestJson<TtsSynthesisResponse>("/api/tts/synthesize", {
+    method: "POST",
+    body: JSON.stringify({ text })
   });
 }
 

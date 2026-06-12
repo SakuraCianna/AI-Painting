@@ -84,6 +84,19 @@ class AsrTranscriptionResponse(BaseModel):
     attempts: list[AsrProviderAttempt] = Field(default_factory=list)
 
 
+class TtsSynthesisRequest(BaseModel):
+    text: str
+    voice: str | None = None
+    style: str | None = None
+
+
+class TtsSynthesisResponse(BaseModel):
+    audio_data_url: str
+    provider: str = "xiaomi"
+    provider_label: str = "小米 MiMo TTS"
+    format: str = "wav"
+
+
 class CommandExecutionResponse(BaseModel):
     message: str
     plan: CommandPlan

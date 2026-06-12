@@ -24,7 +24,10 @@ from .schemas import (
     CommandParseRequest,
     CommandPlan,
     OperationResponse,
+    TtsSynthesisRequest,
+    TtsSynthesisResponse,
 )
+from .tts import TtsProviderError, synthesize_with_xiaomi
 
 
 load_env_file()
@@ -105,6 +108,16 @@ async def api_transcribe_audio(request: AsrTranscriptionRequest) -> AsrTranscrip
                 "attempts": [attempt.model_dump() for attempt in exc.attempts],
             },
         ) from exc
+
+
+@app.post("/api/tts/synthesize", response_model=TtsSynthesisResponse)
+async def api_synthesize_speech(request: TtsSynthesisRequest) -> TtsSynthesisResponse:
+    try:
+        return await synthesize_with_xiaomi(request.text, request.voice, request.style)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except TtsProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/artworks/{artwork_id}/commands", response_model=CommandExecutionResponse)
