@@ -11,7 +11,7 @@ import { createArtwork, submitVoiceCommand, synthesizeSpeech } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
-import type { Artwork, CommandPlan } from "./types";
+import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan } from "./types";
 import { exportSvgAsPng } from "./utils/exportPng";
 
 interface TimelineItem {
@@ -19,6 +19,8 @@ interface TimelineItem {
   transcript: string;
   message: string;
   plan: CommandPlan | null;
+  commandMetrics: CommandExecutionMetrics | null;
+  asrMetrics: AsrTranscriptionMetrics | null;
 }
 
 const OPERATION_LABELS: Record<string, string> = {
@@ -74,12 +76,33 @@ function getPlanSummary(plan: CommandPlan | null): string {
   return plan.operations.map((operation) => getOperationLabel(operation.operation_type)).join(" -> ");
 }
 
+function formatLatency(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "暂无";
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(2)} s`;
+  }
+  return `${Math.round(value)} ms`;
+}
+
+function getEndToEndLatency(commandMetrics: CommandExecutionMetrics | null, asrMetrics: AsrTranscriptionMetrics | null): number | null {
+  const commandMs = commandMetrics?.total_ms;
+  const asrMs = asrMetrics?.total_ms;
+  if (commandMs === null || commandMs === undefined) {
+    return null;
+  }
+  return commandMs + (asrMs ?? 0);
+}
+
 export default function App() {
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
   const [isBusy, setIsBusy] = useState(false);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
+  const [latestCommandMetrics, setLatestCommandMetrics] = useState<CommandExecutionMetrics | null>(null);
+  const [latestAsrMetrics, setLatestAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
   const hasCreatedArtworkRef = useRef(false);
   const feedbackAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -111,16 +134,18 @@ export default function App() {
   }, []);
 
   const handleFinalTranscript = useCallback(
-    async (text: string) => {
+    async (text: string, asrMetrics: AsrTranscriptionMetrics | null) => {
       if (!artwork || isBusy) {
         return;
       }
 
       setIsBusy(true);
       setStatusMessage("正在解析语音指令");
+      setLatestAsrMetrics(asrMetrics);
       try {
         const response = await submitVoiceCommand(artwork.id, text);
         setLatestPlan(response.plan);
+        setLatestCommandMetrics(response.metrics);
         if (response.artwork) {
           setArtwork(response.artwork);
         }
@@ -133,7 +158,9 @@ export default function App() {
             id: crypto.randomUUID(),
             transcript: text,
             message: response.message,
-            plan: response.plan
+            plan: response.plan,
+            commandMetrics: response.metrics,
+            asrMetrics
           },
           ...items
         ].slice(0, 12));
@@ -142,12 +169,15 @@ export default function App() {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "语音指令执行失败";
         setLatestPlan(null);
+        setLatestCommandMetrics(null);
         setTimeline((items) => [
           {
             id: crypto.randomUUID(),
             transcript: text,
             message,
-            plan: null
+            plan: null,
+            commandMetrics: null,
+            asrMetrics
           },
           ...items
         ].slice(0, 12));
@@ -172,6 +202,7 @@ export default function App() {
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
   const listeningLabel = voice.isListening ? voice.providerLabel : `待机: ${voice.providerLabel}`;
+  const endToEndLatency = getEndToEndLatency(latestCommandMetrics, latestAsrMetrics);
 
   return (
     <main className="workspace">
@@ -296,6 +327,37 @@ export default function App() {
           )}
         </div>
 
+        <div className="voice-card metrics-card">
+          <p className="panel-label">延迟指标</p>
+          <div className="metrics-grid">
+            <span>
+              <small>ASR</small>
+              <strong>{formatLatency(latestAsrMetrics?.total_ms)}</strong>
+            </span>
+            <span>
+              <small>规划</small>
+              <strong>{formatLatency(latestCommandMetrics?.planner_total_ms)}</strong>
+            </span>
+            <span>
+              <small>执行</small>
+              <strong>{formatLatency(latestCommandMetrics?.execute_ms)}</strong>
+            </span>
+            <span>
+              <small>端到端</small>
+              <strong>{formatLatency(endToEndLatency)}</strong>
+            </span>
+          </div>
+          <p className="metrics-note">
+            {latestCommandMetrics?.fallback_used
+              ? "MiMo 规划失败，已使用规则兜底"
+              : latestCommandMetrics?.llm_succeeded
+                ? "MiMo 规划已命中"
+                : latestCommandMetrics
+                  ? "规则解析已命中"
+                  : "等待一次完整语音指令"}
+          </p>
+        </div>
+
         <div className="timeline">
           <p className="panel-label">操作历史</p>
           {timeline.length === 0 ? (
@@ -305,7 +367,10 @@ export default function App() {
               <article className="timeline-item" key={item.id}>
                 <strong>{item.transcript}</strong>
                 <span>{item.message}</span>
-                <small>{getPlanSummary(item.plan)}</small>
+                <small>
+                  {getPlanSummary(item.plan)} · 规划 {formatLatency(item.commandMetrics?.planner_total_ms)} · 总计{" "}
+                  {formatLatency(getEndToEndLatency(item.commandMetrics, item.asrMetrics))}
+                </small>
               </article>
             ))
           )}

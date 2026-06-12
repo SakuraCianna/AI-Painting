@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from time import perf_counter
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -20,6 +21,7 @@ from .schemas import (
     AsrTranscriptionResponse,
     ArtworkCreateRequest,
     ArtworkResponse,
+    CommandExecutionMetrics,
     CommandExecutionResponse,
     CommandParseRequest,
     CommandPlan,
@@ -49,6 +51,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@dataclass(frozen=True)
+class PlannedCommand:
+    plan: CommandPlan
+    metrics: CommandExecutionMetrics
 
 
 @app.get("/health")
@@ -97,13 +105,40 @@ def _with_plan_metadata(plan: CommandPlan, planner_source: str) -> CommandPlan:
 
 
 async def build_command_plan(text: str) -> CommandPlan:
+    return (await build_command_plan_with_metrics(text)).plan
+
+
+async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
+    started_at = perf_counter()
+    rule_started_at = perf_counter()
     rule_plan = _with_plan_metadata(parse_command(text), "rules")
+    rule_finished_at = perf_counter()
+    metrics = CommandExecutionMetrics(
+        rule_parse_ms=round((rule_finished_at - rule_started_at) * 1000, 2),
+        planner_source=rule_plan.planner_source,
+    )
     if not should_use_llm_planner(text, rule_plan):
-        return rule_plan
+        metrics.planner_total_ms = round((rule_finished_at - started_at) * 1000, 2)
+        return PlannedCommand(rule_plan, metrics)
+
+    metrics.llm_attempted = True
+    llm_started_at = perf_counter()
     try:
-        return _with_plan_metadata(await plan_with_mimo(text), "mimo")
+        plan = _with_plan_metadata(await plan_with_mimo(text), "mimo")
+        llm_finished_at = perf_counter()
+        metrics.llm_planner_ms = round((llm_finished_at - llm_started_at) * 1000, 2)
+        metrics.planner_total_ms = round((llm_finished_at - started_at) * 1000, 2)
+        metrics.llm_succeeded = True
+        metrics.planner_source = plan.planner_source
+        return PlannedCommand(plan, metrics)
     except LlmPlannerError:
-        return _with_plan_metadata(rule_plan, "rules_fallback")
+        llm_finished_at = perf_counter()
+        plan = _with_plan_metadata(rule_plan, "rules_fallback")
+        metrics.llm_planner_ms = round((llm_finished_at - llm_started_at) * 1000, 2)
+        metrics.planner_total_ms = round((llm_finished_at - started_at) * 1000, 2)
+        metrics.fallback_used = True
+        metrics.planner_source = plan.planner_source
+        return PlannedCommand(plan, metrics)
 
 
 @app.get("/api/asr/providers", response_model=AsrProvidersResponse)
@@ -149,10 +184,13 @@ async def api_execute_command(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    plan = await build_command_plan(request.text)
-    parse_finished_at = perf_counter()
+    planned_command = await build_command_plan_with_metrics(request.text)
+    plan = planned_command.plan
+    metrics = planned_command.metrics
 
     if plan.requires_confirmation:
+        metrics.execute_ms = 0
+        metrics.total_ms = round((perf_counter() - started_at) * 1000, 2)
         record_voice_log(
             db,
             artwork_id=artwork_id,
@@ -162,11 +200,17 @@ async def api_execute_command(
             confidence=plan.confidence,
             status="needs_confirmation",
             error_message=plan.clarification_question,
-            latency={"parse_ms": round((parse_finished_at - started_at) * 1000, 2)},
+            latency=metrics.model_dump(exclude_none=True),
         )
-        return CommandExecutionResponse(message=plan.clarification_question or "需要确认", plan=plan, artwork=get_artwork(db, artwork_id))
+        return CommandExecutionResponse(
+            message=plan.clarification_question or "需要确认",
+            plan=plan,
+            artwork=get_artwork(db, artwork_id),
+            metrics=metrics,
+        )
 
     message = "未执行任何操作"
+    execute_started_at = perf_counter()
     try:
         if len(plan.operations) == 1 and plan.operations[0].operation_type == "undo":
             undo_last_operation(db, artwork_id)
@@ -188,6 +232,8 @@ async def api_execute_command(
         message = str(exc)
 
     finished_at = perf_counter()
+    metrics.execute_ms = round((finished_at - execute_started_at) * 1000, 2)
+    metrics.total_ms = round((finished_at - started_at) * 1000, 2)
     record_voice_log(
         db,
         artwork_id=artwork_id,
@@ -197,15 +243,11 @@ async def api_execute_command(
         confidence=plan.confidence,
         status=status,
         error_message=error_message,
-        latency={
-            "parse_ms": round((parse_finished_at - started_at) * 1000, 2),
-            "execute_ms": round((finished_at - parse_finished_at) * 1000, 2),
-            "total_ms": round((finished_at - started_at) * 1000, 2),
-        },
+        latency=metrics.model_dump(exclude_none=True),
     )
     if status == "failed":
         raise HTTPException(status_code=422, detail=message)
-    return CommandExecutionResponse(message=message, plan=plan, artwork=artwork)
+    return CommandExecutionResponse(message=message, plan=plan, artwork=artwork, metrics=metrics)
 
 
 @app.post("/api/artworks/{artwork_id}/undo", response_model=OperationResponse)

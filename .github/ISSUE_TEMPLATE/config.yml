@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 项目文档
+    url: https://github.com/SakuraCianna/AI-Painting#readme
+    about: 查看本地启动、环境变量、语音识别优先级和复杂任务规划说明
