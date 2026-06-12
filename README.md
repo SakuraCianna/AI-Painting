@@ -291,10 +291,11 @@ ASR 样本评测脚手架详见 [docs/evaluation/asr-benchmark.md](docs/evaluati
 1. 后端先使用本地规则解析器处理常见指令
 2. 当规则解析不足且启用 Agent 时, 进入 Drawing Agent Planner
 3. Agent 先生成 SceneGraph v2, 再由编译器转换成受控 `CommandPlan`
-4. 后端会校验对象类型、操作类型、对象数量和风险等级, 校验通过后才交给绘图引擎执行
-5. 多主体场景或全局改造指令在规则层会先返回追问, 避免把复杂描述误执行成单个对象
-6. Agent 规划失败时回退到规则解析结果, 不阻断基础绘图路径
-7. 当前已落地本地客厅场景 Agent 模板, 后续会扩展到流程图、信息图、海报和 UI 草图
+4. LangGraph 节点会执行 SceneGraph repair、validate 和 compile
+5. 后端会校验对象类型、操作类型、对象数量和风险等级, 校验通过后才交给绘图引擎执行
+6. 多主体场景或全局改造指令在规则层会先返回追问, 避免把复杂描述误执行成单个对象
+7. Agent 规划失败时回退到规则解析结果, 不阻断基础绘图路径
+8. 当前已落地本地客厅场景 Agent 模板, 后续会扩展到流程图、信息图、海报和 UI 草图
 
 Drawing Agent 架构详见 [docs/agent-architecture.md](docs/agent-architecture.md)。
 

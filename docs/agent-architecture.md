@@ -26,7 +26,8 @@ ASR
 Drawing Agent Planner
 ├─ Intent / Domain Routing
 ├─ SceneGraph v2 生成
-├─ Pydantic 校验
+├─ SceneGraph Repair
+├─ SceneGraph Validation
 ├─ SceneGraph Compiler
 └─ Tool / Operation Router
 ↓
@@ -55,28 +56,34 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 4. 已落地模块
 
 - `backend/app/agent/scene_graph.py`: SceneGraph v2 Pydantic schema
+- `backend/app/agent/validator.py`: SceneGraph repair 与约束校验
+- `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 repair、validate、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
-- `backend/app/agent/planner.py`: Drawing Agent Planner, 包含本地模板、MiMo SceneGraph 规划和可选 LangGraph runtime
+- `backend/app/agent/planner.py`: Drawing Agent Planner, 包含本地模板和 MiMo SceneGraph 规划
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
 
 ## 5. LangGraph 角色
 
-`langgraph` 已作为后端依赖加入。当前第一阶段以轻量方式接入:
+`langgraph` 已作为后端依赖加入。当前已接入明确的 StateGraph 节点:
 
-- 如果本地安装了 `langgraph`, Agent 编译节点会通过 `StateGraph` 执行
-- 如果不可用, 自动回退到同步编译路径
+- `repair_scene_graph`
+- `validate_scene_graph`
+- `compile_plan`
+
+如果运行环境不可用或 LangGraph 节点执行失败, 会自动回退到同步 repair、validate、compile 路径。
 - 简单规则路径不依赖 LangGraph, 保证基础绘图速度和稳定性
 
-后续会把 Agent 拆为更完整的 LangGraph 节点:
+后续会继续扩展更完整的 LangGraph 节点:
 
 1. `classify_intent`
 2. `build_scene_graph`
-3. `validate_scene_graph`
-4. `repair_scene_graph`
-5. `compile_operations`
-6. `ask_confirmation`
-7. `execute_tools`
+3. `repair_scene_graph`
+4. `validate_scene_graph`
+5. `repair_with_model`
+6. `compile_operations`
+7. `ask_confirmation`
+8. `execute_tools`
 
 ## 6. 输出速度策略
 
@@ -89,6 +96,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 7. 输出质量策略
 
 - SceneGraph 使用 Pydantic schema 校验
+- Repair 节点会修复坐标越界、无效图层、无效关系和高风险确认标记
 - 编译器只允许项目支持的对象类型和操作类型
 - 复杂计划必须带语义标签、分组和图层
 - 高风险操作必须走确认链
@@ -99,7 +107,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 
 - 增加 50 到 100 条复杂语音评测集
 - 扩展领域工具: 室内、人物、流程图、信息图、海报、UI 草图
-- 增加 SceneGraph repair 节点
+- 增加模型驱动的 SceneGraph repair 节点
 - 增加组级移动、缩放、撤销和局部重绘
 - 引入 Mermaid / PlantUML 执行器
 - 引入 Canvas 或 OffscreenCanvas 作为滤镜、笔刷和大图导出增强层

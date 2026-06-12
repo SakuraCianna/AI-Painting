@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import re
-from typing import Any, TypedDict
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
 
 from ..command_parser import is_voice_noise_input, normalize_text
 from ..schemas import CommandPlan
-from .compiler import ALLOWED_OBJECT_TYPES, ALLOWED_OPERATION_TYPES, SceneGraphCompileError, compile_scene_graph_to_command_plan
+from .compiler import ALLOWED_OBJECT_TYPES, ALLOWED_OPERATION_TYPES
+from .graph import run_agent_graph
 from .scene_graph import AgentSceneGraph, AgentSceneObject, AgentSceneRelation, AgentStyle
+from .validator import SceneGraphValidationError
 
 
 MIMO_CHAT_URL = "https://api.xiaomimimo.com/v1/chat/completions"
@@ -24,13 +25,6 @@ JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 class DrawingAgentError(RuntimeError):
     pass
-
-
-class AgentState(TypedDict, total=False):
-    text: str
-    normalized_text: str
-    scene_graph: AgentSceneGraph
-    plan: CommandPlan
 
 
 def is_drawing_agent_enabled() -> bool:
@@ -182,28 +176,6 @@ def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
     return None
 
 
-def _langgraph_is_available() -> bool:
-    return importlib.util.find_spec("langgraph") is not None
-
-
-def _compile_local_scene_with_optional_graph(raw_text: str, normalized_text: str, graph: AgentSceneGraph) -> CommandPlan:
-    if not _langgraph_is_available():
-        return compile_scene_graph_to_command_plan(raw_text, normalized_text, graph)
-
-    try:
-        from langgraph.graph import END, START, StateGraph
-
-        builder = StateGraph(AgentState)
-        builder.add_node("compile_scene_graph", lambda state: {"plan": compile_scene_graph_to_command_plan(state["text"], state["normalized_text"], state["scene_graph"])})
-        builder.add_edge(START, "compile_scene_graph")
-        builder.add_edge("compile_scene_graph", END)
-        runtime = builder.compile()
-        result = runtime.invoke({"text": raw_text, "normalized_text": normalized_text, "scene_graph": graph})
-        return result["plan"]
-    except Exception:
-        return compile_scene_graph_to_command_plan(raw_text, normalized_text, graph)
-
-
 def _build_scene_graph_prompt(text: str) -> list[dict[str, str]]:
     schema_hint = AgentSceneGraph.model_json_schema()
     return [
@@ -266,7 +238,7 @@ async def plan_with_drawing_agent(text: str, *, rule_plan: CommandPlan | None = 
         scene_graph = _local_scene_graph_for_text(normalized)
         if scene_graph is None:
             scene_graph = await _scene_graph_with_mimo(text)
-        plan = _compile_local_scene_with_optional_graph(text, normalized, scene_graph)
+        plan = run_agent_graph(text, normalized, scene_graph)
         return _validate_command_plan(plan)
-    except (SceneGraphCompileError, ValidationError) as exc:
+    except (SceneGraphValidationError, ValidationError) as exc:
         raise DrawingAgentError("Drawing Agent 计划校验失败") from exc
