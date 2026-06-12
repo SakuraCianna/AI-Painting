@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArtwork, submitVoiceCommand } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
@@ -48,8 +48,13 @@ export default function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
+  const hasCreatedArtworkRef = useRef(false);
 
   useEffect(() => {
+    if (hasCreatedArtworkRef.current) {
+      return;
+    }
+    hasCreatedArtworkRef.current = true;
     createArtwork()
       .then((created) => {
         setArtwork(created);
@@ -118,17 +123,23 @@ export default function App() {
   const liveTranscript = voice.interimTranscript || voice.lastFinalTranscript;
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
+  const listeningLabel = voice.isListening ? "正在聆听" : "待机";
 
   return (
     <main className="workspace">
       <section className="stage-panel">
         <header className="topbar" aria-live="polite">
-          <div>
-            <p className="eyebrow">AI Painting</p>
-            <h1>{artwork?.title ?? "语音绘图作品"}</h1>
+          <div className="product-lockup">
+            <div className="app-mark" aria-hidden="true">
+              <span />
+            </div>
+            <div>
+              <p className="eyebrow">Voice Canvas</p>
+              <h1>{artwork?.title ?? "语音绘图作品"}</h1>
+            </div>
           </div>
           <div className="status-cluster">
-            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>{voice.isListening ? "监听中" : "未监听"}</span>
+            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>{listeningLabel}</span>
             <span className="status-pill">{objectCountText}</span>
           </div>
         </header>
@@ -137,7 +148,12 @@ export default function App() {
       </section>
 
       <aside className="side-panel" aria-live="polite">
-        <div className="voice-card">
+        <div className="panel-heading">
+          <p className="eyebrow">Workspace</p>
+          <h2>语音控制台</h2>
+        </div>
+
+        <div className="voice-card status-card">
           <p className="panel-label">当前状态</p>
           <strong>{voice.isSupported ? statusMessage : "当前浏览器不支持内置语音识别"}</strong>
           {voice.error ? <span className="error-text">{voice.error}</span> : null}

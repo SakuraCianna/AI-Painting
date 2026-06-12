@@ -48,6 +48,12 @@ npm install --prefix frontend
 
 ## 本地开发
 
+快速启动前后端:
+
+```powershell
+.\快速启动.bat
+```
+
 启动后端:
 
 ```powershell
@@ -135,6 +141,7 @@ $env:VITE_API_BASE_URL="http://127.0.0.1:8000"
 ├── docs
 │   └── superpowers
 ├── README.md
+├── 快速启动.bat
 ├── 设计文档.md
 └── 需求文档.md
 ```
