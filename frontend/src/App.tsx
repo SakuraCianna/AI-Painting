@@ -139,7 +139,7 @@ export default function App() {
   const liveTranscript = voice.interimTranscript || voice.lastFinalTranscript;
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
-  const listeningLabel = voice.isListening ? "正在聆听" : "待机";
+  const listeningLabel = voice.isListening ? voice.providerLabel : "待机";
 
   return (
     <main className="workspace">
@@ -226,7 +226,7 @@ export default function App() {
 
         <div className="voice-card status-card">
           <p className="panel-label">当前状态</p>
-          <strong>{voice.isSupported ? statusMessage : "当前浏览器不支持内置语音识别"}</strong>
+          <strong>{voice.isSupported ? statusMessage : "当前没有可用的语音识别"}</strong>
           {voice.error ? <span className="error-text">{voice.error}</span> : null}
         </div>
 

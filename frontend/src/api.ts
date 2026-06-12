@@ -1,4 +1,4 @@
-import type { Artwork, CommandExecutionResponse } from "./types";
+import type { Artwork, AsrProvidersResponse, AsrTranscriptionResponse, CommandExecutionResponse } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -39,6 +39,20 @@ export function submitVoiceCommand(artworkId: string, text: string): Promise<Com
   return requestJson<CommandExecutionResponse>(`/api/artworks/${artworkId}/commands`, {
     method: "POST",
     body: JSON.stringify({ text })
+  });
+}
+
+export function fetchAsrProviders(): Promise<AsrProvidersResponse> {
+  return requestJson<AsrProvidersResponse>("/api/asr/providers");
+}
+
+export function transcribeAudio(audioDataUrl: string, language = "zh"): Promise<AsrTranscriptionResponse> {
+  return requestJson<AsrTranscriptionResponse>("/api/asr/transcribe", {
+    method: "POST",
+    body: JSON.stringify({
+      audio_data_url: audioDataUrl,
+      language
+    })
   });
 }
 

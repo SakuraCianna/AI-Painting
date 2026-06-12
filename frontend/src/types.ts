@@ -43,3 +43,22 @@ export interface CommandExecutionResponse {
   plan: CommandPlan;
   artwork: Artwork | null;
 }
+
+export interface AsrProvidersResponse {
+  providers: string[];
+  provider_labels: Record<string, string>;
+  primary_provider?: string | null;
+  fallback_provider: string;
+}
+
+export interface AsrTranscriptionResponse {
+  text: string;
+  provider: string;
+  provider_label: string;
+  attempts: Array<{
+    provider: string;
+    status: string;
+    message: string;
+    latency_ms?: number | null;
+  }>;
+}

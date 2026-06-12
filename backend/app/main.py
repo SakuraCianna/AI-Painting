@@ -7,11 +7,15 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlite3 import Connection
 
+from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_audio_data_url
 from .command_parser import parse_command
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
 from .repositories import create_artwork, get_artwork, list_artworks, record_voice_log
 from .schemas import (
+    AsrProvidersResponse,
+    AsrTranscriptionRequest,
+    AsrTranscriptionResponse,
     ArtworkCreateRequest,
     ArtworkResponse,
     CommandExecutionResponse,
@@ -65,6 +69,27 @@ def api_get_artwork(artwork_id: str, db: Connection = Depends(get_db)) -> Artwor
 @app.post("/api/commands/parse", response_model=CommandPlan)
 def api_parse_command(request: CommandParseRequest) -> CommandPlan:
     return parse_command(request.text)
+
+
+@app.get("/api/asr/providers", response_model=AsrProvidersResponse)
+def api_get_asr_providers() -> AsrProvidersResponse:
+    return get_asr_provider_status()
+
+
+@app.post("/api/asr/transcribe", response_model=AsrTranscriptionResponse)
+async def api_transcribe_audio(request: AsrTranscriptionRequest) -> AsrTranscriptionResponse:
+    try:
+        return await transcribe_audio_data_url(request.audio_data_url, request.language)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AsrProvidersUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "后端 ASR 不可用, 请使用 Web Speech API 兜底",
+                "attempts": [attempt.model_dump() for attempt in exc.attempts],
+            },
+        ) from exc
 
 
 @app.post("/api/artworks/{artwork_id}/commands", response_model=CommandExecutionResponse)
