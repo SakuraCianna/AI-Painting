@@ -192,6 +192,18 @@ def test_object_metadata_and_semantic_batch_scale(client: TestClient) -> None:
     assert [obj["type"] for obj in restored_windows] == ["rect", "rect"]
 
 
+def test_house_command_respects_component_color_words(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子，红色门，两个窗户。"})
+
+    assert response.status_code == 200
+    objects = response.json()["artwork"]["objects"]
+    door = next(obj for obj in objects if "house.door" in obj["semantic_tags"])
+    windows = [obj for obj in objects if "house.window" in obj["semantic_tags"]]
+    assert door["style"]["fill"] == "#dc2626"
+    assert len(windows) == 2
+
+
 def test_rename_latest_and_move_layer(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色圆形 命名为太阳 放到前景层"})

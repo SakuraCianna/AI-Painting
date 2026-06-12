@@ -72,6 +72,8 @@ VOICE_NOISE_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”�
 CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
 TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
 OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
+COLOR_CONTEXT_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_的]+")
+COLOR_LINK_WORDS = ("是", "为", "设为", "设置为", "设置成", "改为", "改成", "变为", "变成", "用", "使用", "涂成", "刷成", "画成")
 LAYER_MAP: dict[str, str] = {
     "背景层": "background",
     "底层": "background",
@@ -237,6 +239,54 @@ def _find_color(text: str, default: str = "#2563eb") -> str:
 
 def _find_all_colors(text: str) -> list[tuple[str, str]]:
     return [(name, COLOR_MAP[name]) for name in SORTED_COLOR_NAMES if name in text]
+
+
+def _compact_color_context(text: str) -> str:
+    return COLOR_CONTEXT_STRIP_PATTERN.sub("", text)
+
+
+def _color_display_name(color: str) -> str:
+    for name, value in COLOR_MAP.items():
+        if value == color:
+            return name
+    return "彩色"
+
+
+def _find_component_color(text: str, target_words: tuple[str, ...], default: str) -> str:
+    compact = _compact_color_context(text)
+    if not compact:
+        return default
+
+    for color_name in SORTED_COLOR_NAMES:
+        for target_word in target_words:
+            if f"{color_name}{target_word}" in compact:
+                return COLOR_MAP[color_name]
+
+    for target_word in target_words:
+        for link_word in COLOR_LINK_WORDS:
+            for color_name in SORTED_COLOR_NAMES:
+                if f"{target_word}{link_word}{color_name}" in compact:
+                    return COLOR_MAP[color_name]
+
+    best_match: tuple[int, int, str] | None = None
+    for target_word in target_words:
+        for target_match in re.finditer(re.escape(target_word), compact):
+            for color_name in SORTED_COLOR_NAMES:
+                for color_match in re.finditer(re.escape(color_name), compact):
+                    gap = target_match.start() - (color_match.start() + len(color_name))
+                    if 0 <= gap <= 4:
+                        candidate = (gap, color_match.start(), COLOR_MAP[color_name])
+                        if best_match is None or candidate[:2] < best_match[:2]:
+                            best_match = candidate
+    return best_match[2] if best_match else default
+
+
+def _find_house_body_color(text: str, default: str) -> str:
+    compact = _compact_color_context(text)
+    for color_name in SORTED_COLOR_NAMES:
+        if any(f"{color_name}{target_word}" in compact for target_word in ("房子", "小屋", "房屋")):
+            return COLOR_MAP[color_name]
+    return _find_component_color(text, ("房子主体", "墙体", "墙面", "房身", "主体", "墙"), default)
 
 
 def _find_shape(text: str) -> str | None:
@@ -584,18 +634,22 @@ def _multi_star_plan(raw_text: str, normalized_text: str) -> CommandPlan:
 
 
 def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    body_color = _find_house_body_color(normalized_text, "#faf7ed")
+    roof_color = _find_component_color(normalized_text, ("屋顶", "房顶"), "#dc2626")
+    door_color = _find_component_color(normalized_text, ("大门", "门"), "#2563eb")
+    window_color = _find_component_color(normalized_text, ("窗户", "窗"), "#7dd3fc")
     operations = [
         OperationRequest(
             operation_type="add_object",
             payload={
                 "object": {
                     "type": "rect",
-                    "name": "房子主体",
+                    "name": "房子主体" if body_color == "#faf7ed" else f"{_color_display_name(body_color)}房子主体",
                     "layer_id": "middle",
                     "group_id": "house",
                     "semantic_tags": ["house", "house.body", "shape.rect"],
                     "geometry": {"x": 350, "y": 330, "width": 320, "height": 240, "radius": 6},
-                    "style": {"fill": "#faf7ed", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+                    "style": {"fill": body_color, "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
                 }
             },
         ),
@@ -604,12 +658,12 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
             payload={
                 "object": {
                     "type": "triangle",
-                    "name": "红色屋顶",
+                    "name": f"{_color_display_name(roof_color)}屋顶",
                     "layer_id": "middle",
                     "group_id": "house",
                     "semantic_tags": ["house", "house.roof", "shape.triangle"],
                     "geometry": {"x": 510, "y": 270, "size": 380},
-                    "style": {"fill": "#dc2626", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+                    "style": {"fill": roof_color, "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
                 }
             },
         ),
@@ -618,12 +672,12 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
             payload={
                 "object": {
                     "type": "rect",
-                    "name": "蓝色门",
+                    "name": f"{_color_display_name(door_color)}门",
                     "layer_id": "middle",
                     "group_id": "house",
                     "semantic_tags": ["house", "house.door", "shape.rect"],
                     "geometry": {"x": 475, "y": 440, "width": 70, "height": 130, "radius": 4},
-                    "style": {"fill": "#2563eb", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
+                    "style": {"fill": door_color, "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
                 }
             },
         ),
@@ -637,7 +691,7 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                     "group_id": "house",
                     "semantic_tags": ["house", "house.window", "shape.rect"],
                     "geometry": {"x": 390, "y": 380, "width": 64, "height": 64, "radius": 4},
-                    "style": {"fill": "#7dd3fc", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
+                    "style": {"fill": window_color, "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
                 }
             },
         ),
@@ -651,7 +705,7 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                     "group_id": "house",
                     "semantic_tags": ["house", "house.window", "shape.rect"],
                     "geometry": {"x": 570, "y": 380, "width": 64, "height": 64, "radius": 4},
-                    "style": {"fill": "#7dd3fc", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
+                    "style": {"fill": window_color, "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
                 }
             },
         ),

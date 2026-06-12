@@ -82,6 +82,18 @@ def test_parse_complex_house_plan() -> None:
     assert plan.operations[3].payload["object"]["semantic_tags"] == ["house", "house.window", "shape.rect"]
 
 
+def test_parse_house_component_colors_from_voice_text() -> None:
+    plan = parse_command("画一个房子，蓝色屋顶，红色门，黄色窗户。")
+    objects = [op.payload["object"] for op in plan.operations]
+    roof = next(obj for obj in objects if "house.roof" in obj["semantic_tags"])
+    door = next(obj for obj in objects if "house.door" in obj["semantic_tags"])
+    windows = [obj for obj in objects if "house.window" in obj["semantic_tags"]]
+
+    assert roof["style"]["fill"] == "#2563eb"
+    assert door["style"]["fill"] == "#dc2626"
+    assert all(window["style"]["fill"] == "#facc15" for window in windows)
+
+
 def test_parse_sun_and_cloud_as_two_step_plan() -> None:
     plan = parse_command("画一个太阳然后在下面加一片云")
     assert [op.operation_type for op in plan.operations] == ["add_object", "add_object"]
