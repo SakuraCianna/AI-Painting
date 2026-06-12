@@ -70,6 +70,8 @@ def _read_int_env(name: str, default: int) -> int:
 
 
 def provider_label(provider: str) -> str:
+    if provider == "local":
+        return os.getenv("AI_PAINTING_LOCAL_ASR_LABEL", PROVIDER_LABELS["local"])
     return PROVIDER_LABELS.get(provider, provider)
 
 

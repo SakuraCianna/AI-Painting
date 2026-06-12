@@ -56,6 +56,8 @@ jobs:
           mkdir -p "$package_name/backend" "$package_name/frontend-dist" "$package_name/docs"
           cp -r backend/app "$package_name/backend/app"
           cp backend/requirements.txt "$package_name/backend/requirements.txt"
+          cp backend/requirements-local-asr.txt "$package_name/backend/requirements-local-asr.txt"
+          cp backend/local_asr_qwen3.py "$package_name/backend/local_asr_qwen3.py"
           cp -r frontend/dist/. "$package_name/frontend-dist/"
           cp -r docs/. "$package_name/docs/"
           cp README.md ROADMAP.md "$package_name/"
