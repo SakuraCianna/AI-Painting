@@ -63,7 +63,7 @@ app = FastAPI(title="AI Painting Voice Drawing API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_read_csv_env("AI_PAINTING_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
+    allow_origins=_read_csv_env("AI_PAINTING_CORS_ORIGINS", "http://localhost:3001,http://127.0.0.1:3001"),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

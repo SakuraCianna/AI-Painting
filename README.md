@@ -93,7 +93,7 @@ npm install --prefix frontend
 .\快速启动.bat
 ```
 
-脚本固定使用后端 `8080` 和前端 `5173`, 并打开前端地址。如果端口被占用, 对应服务会启动失败, 需要先关闭占用端口的进程。
+脚本固定使用后端 `8084` 和前端 `3001`, 并打开前端地址。如果端口被占用, 对应服务会启动失败, 需要先关闭占用端口的进程。
 
 启用本地 Qwen3-ASR 备用服务:
 
@@ -113,7 +113,7 @@ $env:AI_PAINTING_INSTALL_LOCAL_ASR="1"
 启动后端:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8080 --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8084 --reload
 ```
 
 启动前端:
@@ -125,13 +125,13 @@ npm run dev --prefix frontend
 默认访问地址:
 
 ```txt
-http://127.0.0.1:5173
+http://127.0.0.1:3001
 ```
 
 默认后端地址:
 
 ```txt
-http://127.0.0.1:8080
+http://127.0.0.1:8084
 ```
 
 ## 构建命令
@@ -178,13 +178,13 @@ git diff --check
 
 ```powershell
 $env:AI_PAINTING_DB="E:\CodeHome\AI Painting\backend\data\ai_painting.sqlite3"
-$env:VITE_API_BASE_URL="http://127.0.0.1:8080"
+$env:VITE_API_BASE_URL="http://127.0.0.1:8084"
 $env:MIMO_API_KEY="<你的 Xiaomi MiMo API Key>"
 $env:AI_PAINTING_ASR_PROVIDERS="xiaomi,local"
 $env:AI_PAINTING_ASR_LANGUAGE="zh"
 $env:AI_PAINTING_LOCAL_ASR_URL="http://127.0.0.1:9001/asr"
 $env:AI_PAINTING_LOCAL_ASR_LABEL="Qwen3-ASR 本地服务"
-$env:AI_PAINTING_CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
+$env:AI_PAINTING_CORS_ORIGINS="http://localhost:3001,http://127.0.0.1:3001"
 $env:QWEN3_ASR_MODEL="Qwen/Qwen3-ASR-0.6B"
 $env:QWEN3_ASR_DEVICE="auto"
 $env:QWEN3_ASR_DTYPE="auto"
@@ -208,13 +208,13 @@ $env:AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT="b64_json"
 说明:
 
 - `AI_PAINTING_DB`: 后端 SQLite 数据库路径, 未设置时默认使用 `backend\data\ai_painting.sqlite3`
-- `VITE_API_BASE_URL`: 前端请求后端 API 的地址, 未设置时默认使用 `http://127.0.0.1:8080`
+- `VITE_API_BASE_URL`: 前端请求后端 API 的地址, 未设置时默认使用 `http://127.0.0.1:8084`
 - `MIMO_API_KEY`: 小米 MiMo API Key, 配置后后端会优先调用 `mimo-v2.5-asr`
 - `AI_PAINTING_ASR_PROVIDERS`: 后端 ASR Provider 顺序, 默认是 `xiaomi,local`
 - `AI_PAINTING_ASR_LANGUAGE`: 后端 ASR 语种, 默认是 `zh`, 小米接口也支持 `auto` 和 `en`
 - `AI_PAINTING_LOCAL_ASR_URL`: 本地 ASR HTTP 服务地址, 作为小米 ASR 后的第一备用方案
 - `AI_PAINTING_LOCAL_ASR_LABEL`: 前端展示的本地 ASR Provider 名称
-- `AI_PAINTING_CORS_ORIGINS`: 后端允许的前端来源列表, 用英文逗号分隔, 默认只允许 `5173`
+- `AI_PAINTING_CORS_ORIGINS`: 后端允许的前端来源列表, 用英文逗号分隔, 默认只允许 `3001`
 - `AI_PAINTING_LOCAL_ASR_COMMAND`: 本地 ASR 命令模板, 作为本地 HTTP 服务的替代方案, 命令需要把识别文本输出到 stdout
 - `QWEN3_ASR_MODEL`: 本地 Qwen3-ASR 模型 ID 或本地模型目录, 默认是 `Qwen/Qwen3-ASR-0.6B`
 - `QWEN3_ASR_DEVICE`: 本地 Qwen3-ASR 推理设备, 默认 `auto`
