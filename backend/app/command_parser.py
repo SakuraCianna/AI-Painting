@@ -51,6 +51,12 @@ CHINESE_DIGITS: dict[str, int] = {
     "九": 9,
 }
 
+SORTED_COLOR_NAMES = sorted(COLOR_MAP, key=len, reverse=True)
+SORTED_SHAPE_NAMES = sorted(SHAPE_MAP, key=len, reverse=True)
+WHITESPACE_PATTERN = re.compile(r"\s+")
+CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
+TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
+
 
 def chinese_number_to_int(text: str) -> int | None:
     if not text:
@@ -88,20 +94,24 @@ def normalize_text(text: str) -> str:
     }
     for source, target in replacements.items():
         normalized = normalized.replace(source, target)
-    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = WHITESPACE_PATTERN.sub(" ", normalized)
     return normalized
 
 
 def _find_color(text: str, default: str = "#2563eb") -> str:
     # 先匹配长颜色名, 避免“浅蓝色”被“蓝色”提前命中。
-    for name in sorted(COLOR_MAP, key=len, reverse=True):
+    for name in SORTED_COLOR_NAMES:
         if name in text:
             return COLOR_MAP[name]
     return default
 
 
+def _find_all_colors(text: str) -> list[tuple[str, str]]:
+    return [(name, COLOR_MAP[name]) for name in SORTED_COLOR_NAMES if name in text]
+
+
 def _find_shape(text: str) -> str | None:
-    for name in sorted(SHAPE_MAP, key=len, reverse=True):
+    for name in SORTED_SHAPE_NAMES:
         if name in text:
             return SHAPE_MAP[name]
     return None
@@ -113,6 +123,15 @@ def _extract_number(text: str, after: str, default: int) -> int:
     if not match:
         return default
     return chinese_number_to_int(match.group(1)) or default
+
+
+def _extract_movement_amount(text: str) -> int:
+    explicit_pixel = re.search(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:像素|px)", text)
+    if explicit_pixel:
+        return chinese_number_to_int(explicit_pixel.group(1)) or 20
+    if "一点" in text:
+        return 20
+    return _extract_number(text, "(?:移动|右|左|上|下)", 20)
 
 
 def _base_style(text: str) -> dict[str, Any]:
@@ -169,7 +188,7 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
         }
     if shape == "star":
         return {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style}
-    content_match = re.search(r"(?:写|内容是|文字是|文本是)(.+)$", text)
+    content_match = CONTENT_PATTERN.search(text)
     content = content_match.group(1).strip() if content_match else "语音文字"
     return {
         "type": "text",
@@ -177,6 +196,47 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
         "geometry": {"x": x, "y": y, "fontSize": 48, "content": content},
         "style": {**style, "fill": style["fill"], "stroke": "transparent"},
     }
+
+
+def _extract_count(text: str, default: int = 1) -> int:
+    match = re.search(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|颗|条|张|扇)?", text)
+    if not match:
+        return default
+    return max(1, min(chinese_number_to_int(match.group(1)) or default, 12))
+
+
+def _multi_star_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    count = _extract_count(normalized_text, 3)
+    style = _base_style(normalized_text)
+    left_to_right = "从左到右" in normalized_text or "左到右" in normalized_text
+    shrinking = "变小" in normalized_text or "逐渐小" in normalized_text
+    start_x = 280
+    gap = 170 if count <= 4 else 110
+    operations: list[OperationRequest] = []
+    for index in range(count):
+        outer_radius = 88 - index * 18 if shrinking else 72
+        outer_radius = max(34, outer_radius)
+        x = start_x + index * gap if left_to_right else 512 + (index - count // 2) * gap
+        operations.append(
+            OperationRequest(
+                operation_type="add_object",
+                payload={
+                    "object": {
+                        "type": "star",
+                        "name": f"星星{index + 1}",
+                        "geometry": {
+                            "cx": x,
+                            "cy": 384,
+                            "outerRadius": outer_radius,
+                            "innerRadius": round(outer_radius * 0.45, 2),
+                            "points": 5,
+                        },
+                        "style": style,
+                    }
+                },
+            )
+        )
+    return CommandPlan(raw_text=raw_text, normalized_text=normalized_text, operations=operations, confidence=0.88)
 
 
 def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
@@ -262,7 +322,7 @@ def parse_command(text: str) -> CommandPlan:
     elif "恢复" in normalized:
         operations.append(OperationRequest(operation_type="redo", payload={}))
     elif "保存" in normalized:
-        title_match = re.search(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)", normalized)
+        title_match = TITLE_PATTERN.search(normalized)
         operations.append(OperationRequest(operation_type="save_artwork", payload={"title": title_match.group(1) if title_match else None}))
     elif "导出 png" in normalized or "导出png" in normalized:
         operations.append(OperationRequest(operation_type="export_artwork", payload={"format": "png"}))
@@ -276,6 +336,24 @@ def parse_command(text: str) -> CommandPlan:
         )
     elif "房子" in normalized:
         return _house_plan(text, normalized)
+    elif "星" in normalized and _extract_count(normalized, 1) > 1:
+        return _multi_star_plan(text, normalized)
+    elif "所有" in normalized and any(keyword in normalized for keyword in ("改成", "换成")):
+        colors = _find_all_colors(normalized)
+        source_color = colors[0][1] if colors else None
+        target_color = colors[1][1] if len(colors) > 1 else _find_color(normalized)
+        if source_color:
+            operations.append(
+                OperationRequest(
+                    operation_type="set_style_many",
+                    payload={"target": {"selector": "all", "color": source_color}, "style": {"fill": target_color, "stroke": target_color}},
+                )
+            )
+        if "整体" in normalized and ("上" in normalized or "下" in normalized or "左" in normalized or "右" in normalized):
+            amount = _extract_movement_amount(normalized)
+            dx = amount if "右" in normalized else -amount if "左" in normalized else 0
+            dy = amount if "下" in normalized else -amount if "上" in normalized else 0
+            operations.append(OperationRequest(operation_type="move_many", payload={"target": {"selector": "all"}, "dx": dx, "dy": dy}))
     elif any(keyword in normalized for keyword in ("改成", "换成", "加粗")):
         style: dict[str, Any] = {}
         if any(color in normalized for color in COLOR_MAP):
@@ -284,10 +362,15 @@ def parse_command(text: str) -> CommandPlan:
             style["strokeWidth"] = 5
         operations.append(OperationRequest(operation_type="set_style", payload={"target": {"selector": "latest"}, "style": style}))
     elif "移动" in normalized or "往" in normalized or "向" in normalized:
-        amount = _extract_number(normalized, "(?:移动|一点|像素|右|左|上|下)", 20)
+        amount = _extract_movement_amount(normalized)
         dx = amount if "右" in normalized else -amount if "左" in normalized else 0
         dy = amount if "下" in normalized else -amount if "上" in normalized else 0
         operations.append(OperationRequest(operation_type="move_object", payload={"target": {"selector": "latest"}, "dx": dx, "dy": dy}))
+    elif "放大" in normalized or "缩小" in normalized:
+        factor = 2 if "一倍" in normalized or "两倍" in normalized else 1.2
+        if "缩小" in normalized:
+            factor = 0.5 if "一半" in normalized or "一倍" in normalized else 0.8
+        operations.append(OperationRequest(operation_type="scale_object", payload={"target": {"selector": "latest"}, "factor": factor}))
     else:
         shape = _find_shape(normalized)
         if shape:

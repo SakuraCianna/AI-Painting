@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Icon } from "@iconify/react";
+import categoryRounded from "@iconify-icons/material-symbols/category-rounded";
+import downloadRounded from "@iconify-icons/material-symbols/download-rounded";
+import gestureRounded from "@iconify-icons/material-symbols/gesture-rounded";
+import graphicEqRounded from "@iconify-icons/material-symbols/graphic-eq-rounded";
+import micRounded from "@iconify-icons/material-symbols/mic-rounded";
+import pauseCircleRounded from "@iconify-icons/material-symbols/pause-circle-rounded";
+import radioButtonUnchecked from "@iconify-icons/material-symbols/radio-button-unchecked";
+import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArtwork, submitVoiceCommand } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
@@ -13,6 +22,25 @@ interface TimelineItem {
   plan: CommandPlan | null;
 }
 
+const OPERATION_LABELS: Record<string, string> = {
+  create_canvas: "更新画布",
+  add_object: "添加对象",
+  set_style: "修改样式",
+  set_style_many: "批量改色",
+  move_object: "移动对象",
+  move_many: "批量移动",
+  scale_object: "缩放对象",
+  delete_object: "删除对象",
+  save_artwork: "保存作品",
+  export_artwork: "导出作品",
+  undo: "撤销",
+  redo: "恢复"
+};
+
+function getOperationLabel(operationType: string): string {
+  return OPERATION_LABELS[operationType] ?? operationType;
+}
+
 function getPlanSummary(plan: CommandPlan | null): string {
   if (!plan) {
     return "未生成计划";
@@ -20,7 +48,7 @@ function getPlanSummary(plan: CommandPlan | null): string {
   if (plan.clarification_question) {
     return plan.clarification_question;
   }
-  return plan.operations.map((operation) => operation.operation_type).join(" -> ");
+  return plan.operations.map((operation) => getOperationLabel(operation.operation_type)).join(" -> ");
 }
 
 export default function App() {
@@ -28,8 +56,14 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
   const [isBusy, setIsBusy] = useState(false);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
+  const hasCreatedArtworkRef = useRef(false);
 
   useEffect(() => {
+    if (hasCreatedArtworkRef.current) {
+      return;
+    }
+    hasCreatedArtworkRef.current = true;
     createArtwork()
       .then((created) => {
         setArtwork(created);
@@ -50,6 +84,7 @@ export default function App() {
       setStatusMessage("正在解析语音指令");
       try {
         const response = await submitVoiceCommand(artwork.id, text);
+        setLatestPlan(response.plan);
         if (response.artwork) {
           setArtwork(response.artwork);
         }
@@ -67,8 +102,15 @@ export default function App() {
           ...items
         ].slice(0, 12));
         setStatusMessage(response.message);
+        if ("speechSynthesis" in window) {
+          const utterance = new SpeechSynthesisUtterance(response.message);
+          utterance.lang = "zh-CN";
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
+        }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "语音指令执行失败";
+        setLatestPlan(null);
         setTimeline((items) => [
           {
             id: crypto.randomUUID(),
@@ -87,20 +129,89 @@ export default function App() {
   );
 
   const voice = useVoiceRecognition({ onFinalTranscript: handleFinalTranscript });
+  const handleManualExport = useCallback(async () => {
+    if (!artwork) {
+      return;
+    }
+    await exportSvgAsPng("voice-canvas-svg", `${artwork.title}.png`);
+    setStatusMessage("已导出 PNG");
+  }, [artwork]);
   const liveTranscript = voice.interimTranscript || voice.lastFinalTranscript;
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
+  const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
+  const listeningLabel = voice.isListening ? voice.providerLabel : "待机";
 
   return (
     <main className="workspace">
       <section className="stage-panel">
         <header className="topbar" aria-live="polite">
-          <div>
-            <p className="eyebrow">AI Painting</p>
-            <h1>{artwork?.title ?? "语音绘图作品"}</h1>
+          <div className="product-lockup">
+            <div className="app-mark" aria-hidden="true">
+              <Icon icon={gestureRounded} width={22} height={22} />
+            </div>
+            <div>
+              <p className="eyebrow">Voice Canvas</p>
+              <h1>{artwork?.title ?? "语音绘图作品"}</h1>
+            </div>
           </div>
           <div className="status-cluster">
-            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>{voice.isListening ? "监听中" : "未监听"}</span>
-            <span className="status-pill">{objectCountText}</span>
+            <span className={voice.isListening ? "status-pill listening" : "status-pill"}>
+              <Icon icon={voice.isListening ? graphicEqRounded : radioButtonUnchecked} width={16} height={16} />
+              {listeningLabel}
+            </span>
+            <span className="status-pill">
+              <Icon icon={categoryRounded} width={16} height={16} />
+              {objectCountText}
+            </span>
+            <div className="toolbar" aria-label="语音画布工具">
+              <button
+                aria-label="开始监听"
+                className="icon-button"
+                data-tooltip="开始监听"
+                disabled={!voice.isSupported || voice.isListening}
+                onClick={voice.start}
+                title="开始监听"
+                type="button"
+              >
+                <Icon icon={micRounded} width={20} height={20} />
+              </button>
+              <button
+                aria-label="暂停监听"
+                className="icon-button"
+                data-tooltip="暂停监听"
+                disabled={!voice.isListening}
+                onClick={voice.stop}
+                title="暂停监听"
+                type="button"
+              >
+                <Icon icon={pauseCircleRounded} width={20} height={20} />
+              </button>
+              <button
+                aria-label="重新监听"
+                className="icon-button"
+                data-tooltip="重新监听"
+                disabled={!voice.isSupported}
+                onClick={() => {
+                  voice.stop();
+                  window.setTimeout(() => voice.start(), 160);
+                }}
+                title="重新监听"
+                type="button"
+              >
+                <Icon icon={refreshRounded} width={20} height={20} />
+              </button>
+              <button
+                aria-label="导出 PNG"
+                className="icon-button"
+                data-tooltip="导出 PNG"
+                disabled={!artwork}
+                onClick={handleManualExport}
+                title="导出 PNG"
+                type="button"
+              >
+                <Icon icon={downloadRounded} width={20} height={20} />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -108,15 +219,39 @@ export default function App() {
       </section>
 
       <aside className="side-panel" aria-live="polite">
-        <div className="voice-card">
+        <div className="panel-heading">
+          <p className="eyebrow">Workspace</p>
+          <h2>控制台</h2>
+        </div>
+
+        <div className="voice-card status-card">
           <p className="panel-label">当前状态</p>
-          <strong>{voice.isSupported ? statusMessage : "当前浏览器不支持内置语音识别"}</strong>
+          <strong>{voice.isSupported ? statusMessage : "当前没有可用的语音识别"}</strong>
           {voice.error ? <span className="error-text">{voice.error}</span> : null}
         </div>
 
         <div className="voice-card transcript-card">
           <p className="panel-label">识别文本</p>
           <p className="transcript">{liveTranscript || "等待语音输入"}</p>
+        </div>
+
+        <div className="voice-card plan-card">
+          <p className="panel-label">执行计划</p>
+          {latestPlan ? (
+            <>
+              <div className="plan-meta">
+                <span>{latestPlan.operations.length} 个步骤</span>
+                <span>置信度 {planConfidenceText}</span>
+              </div>
+              <ol className="plan-list">
+                {latestPlan.operations.map((operation, index) => (
+                  <li key={`${operation.operation_type}-${index}`}>{getOperationLabel(operation.operation_type)}</li>
+                ))}
+              </ol>
+            </>
+          ) : (
+            <p className="empty-text">等待指令计划</p>
+          )}
         </div>
 
         <div className="timeline">

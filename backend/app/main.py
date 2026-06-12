@@ -7,11 +7,17 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlite3 import Connection
 
+from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_audio_data_url
 from .command_parser import parse_command
+from .config import load_env_file
 from .database import get_db, init_db
-from .drawing_engine import apply_operation, redo_last_operation, undo_last_operation
+from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
+from .llm_planner import LlmPlannerError, plan_with_mimo, should_use_llm_planner
 from .repositories import create_artwork, get_artwork, list_artworks, record_voice_log
 from .schemas import (
+    AsrProvidersResponse,
+    AsrTranscriptionRequest,
+    AsrTranscriptionResponse,
     ArtworkCreateRequest,
     ArtworkResponse,
     CommandExecutionResponse,
@@ -19,6 +25,9 @@ from .schemas import (
     CommandPlan,
     OperationResponse,
 )
+
+
+load_env_file()
 
 
 @asynccontextmanager
@@ -32,6 +41,7 @@ app = FastAPI(title="AI Painting Voice Drawing API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,12 +72,43 @@ def api_get_artwork(artwork_id: str, db: Connection = Depends(get_db)) -> Artwor
 
 
 @app.post("/api/commands/parse", response_model=CommandPlan)
-def api_parse_command(request: CommandParseRequest) -> CommandPlan:
-    return parse_command(request.text)
+async def api_parse_command(request: CommandParseRequest) -> CommandPlan:
+    return await build_command_plan(request.text)
+
+
+async def build_command_plan(text: str) -> CommandPlan:
+    rule_plan = parse_command(text)
+    if not should_use_llm_planner(text, rule_plan):
+        return rule_plan
+    try:
+        return await plan_with_mimo(text)
+    except LlmPlannerError:
+        return rule_plan
+
+
+@app.get("/api/asr/providers", response_model=AsrProvidersResponse)
+def api_get_asr_providers() -> AsrProvidersResponse:
+    return get_asr_provider_status()
+
+
+@app.post("/api/asr/transcribe", response_model=AsrTranscriptionResponse)
+async def api_transcribe_audio(request: AsrTranscriptionRequest) -> AsrTranscriptionResponse:
+    try:
+        return await transcribe_audio_data_url(request.audio_data_url, request.language)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AsrProvidersUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "后端 ASR 不可用, 请使用 Web Speech API 兜底",
+                "attempts": [attempt.model_dump() for attempt in exc.attempts],
+            },
+        ) from exc
 
 
 @app.post("/api/artworks/{artwork_id}/commands", response_model=CommandExecutionResponse)
-def api_execute_command(
+async def api_execute_command(
     artwork_id: str,
     request: CommandParseRequest,
     db: Connection = Depends(get_db),
@@ -78,7 +119,7 @@ def api_execute_command(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    plan = parse_command(request.text)
+    plan = await build_command_plan(request.text)
     parse_finished_at = perf_counter()
 
     if plan.requires_confirmation:
@@ -97,15 +138,16 @@ def api_execute_command(
 
     message = "未执行任何操作"
     try:
-        for operation in plan.operations:
-            if operation.operation_type == "undo":
-                undo_last_operation(db, artwork_id)
-                message = "已撤销上一步"
-            elif operation.operation_type == "redo":
-                redo_last_operation(db, artwork_id)
-                message = "已恢复上一步"
-            else:
-                message = apply_operation(db, artwork_id, operation)
+        if len(plan.operations) == 1 and plan.operations[0].operation_type == "undo":
+            undo_last_operation(db, artwork_id)
+            message = "已撤销上一步"
+        elif len(plan.operations) == 1 and plan.operations[0].operation_type == "redo":
+            redo_last_operation(db, artwork_id)
+            message = "已恢复上一步"
+        elif len(plan.operations) == 1:
+            message = apply_operation(db, artwork_id, plan.operations[0])
+        else:
+            message = apply_operation_plan(db, artwork_id, plan.operations)
         artwork = get_artwork(db, artwork_id)
         status = "success"
         error_message = None

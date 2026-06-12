@@ -13,7 +13,7 @@ def get_database_path() -> str:
 def connect_db(path: str | None = None) -> sqlite3.Connection:
     db_path = Path(path or get_database_path())
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -76,6 +76,15 @@ def init_db(path: str | None = None) -> None:
                 latency_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_drawing_objects_artwork_z
+                ON drawing_objects (artwork_id, z_index, created_at);
+            CREATE INDEX IF NOT EXISTS idx_drawing_objects_artwork_type
+                ON drawing_objects (artwork_id, type);
+            CREATE INDEX IF NOT EXISTS idx_operations_artwork_status_created
+                ON operations (artwork_id, status, created_at);
+            CREATE INDEX IF NOT EXISTS idx_voice_logs_artwork_created
+                ON voice_command_logs (artwork_id, created_at);
             """
         )
 

@@ -58,6 +58,32 @@ class CommandParseRequest(BaseModel):
     text: str
 
 
+class AsrTranscriptionRequest(BaseModel):
+    audio_data_url: str
+    language: str = "zh"
+
+
+class AsrProviderAttempt(BaseModel):
+    provider: str
+    status: str
+    message: str
+    latency_ms: float | None = None
+
+
+class AsrProvidersResponse(BaseModel):
+    providers: list[str] = Field(default_factory=list)
+    provider_labels: dict[str, str] = Field(default_factory=dict)
+    primary_provider: str | None = None
+    fallback_provider: str = "web_speech"
+
+
+class AsrTranscriptionResponse(BaseModel):
+    text: str
+    provider: str
+    provider_label: str
+    attempts: list[AsrProviderAttempt] = Field(default_factory=list)
+
+
 class CommandExecutionResponse(BaseModel):
     message: str
     plan: CommandPlan
