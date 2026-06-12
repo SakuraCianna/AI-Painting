@@ -56,3 +56,25 @@ def test_build_command_plan_falls_back_when_mimo_fails(monkeypatch) -> None:
     assert plan.operations == []
     assert plan.planner_source == "rules_fallback"
     assert plan.explanation is not None
+
+
+def test_build_command_plan_skips_mimo_for_voice_noise(monkeypatch) -> None:
+    from app import main
+
+    called = False
+
+    async def fake_plan_with_mimo(_: str) -> CommandPlan:
+        nonlocal called
+        called = True
+        raise AssertionError("voice noise should not call MiMo")
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_LLM_PLANNER", "true")
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setattr(main, "plan_with_mimo", fake_plan_with_mimo)
+
+    plan = asyncio.run(main.build_command_plan("然后。"))
+
+    assert called is False
+    assert plan.requires_confirmation is True
+    assert plan.operations == []
+    assert plan.planner_source == "rules"

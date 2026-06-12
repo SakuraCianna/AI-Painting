@@ -18,6 +18,33 @@ def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     assert body["artwork"]["objects"][0]["style"]["fill"] == "#2563eb"
 
 
+def test_voice_noise_command_requires_clarification_without_mimo(client: TestClient, monkeypatch) -> None:
+    from app import main
+
+    called = False
+
+    async def fake_plan_with_mimo(_: str):
+        nonlocal called
+        called = True
+        raise AssertionError("voice noise should not call MiMo")
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_LLM_PLANNER", "true")
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setattr(main, "plan_with_mimo", fake_plan_with_mimo)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "嗯。"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert called is False
+    assert body["message"] == "我听到的是口头语或噪声, 请直接说要画什么、怎么改或要执行的操作。"
+    assert body["plan"]["requires_confirmation"] is True
+    assert body["plan"]["operations"] == []
+    assert body["plan"]["planner_source"] == "rules"
+    assert body["artwork"]["objects"] == []
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})

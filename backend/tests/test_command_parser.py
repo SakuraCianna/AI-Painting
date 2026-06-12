@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.command_parser import chinese_number_to_int, parse_command
 
 
@@ -8,6 +10,24 @@ def test_chinese_number_to_int() -> None:
     assert chinese_number_to_int("两") == 2
     assert chinese_number_to_int("十二") == 12
     assert chinese_number_to_int("一百") == 100
+
+
+@pytest.mark.parametrize("text", ["嗯。", "hmm.", "然后。", "卡。", "需要漏。"])
+def test_parse_voice_noise_short_circuits_to_clarification(text: str) -> None:
+    plan = parse_command(text)
+
+    assert plan.operations == []
+    assert plan.requires_confirmation is True
+    assert plan.confidence == 0.12
+    assert plan.clarification_question == "我听到的是口头语或噪声, 请直接说要画什么、怎么改或要执行的操作。"
+    assert plan.explanation == "识别到口头语或噪声输入, 已跳过复杂规划"
+
+
+def test_parse_command_after_filler_word_still_draws() -> None:
+    plan = parse_command("然后画一个蓝色圆形")
+
+    assert plan.operations[0].operation_type == "add_object"
+    assert plan.operations[0].payload["object"]["type"] == "circle"
 
 
 def test_parse_create_canvas() -> None:
