@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import sqlite3
+
 from fastapi.testclient import TestClient
 
 
@@ -177,3 +180,77 @@ def test_complex_scene_requires_clarification_without_partial_execution(client: 
     assert body["artwork"]["objects"] == []
     assert body["metrics"]["execute_ms"] == 0
     assert body["metrics"]["planner_total_ms"] >= 0
+
+
+def test_clear_canvas_confirmation_executes_and_preserves_undo_redo_history(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个蓝色圆形在左边"})
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在右边"})
+
+    clear_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "清空画布"})
+
+    assert clear_response.status_code == 200
+    clear_body = clear_response.json()
+    assert clear_body["plan"]["requires_confirmation"] is True
+    assert clear_body["plan"]["operations"][0]["operation_type"] == "clear_canvas"
+    assert len(clear_body["artwork"]["objects"]) == 2
+    assert clear_body["metrics"]["execute_ms"] == 0
+
+    confirm_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "确认清空"})
+
+    assert confirm_response.status_code == 200
+    confirm_body = confirm_response.json()
+    assert confirm_body["message"] == "已清空画布"
+    assert confirm_body["plan"]["requires_confirmation"] is False
+    assert confirm_body["plan"]["planner_source"] == "confirmation"
+    assert confirm_body["artwork"]["objects"] == []
+
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    restored_objects = undo_response.json()["artwork"]["objects"]
+    assert [obj["type"] for obj in restored_objects] == ["circle", "star"]
+
+    redo_response = client.post(f"/api/artworks/{artwork_id}/redo")
+    assert redo_response.status_code == 200
+    assert redo_response.json()["artwork"]["objects"] == []
+
+    connection = sqlite3.connect(os.environ["AI_PAINTING_DB"])
+    connection.row_factory = sqlite3.Row
+    operations = connection.execute(
+        "SELECT operation_type, status FROM operations WHERE artwork_id = ? ORDER BY created_at, rowid",
+        (artwork_id,),
+    ).fetchall()
+    logs = connection.execute(
+        "SELECT raw_transcript, status FROM voice_command_logs WHERE artwork_id = ? ORDER BY created_at, rowid",
+        (artwork_id,),
+    ).fetchall()
+    connection.close()
+
+    assert operations[-1]["operation_type"] == "clear_canvas"
+    assert operations[-1]["status"] == "applied"
+    assert ("清空画布", "confirmed") in [(row["raw_transcript"], row["status"]) for row in logs]
+    assert ("确认清空", "success") in [(row["raw_transcript"], row["status"]) for row in logs]
+
+
+def test_cancel_clear_canvas_confirmation_keeps_objects(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个蓝色圆形"})
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "清空画布"})
+
+    cancel_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "取消清空"})
+
+    assert cancel_response.status_code == 200
+    body = cancel_response.json()
+    assert body["message"] == "已取消清空画布"
+    assert len(body["artwork"]["objects"]) == 1
+
+    connection = sqlite3.connect(os.environ["AI_PAINTING_DB"])
+    connection.row_factory = sqlite3.Row
+    logs = connection.execute(
+        "SELECT raw_transcript, status FROM voice_command_logs WHERE artwork_id = ? ORDER BY created_at, rowid",
+        (artwork_id,),
+    ).fetchall()
+    connection.close()
+
+    assert ("清空画布", "canceled") in [(row["raw_transcript"], row["status"]) for row in logs]
+    assert ("取消清空", "canceled") in [(row["raw_transcript"], row["status"]) for row in logs]

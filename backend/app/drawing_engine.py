@@ -7,6 +7,7 @@ from typing import Any
 from .repositories import (
     add_object,
     clear_redo_stack,
+    delete_all_objects,
     delete_object,
     find_latest_object,
     find_objects,
@@ -257,6 +258,11 @@ def apply_operation(
         removed = delete_object(connection, artwork_id, object_id, commit=commit)
         inverse_payload = {"object": removed.model_dump()}
         message = "已删除对象"
+    elif operation_type == "clear_canvas":
+        removed_objects = delete_all_objects(connection, artwork_id, commit=commit)
+        inverse_payload = {"objects": [obj.model_dump() for obj in removed_objects]}
+        payload["object_count"] = len(removed_objects)
+        message = "已清空画布" if removed_objects else "画布已经是空的"
     elif operation_type == "save_artwork":
         title = payload.get("title")
         if title:
@@ -329,6 +335,9 @@ def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> Artw
         apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False)
     elif operation_type == "delete_object":
         add_object(connection, artwork_id, inverse_payload["object"])
+    elif operation_type == "clear_canvas":
+        for obj in inverse_payload.get("objects", []):
+            add_object(connection, artwork_id, obj)
 
     mark_operation_status(connection, row["id"], "undone")
     return get_artwork(connection, artwork_id)

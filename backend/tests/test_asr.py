@@ -32,6 +32,7 @@ def test_xiaomi_payload_matches_mimo_asr_contract() -> None:
 def test_provider_status_prefers_xiaomi_then_local(monkeypatch) -> None:
     monkeypatch.setenv("MIMO_API_KEY", "test-key")
     monkeypatch.setenv("AI_PAINTING_LOCAL_ASR_URL", "http://127.0.0.1:9001/asr")
+    monkeypatch.setenv("AI_PAINTING_LOCAL_ASR_LABEL", "Qwen3-ASR 本地服务")
     monkeypatch.setenv("AI_PAINTING_ASR_PROVIDERS", "xiaomi,local")
 
     status = get_asr_provider_status()
@@ -39,6 +40,7 @@ def test_provider_status_prefers_xiaomi_then_local(monkeypatch) -> None:
     assert status.providers == ["xiaomi", "local"]
     assert status.primary_provider == "xiaomi"
     assert status.fallback_provider == "web_speech"
+    assert status.provider_labels["local"] == "Qwen3-ASR 本地服务"
 
 
 def test_transcribe_endpoint_returns_503_without_backend_provider(client: TestClient, monkeypatch) -> None:

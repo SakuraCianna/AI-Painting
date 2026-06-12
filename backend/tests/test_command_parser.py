@@ -105,6 +105,15 @@ def test_parse_undo_synonym() -> None:
     assert plan.operations[0].operation_type == "undo"
 
 
+def test_parse_clear_canvas_requires_confirmation() -> None:
+    plan = parse_command("清空画布")
+
+    assert plan.requires_confirmation is True
+    assert plan.risk_level == "high"
+    assert plan.operations[0].operation_type == "clear_canvas"
+    assert plan.clarification_question == "清空画布会删除当前所有对象, 请说确认清空或取消"
+
+
 def test_parse_multiple_stars_left_to_right_shrinking() -> None:
     plan = parse_command("画三颗黄色星星 从左到右变小")
     assert len(plan.operations) == 3
