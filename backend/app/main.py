@@ -9,7 +9,7 @@ from sqlite3 import Connection
 
 from .command_parser import parse_command
 from .database import get_db, init_db
-from .drawing_engine import apply_operation, redo_last_operation, undo_last_operation
+from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
 from .repositories import create_artwork, get_artwork, list_artworks, record_voice_log
 from .schemas import (
     ArtworkCreateRequest,
@@ -97,15 +97,16 @@ def api_execute_command(
 
     message = "未执行任何操作"
     try:
-        for operation in plan.operations:
-            if operation.operation_type == "undo":
-                undo_last_operation(db, artwork_id)
-                message = "已撤销上一步"
-            elif operation.operation_type == "redo":
-                redo_last_operation(db, artwork_id)
-                message = "已恢复上一步"
-            else:
-                message = apply_operation(db, artwork_id, operation)
+        if len(plan.operations) == 1 and plan.operations[0].operation_type == "undo":
+            undo_last_operation(db, artwork_id)
+            message = "已撤销上一步"
+        elif len(plan.operations) == 1 and plan.operations[0].operation_type == "redo":
+            redo_last_operation(db, artwork_id)
+            message = "已恢复上一步"
+        elif len(plan.operations) == 1:
+            message = apply_operation(db, artwork_id, plan.operations[0])
+        else:
+            message = apply_operation_plan(db, artwork_id, plan.operations)
         artwork = get_artwork(db, artwork_id)
         status = "success"
         error_message = None

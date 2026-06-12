@@ -25,6 +25,11 @@ def _loads(raw: str) -> Any:
     return json.loads(raw)
 
 
+def _commit(connection: sqlite3.Connection, commit: bool) -> None:
+    if commit:
+        connection.commit()
+
+
 def row_to_object(row: sqlite3.Row) -> DrawingObject:
     return DrawingObject(
         id=row["id"],
@@ -36,7 +41,7 @@ def row_to_object(row: sqlite3.Row) -> DrawingObject:
     )
 
 
-def create_artwork(connection: sqlite3.Connection, request: ArtworkCreateRequest) -> ArtworkResponse:
+def create_artwork(connection: sqlite3.Connection, request: ArtworkCreateRequest, *, commit: bool = True) -> ArtworkResponse:
     artwork_id = new_id()
     timestamp = now_iso()
     connection.execute(
@@ -46,7 +51,7 @@ def create_artwork(connection: sqlite3.Connection, request: ArtworkCreateRequest
         """,
         (artwork_id, request.title, request.width, request.height, request.background, timestamp, timestamp),
     )
-    connection.commit()
+    _commit(connection, commit)
     return get_artwork(connection, artwork_id)
 
 
@@ -84,6 +89,7 @@ def update_artwork(
     width: int | None = None,
     height: int | None = None,
     background: str | None = None,
+    commit: bool = True,
 ) -> ArtworkResponse:
     current = get_artwork(connection, artwork_id)
     connection.execute(
@@ -101,7 +107,7 @@ def update_artwork(
             artwork_id,
         ),
     )
-    connection.commit()
+    _commit(connection, commit)
     return get_artwork(connection, artwork_id)
 
 
@@ -113,7 +119,7 @@ def get_next_z_index(connection: sqlite3.Connection, artwork_id: str) -> int:
     return int(row["next_z"])
 
 
-def add_object(connection: sqlite3.Connection, artwork_id: str, obj: dict[str, Any]) -> DrawingObject:
+def add_object(connection: sqlite3.Connection, artwork_id: str, obj: dict[str, Any], *, commit: bool = True) -> DrawingObject:
     timestamp = now_iso()
     object_id = obj.get("id") or new_id()
     z_index = int(obj.get("z_index", get_next_z_index(connection, artwork_id)))
@@ -136,7 +142,7 @@ def add_object(connection: sqlite3.Connection, artwork_id: str, obj: dict[str, A
         ),
     )
     connection.execute("UPDATE artworks SET updated_at = ? WHERE id = ?", (timestamp, artwork_id))
-    connection.commit()
+    _commit(connection, commit)
     return get_object(connection, artwork_id, object_id)
 
 
@@ -176,6 +182,51 @@ def find_latest_object(connection: sqlite3.Connection, artwork_id: str, object_t
     return row_to_object(row)
 
 
+def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict[str, Any] | None) -> list[DrawingObject]:
+    selector = selector or {"selector": "all"}
+    if selector.get("object_ids"):
+        object_ids = [str(object_id) for object_id in selector["object_ids"]]
+        placeholders = ",".join("?" for _ in object_ids)
+        rows = connection.execute(
+            f"""
+            SELECT * FROM drawing_objects
+            WHERE artwork_id = ? AND id IN ({placeholders})
+            ORDER BY z_index ASC, created_at ASC
+            """,
+            (artwork_id, *object_ids),
+        ).fetchall()
+        return [row_to_object(row) for row in rows]
+
+    if selector.get("selector") == "latest":
+        return [find_latest_object(connection, artwork_id, selector.get("type"))]
+
+    object_type = selector.get("type")
+    if object_type:
+        rows = connection.execute(
+            """
+            SELECT * FROM drawing_objects
+            WHERE artwork_id = ? AND type = ?
+            ORDER BY z_index ASC, created_at ASC
+            """,
+            (artwork_id, object_type),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            """
+            SELECT * FROM drawing_objects
+            WHERE artwork_id = ?
+            ORDER BY z_index ASC, created_at ASC
+            """,
+            (artwork_id,),
+        ).fetchall()
+
+    objects = [row_to_object(row) for row in rows]
+    color = selector.get("color")
+    if color:
+        objects = [obj for obj in objects if obj.style.get("fill") == color or obj.style.get("stroke") == color]
+    return objects
+
+
 def update_object(
     connection: sqlite3.Connection,
     artwork_id: str,
@@ -184,6 +235,7 @@ def update_object(
     geometry: dict[str, Any] | None = None,
     style: dict[str, Any] | None = None,
     name: str | None = None,
+    commit: bool = True,
 ) -> DrawingObject:
     current = get_object(connection, artwork_id, object_id)
     next_geometry = {**current.geometry, **(geometry or {})}
@@ -205,11 +257,11 @@ def update_object(
         ),
     )
     connection.execute("UPDATE artworks SET updated_at = ? WHERE id = ?", (timestamp, artwork_id))
-    connection.commit()
+    _commit(connection, commit)
     return get_object(connection, artwork_id, object_id)
 
 
-def delete_object(connection: sqlite3.Connection, artwork_id: str, object_id: str) -> DrawingObject:
+def delete_object(connection: sqlite3.Connection, artwork_id: str, object_id: str, *, commit: bool = True) -> DrawingObject:
     current = get_object(connection, artwork_id, object_id)
     timestamp = now_iso()
     connection.execute(
@@ -217,11 +269,11 @@ def delete_object(connection: sqlite3.Connection, artwork_id: str, object_id: st
         (artwork_id, object_id),
     )
     connection.execute("UPDATE artworks SET updated_at = ? WHERE id = ?", (timestamp, artwork_id))
-    connection.commit()
+    _commit(connection, commit)
     return current
 
 
-def save_version(connection: sqlite3.Connection, artwork_id: str) -> None:
+def save_version(connection: sqlite3.Connection, artwork_id: str, *, commit: bool = True) -> None:
     artwork = get_artwork(connection, artwork_id)
     row = connection.execute(
         "SELECT COALESCE(MAX(version_no), 0) + 1 AS version_no FROM artwork_versions WHERE artwork_id = ?",
@@ -240,7 +292,7 @@ def save_version(connection: sqlite3.Connection, artwork_id: str) -> None:
             now_iso(),
         ),
     )
-    connection.commit()
+    _commit(connection, commit)
 
 
 def record_operation(
@@ -250,6 +302,7 @@ def record_operation(
     payload: dict[str, Any],
     inverse_payload: dict[str, Any],
     status: str = "applied",
+    commit: bool = True,
 ) -> str:
     operation_id = new_id()
     timestamp = now_iso()
@@ -261,7 +314,7 @@ def record_operation(
         """,
         (operation_id, artwork_id, operation_type, _json(payload), _json(inverse_payload), status, timestamp, timestamp),
     )
-    connection.commit()
+    _commit(connection, commit)
     return operation_id
 
 
@@ -270,24 +323,24 @@ def get_last_operation(connection: sqlite3.Connection, artwork_id: str, status: 
         """
         SELECT * FROM operations
         WHERE artwork_id = ? AND status = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, rowid DESC
         LIMIT 1
         """,
         (artwork_id, status),
     ).fetchone()
 
 
-def mark_operation_status(connection: sqlite3.Connection, operation_id: str, status: str) -> None:
+def mark_operation_status(connection: sqlite3.Connection, operation_id: str, status: str, *, commit: bool = True) -> None:
     connection.execute(
         "UPDATE operations SET status = ?, updated_at = ? WHERE id = ?",
         (status, now_iso(), operation_id),
     )
-    connection.commit()
+    _commit(connection, commit)
 
 
-def clear_redo_stack(connection: sqlite3.Connection, artwork_id: str) -> None:
+def clear_redo_stack(connection: sqlite3.Connection, artwork_id: str, *, commit: bool = True) -> None:
     connection.execute("DELETE FROM operations WHERE artwork_id = ? AND status = 'undone'", (artwork_id,))
-    connection.commit()
+    _commit(connection, commit)
 
 
 def record_voice_log(

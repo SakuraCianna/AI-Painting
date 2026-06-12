@@ -13,6 +13,25 @@ interface TimelineItem {
   plan: CommandPlan | null;
 }
 
+const OPERATION_LABELS: Record<string, string> = {
+  create_canvas: "更新画布",
+  add_object: "添加对象",
+  set_style: "修改样式",
+  set_style_many: "批量改色",
+  move_object: "移动对象",
+  move_many: "批量移动",
+  scale_object: "缩放对象",
+  delete_object: "删除对象",
+  save_artwork: "保存作品",
+  export_artwork: "导出作品",
+  undo: "撤销",
+  redo: "恢复"
+};
+
+function getOperationLabel(operationType: string): string {
+  return OPERATION_LABELS[operationType] ?? operationType;
+}
+
 function getPlanSummary(plan: CommandPlan | null): string {
   if (!plan) {
     return "未生成计划";
@@ -20,7 +39,7 @@ function getPlanSummary(plan: CommandPlan | null): string {
   if (plan.clarification_question) {
     return plan.clarification_question;
   }
-  return plan.operations.map((operation) => operation.operation_type).join(" -> ");
+  return plan.operations.map((operation) => getOperationLabel(operation.operation_type)).join(" -> ");
 }
 
 export default function App() {
@@ -28,6 +47,7 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
   const [isBusy, setIsBusy] = useState(false);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
 
   useEffect(() => {
     createArtwork()
@@ -50,6 +70,7 @@ export default function App() {
       setStatusMessage("正在解析语音指令");
       try {
         const response = await submitVoiceCommand(artwork.id, text);
+        setLatestPlan(response.plan);
         if (response.artwork) {
           setArtwork(response.artwork);
         }
@@ -67,8 +88,15 @@ export default function App() {
           ...items
         ].slice(0, 12));
         setStatusMessage(response.message);
+        if ("speechSynthesis" in window) {
+          const utterance = new SpeechSynthesisUtterance(response.message);
+          utterance.lang = "zh-CN";
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
+        }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "语音指令执行失败";
+        setLatestPlan(null);
         setTimeline((items) => [
           {
             id: crypto.randomUUID(),
@@ -89,6 +117,7 @@ export default function App() {
   const voice = useVoiceRecognition({ onFinalTranscript: handleFinalTranscript });
   const liveTranscript = voice.interimTranscript || voice.lastFinalTranscript;
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
+  const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
 
   return (
     <main className="workspace">
@@ -117,6 +146,25 @@ export default function App() {
         <div className="voice-card transcript-card">
           <p className="panel-label">识别文本</p>
           <p className="transcript">{liveTranscript || "等待语音输入"}</p>
+        </div>
+
+        <div className="voice-card plan-card">
+          <p className="panel-label">执行计划</p>
+          {latestPlan ? (
+            <>
+              <div className="plan-meta">
+                <span>{latestPlan.operations.length} 个步骤</span>
+                <span>置信度 {planConfidenceText}</span>
+              </div>
+              <ol className="plan-list">
+                {latestPlan.operations.map((operation, index) => (
+                  <li key={`${operation.operation_type}-${index}`}>{getOperationLabel(operation.operation_type)}</li>
+                ))}
+              </ol>
+            </>
+          ) : (
+            <p className="empty-text">等待指令计划</p>
+          )}
         </div>
 
         <div className="timeline">

@@ -145,6 +145,37 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.plan-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 8px;
+  background: #edf5ef;
+  color: #2f533b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plan-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.plan-list li {
+  color: #233127;
+  line-height: 1.45;
+}
+
 .timeline {
   flex: 1;
   overflow: auto;
