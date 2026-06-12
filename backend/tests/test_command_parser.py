@@ -82,6 +82,18 @@ def test_parse_complex_house_plan() -> None:
     assert plan.operations[3].payload["object"]["semantic_tags"] == ["house", "house.window", "shape.rect"]
 
 
+def test_parse_house_component_colors_from_voice_text() -> None:
+    plan = parse_command("画一个房子，蓝色屋顶，红色门，黄色窗户。")
+    objects = [op.payload["object"] for op in plan.operations]
+    roof = next(obj for obj in objects if "house.roof" in obj["semantic_tags"])
+    door = next(obj for obj in objects if "house.door" in obj["semantic_tags"])
+    windows = [obj for obj in objects if "house.window" in obj["semantic_tags"]]
+
+    assert roof["style"]["fill"] == "#2563eb"
+    assert door["style"]["fill"] == "#dc2626"
+    assert all(window["style"]["fill"] == "#facc15" for window in windows)
+
+
 def test_parse_sun_and_cloud_as_two_step_plan() -> None:
     plan = parse_command("画一个太阳然后在下面加一片云")
     assert [op.operation_type for op in plan.operations] == ["add_object", "add_object"]
@@ -91,7 +103,7 @@ def test_parse_sun_and_cloud_as_two_step_plan() -> None:
 
 
 def test_parse_multi_object_scene_requires_planner_clarification() -> None:
-    plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
+    plan = parse_command("把画面改成夜晚 保留房子的形状 给窗户加暖黄色灯光")
     assert plan.requires_confirmation is True
     assert plan.operations == []
     assert plan.confidence == 0.42
@@ -144,6 +156,53 @@ def test_parse_semantic_scale_many() -> None:
     assert plan.operations[0].operation_type == "scale_many"
     assert plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
     assert plan.operations[0].payload["factor"] == 1.2
+
+
+def test_parse_portrait_scene_as_vector_group() -> None:
+    plan = parse_command("画一个人物肖像")
+    assert len(plan.operations) == 8
+    assert [operation.operation_type for operation in plan.operations] == ["add_object"] * 8
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.expected_object_count == 8
+    assert any("portrait.eye" in operation.payload["object"]["semantic_tags"] for operation in plan.operations)
+
+
+def test_parse_text_to_image_asset_generation() -> None:
+    plan = parse_command("生成一张人物肖像画")
+    assert plan.operations[0].operation_type == "generate_image_asset"
+    assert plan.operations[0].payload["width"] == 512
+    assert plan.operations[0].payload["semantic_tags"] == ["generated.image", "image"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "generate_asset"
+
+
+def test_parse_polish_current_image() -> None:
+    plan = parse_command("精修我的图片")
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    assert "精修当前画布" in plan.operations[0].payload["prompt"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "polish_artwork"
+
+
+def test_parse_window_shape_replacement_and_spatial_scale() -> None:
+    replace_plan = parse_command("把窗户改成圆形")
+    assert replace_plan.operations[0].operation_type == "replace_shape_many"
+    assert replace_plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
+    assert replace_plan.operations[0].payload["shape"] == "circle"
+
+    scale_plan = parse_command("把左边窗户改大一点")
+    assert scale_plan.operations[0].operation_type == "scale_many"
+    assert scale_plan.operations[0].payload["target"]["semantic_tag"] == "house.window"
+    assert scale_plan.operations[0].payload["target"]["position"] == "leftmost"
+
+
+def test_parse_cozy_cabin_scene_as_executable_plan() -> None:
+    plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
+    assert plan.requires_confirmation is False
+    assert len(plan.operations) == 14
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.expected_object_count == 14
+    assert [operation.operation_type for operation in plan.operations] == ["add_object"] * 14
 
 
 def test_parse_layer_move_many() -> None:

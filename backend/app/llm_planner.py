@@ -26,6 +26,10 @@ ALLOWED_OPERATION_TYPES = {
     "move_many",
     "scale_object",
     "scale_many",
+    "replace_shape",
+    "replace_shape_many",
+    "generate_image_asset",
+    "polish_image_asset",
     "delete_object",
     "clear_canvas",
     "save_artwork",
@@ -33,7 +37,7 @@ ALLOWED_OPERATION_TYPES = {
     "undo",
     "redo",
 }
-ALLOWED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier"}
+ALLOWED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier", "image"}
 JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
@@ -150,8 +154,8 @@ def _build_prompt(text: str) -> list[dict[str, str]]:
             "role": "system",
             "content": (
                 "你是语音绘图工具的指令规划器。只输出 JSON, 不输出 Markdown。"
-                "画布尺寸默认 1024x768。你只能使用这些对象类型: rect,circle,ellipse,triangle,line,arrow,star,text,polygon,path,bezier。"
-                "你只能使用这些操作: create_canvas,add_object,set_style,set_style_many,set_metadata,set_metadata_many,move_object,move_many,scale_object,scale_many,delete_object,clear_canvas,save_artwork,export_artwork,undo,redo。"
+                "画布尺寸默认 1024x768。你只能使用这些对象类型: rect,circle,ellipse,triangle,line,arrow,star,text,polygon,path,bezier,image。"
+                "你只能使用这些操作: create_canvas,add_object,set_style,set_style_many,set_metadata,set_metadata_many,move_object,move_many,scale_object,scale_many,replace_shape,replace_shape_many,generate_image_asset,polish_image_asset,delete_object,clear_canvas,save_artwork,export_artwork,undo,redo。"
                 "对象可以带 layer_id, group_id, semantic_tags 和 transform。target 可以按 selector,type,color,layer_id,group_id,semantic_tag 选择对象。"
                 "如果用户要求清空或删除大量内容, requires_confirmation 必须为 true。"
                 "无法安全理解时返回 requires_confirmation true 和 clarification_question。"

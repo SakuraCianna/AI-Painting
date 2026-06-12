@@ -7,7 +7,7 @@ export type DrawingGeometryValue =
 
 export interface DrawingObject {
   id: string;
-  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text" | "polygon" | "path" | "bezier";
+  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text" | "polygon" | "path" | "bezier" | "image";
   name?: string | null;
   layer_id: string;
   group_id?: string | null;

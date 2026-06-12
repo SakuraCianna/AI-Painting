@@ -7,7 +7,7 @@ import type {
   TtsSynthesisResponse
 } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8084";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -42,10 +42,13 @@ export function fetchArtwork(artworkId: string): Promise<Artwork> {
   return requestJson<Artwork>(`/api/artworks/${artworkId}`);
 }
 
-export function submitVoiceCommand(artworkId: string, text: string): Promise<CommandExecutionResponse> {
+export function submitVoiceCommand(artworkId: string, text: string, canvasImageDataUrl?: string): Promise<CommandExecutionResponse> {
   return requestJson<CommandExecutionResponse>(`/api/artworks/${artworkId}/commands`, {
     method: "POST",
-    body: JSON.stringify({ text })
+    body: JSON.stringify({
+      text,
+      ...(canvasImageDataUrl ? { canvas_image_data_url: canvasImageDataUrl } : {})
+    })
   });
 }
 

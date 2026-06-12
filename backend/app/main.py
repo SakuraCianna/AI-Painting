@@ -15,6 +15,7 @@ from .command_parser import normalize_text, parse_command
 from .config import load_env_file
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
+from .image_generation import ImageGenerationError, generate_image_object, polish_image_object
 from .llm_planner import LlmPlannerError, plan_with_mimo, should_use_llm_planner
 from .metrics import summarize_latency_rows
 from .repositories import (
@@ -37,6 +38,7 @@ from .schemas import (
     CommandParseRequest,
     CommandPlan,
     LatencyMetricsSummary,
+    OperationRequest,
     OperationResponse,
     TtsSynthesisRequest,
     TtsSynthesisResponse,
@@ -61,7 +63,7 @@ app = FastAPI(title="AI Painting Voice Drawing API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_read_csv_env("AI_PAINTING_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
+    allow_origins=_read_csv_env("AI_PAINTING_CORS_ORIGINS", "http://localhost:3001,http://127.0.0.1:3001"),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,6 +126,36 @@ def _with_plan_metadata(plan: CommandPlan, planner_source: str) -> CommandPlan:
     if not plan.explanation:
         plan.explanation = _default_plan_explanation(plan)
     return plan
+
+
+async def _resolve_generated_image_operations(
+    plan: CommandPlan,
+    *,
+    canvas_image_data_url: str | None,
+    canvas_width: int,
+    canvas_height: int,
+) -> CommandPlan:
+    image_operation_types = {"generate_image_asset", "polish_image_asset"}
+    if not any(operation.operation_type in image_operation_types for operation in plan.operations):
+        return plan
+    resolved_operations = []
+    for operation in plan.operations:
+        if operation.operation_type not in image_operation_types:
+            resolved_operations.append(operation)
+            continue
+        if operation.operation_type == "polish_image_asset":
+            payload = dict(operation.payload)
+            payload["input_image_data_url"] = canvas_image_data_url
+            payload["width"] = canvas_width
+            payload["height"] = canvas_height
+            image_object = await polish_image_object(payload, fallback_width=canvas_width, fallback_height=canvas_height)
+        else:
+            image_object = await generate_image_object(operation.payload)
+        resolved_operations.append(OperationRequest(operation_type="add_object", payload={"object": image_object}))
+    next_plan = plan.model_copy(deep=True)
+    next_plan.operations = resolved_operations
+    next_plan.explanation = next_plan.explanation or "已生成图片对象并加入画布"
+    return next_plan
 
 
 async def build_command_plan(text: str) -> CommandPlan:
@@ -258,7 +290,7 @@ async def api_execute_command(
 ) -> CommandExecutionResponse:
     started_at = perf_counter()
     try:
-        get_artwork(db, artwork_id)
+        current_artwork = get_artwork(db, artwork_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -333,6 +365,12 @@ async def api_execute_command(
     message = "未执行任何操作"
     execute_started_at = perf_counter()
     try:
+        plan = await _resolve_generated_image_operations(
+            plan,
+            canvas_image_data_url=request.canvas_image_data_url,
+            canvas_width=current_artwork.width,
+            canvas_height=current_artwork.height,
+        )
         if len(plan.operations) == 1 and plan.operations[0].operation_type == "undo":
             undo_last_operation(db, artwork_id)
             message = "已撤销上一步"
@@ -346,7 +384,7 @@ async def api_execute_command(
         artwork = get_artwork(db, artwork_id)
         status = "success"
         error_message = None
-    except (KeyError, ValueError) as exc:
+    except (KeyError, ValueError, ImageGenerationError) as exc:
         artwork = get_artwork(db, artwork_id)
         status = "failed"
         error_message = str(exc)

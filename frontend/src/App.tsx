@@ -12,7 +12,7 @@ import { CanvasStage } from "./drawing/CanvasStage";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
 import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan, LatencyMetricsSummary } from "./types";
-import { exportSvgAsPng } from "./utils/exportPng";
+import { exportSvgAsPng, svgToPngDataUrl } from "./utils/exportPng";
 
 interface TimelineItem {
   id: string;
@@ -34,6 +34,10 @@ const OPERATION_LABELS: Record<string, string> = {
   move_many: "批量移动",
   scale_object: "缩放对象",
   scale_many: "批量缩放",
+  replace_shape: "替换形状",
+  replace_shape_many: "批量替换形状",
+  generate_image_asset: "生成图片",
+  polish_image_asset: "精修图片",
   delete_object: "删除对象",
   clear_canvas: "清空画布",
   save_artwork: "保存作品",
@@ -98,6 +102,10 @@ function getHistoricalLatency(summary: LatencyMetricsSummary | null, percentileN
   return summary?.metrics.total_ms?.[percentileName] ?? null;
 }
 
+function shouldAttachCanvasImage(text: string): boolean {
+  return /精修|丰富|润色|美化|增强|提升质感|重新渲染|风格化/.test(text) && /图片|图像|画面|作品|画布/.test(text);
+}
+
 export default function App() {
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
@@ -156,7 +164,11 @@ export default function App() {
       setStatusMessage("正在解析语音指令");
       setLatestAsrMetrics(asrMetrics);
       try {
-        const response = await submitVoiceCommand(artwork.id, text);
+        const canvasImageDataUrl = shouldAttachCanvasImage(text) ? await svgToPngDataUrl("voice-canvas-svg") : undefined;
+        if (canvasImageDataUrl) {
+          setStatusMessage("正在精修当前画布");
+        }
+        const response = await submitVoiceCommand(artwork.id, text, canvasImageDataUrl);
         setLatestPlan(response.plan);
         setLatestCommandMetrics(response.metrics);
         if (response.artwork) {

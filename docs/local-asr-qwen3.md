@@ -87,7 +87,7 @@ $env:AI_PAINTING_LOCAL_ASR_LABEL="Qwen3-ASR 本地服务"
 主后端仍然使用原接口:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8080
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8084
 ```
 
 ## 快速启动脚本

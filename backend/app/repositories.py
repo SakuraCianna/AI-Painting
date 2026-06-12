@@ -254,6 +254,40 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
     if semantic_tags:
         wanted_tags = {str(tag) for tag in semantic_tags}
         objects = [obj for obj in objects if wanted_tags.intersection(obj.semantic_tags)]
+    position = selector.get("position")
+    if position and objects:
+        objects = _filter_objects_by_position(objects, str(position))
+    return objects
+
+
+def _object_center(obj: DrawingObject) -> tuple[float, float]:
+    geometry = obj.geometry
+    if "cx" in geometry or "cy" in geometry:
+        return float(geometry.get("cx", 0)), float(geometry.get("cy", 0))
+    if "x" in geometry or "y" in geometry:
+        width = float(geometry.get("width", geometry.get("size", 0)))
+        height = float(geometry.get("height", geometry.get("size", 0)))
+        return float(geometry.get("x", 0)) + width / 2, float(geometry.get("y", 0)) + height / 2
+    points = geometry.get("points")
+    if isinstance(points, list) and points:
+        xs = [float(point.get("x", 0)) for point in points if isinstance(point, dict)]
+        ys = [float(point.get("y", 0)) for point in points if isinstance(point, dict)]
+        if xs and ys:
+            return sum(xs) / len(xs), sum(ys) / len(ys)
+    commands = geometry.get("commands")
+    if isinstance(commands, list) and commands:
+        xs = [float(command.get("x", 0)) for command in commands if isinstance(command, dict) and "x" in command]
+        ys = [float(command.get("y", 0)) for command in commands if isinstance(command, dict) and "y" in command]
+        if xs and ys:
+            return sum(xs) / len(xs), sum(ys) / len(ys)
+    return 0, 0
+
+
+def _filter_objects_by_position(objects: list[DrawingObject], position: str) -> list[DrawingObject]:
+    key_index = 1 if position in {"topmost", "bottommost"} else 0
+    reverse = position in {"rightmost", "bottommost"}
+    if position in {"leftmost", "rightmost", "topmost", "bottommost"}:
+        return [sorted(objects, key=lambda obj: _object_center(obj)[key_index], reverse=reverse)[0]]
     return objects
 
 
@@ -262,7 +296,9 @@ def update_object(
     artwork_id: str,
     object_id: str,
     *,
+    object_type: str | None = None,
     geometry: dict[str, Any] | None = None,
+    replace_geometry: bool = False,
     style: dict[str, Any] | None = None,
     name: str | None | object = _UNSET,
     layer_id: str | None | object = _UNSET,
@@ -272,8 +308,9 @@ def update_object(
     commit: bool = True,
 ) -> DrawingObject:
     current = get_object(connection, artwork_id, object_id)
-    next_geometry = {**current.geometry, **(geometry or {})}
+    next_geometry = dict(geometry or {}) if replace_geometry and geometry is not None else {**current.geometry, **(geometry or {})}
     next_style = {**current.style, **(style or {})}
+    next_type = object_type or current.type
     next_name = current.name if name is _UNSET else name
     next_layer_id = current.layer_id if layer_id is _UNSET else layer_id or "base"
     next_group_id = current.group_id if group_id is _UNSET else group_id
@@ -283,10 +320,11 @@ def update_object(
     connection.execute(
         """
         UPDATE drawing_objects
-        SET name = ?, layer_id = ?, group_id = ?, semantic_tags_json = ?, transform_json = ?, geometry_json = ?, style_json = ?, updated_at = ?
+        SET type = ?, name = ?, layer_id = ?, group_id = ?, semantic_tags_json = ?, transform_json = ?, geometry_json = ?, style_json = ?, updated_at = ?
         WHERE artwork_id = ? AND id = ?
         """,
         (
+            next_type,
             next_name,
             next_layer_id,
             next_group_id,

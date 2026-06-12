@@ -88,8 +88,29 @@
   {
     "id": "scene-cabin-road-clouds",
     "text": "画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云",
-    "tier": "planner_expected",
-    "reason": "需要多主体构图和数量约束, 交给 ScenePlan 和 LLM 规划器后续评测"
+    "tier": "rules",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "circle", "path", "path", "path", "rect", "triangle", "rect", "rect", "rect", "rect", "circle", "rect", "circle"]
+  },
+  {
+    "id": "portrait-vector",
+    "text": "画一个人物肖像",
+    "tier": "rules",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["ellipse", "rect", "ellipse", "path", "circle", "circle", "path", "path"]
+  },
+  {
+    "id": "portrait-image-generation",
+    "text": "生成一张人物肖像画",
+    "tier": "rules",
+    "expected_operation_types": ["generate_image_asset"]
+  },
+  {
+    "id": "replace-window-shape",
+    "text": "把窗户改成圆形",
+    "tier": "rules",
+    "expected_operation_types": ["replace_shape_many"],
+    "expected_target_semantic_tag": "house.window"
   },
   {
     "id": "night-scene-refine",

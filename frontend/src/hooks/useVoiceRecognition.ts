@@ -59,9 +59,9 @@ interface UseVoiceRecognitionOptions {
 
 const TARGET_SAMPLE_RATE = 16000;
 const SPEECH_THRESHOLD = 0.045;
-const SILENCE_MS = 850;
+const SILENCE_MS = 1500;
 const MIN_SPEECH_MS = 480;
-const MAX_SPEECH_MS = 8000;
+const MAX_SPEECH_MS = 30000;
 
 function mergeChunks(chunks: Float32Array[]): Float32Array {
   const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
