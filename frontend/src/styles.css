@@ -54,33 +54,6 @@ textarea {
   padding: 4px;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 48px;
-  margin-bottom: 10px;
-}
-
-.product-lockup {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.app-mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--primary);
-  box-shadow: var(--shadow-1);
-  color: var(--on-primary);
-}
-
 .eyebrow,
 .panel-label {
   margin: 0 0 4px;
@@ -90,7 +63,6 @@ textarea {
   letter-spacing: 0;
 }
 
-h1,
 h2 {
   margin: 0;
   color: var(--on-surface);
@@ -98,24 +70,9 @@ h2 {
   letter-spacing: 0;
 }
 
-h1 {
-  overflow: hidden;
-  font-size: 22px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 h2 {
   font-size: 18px;
   line-height: 1.35;
-}
-
-.status-cluster {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .status-pill {
@@ -471,12 +428,4 @@ h2 {
     border-top: 1px solid var(--outline-variant);
   }
 
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .status-cluster {
-    justify-content: flex-start;
-  }
 }

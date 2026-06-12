@@ -25,13 +25,6 @@ class ArtworkCreateRequest(BaseModel):
     background: str = "#ffffff"
 
 
-class ArtworkUpdateRequest(BaseModel):
-    title: str | None = None
-    width: int | None = None
-    height: int | None = None
-    background: str | None = None
-
-
 class ArtworkResponse(BaseModel):
     id: str
     title: str
