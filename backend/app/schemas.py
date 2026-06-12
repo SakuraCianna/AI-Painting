@@ -71,6 +71,7 @@ class CommandPlan(BaseModel):
 
 class CommandParseRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=500)
+    canvas_image_data_url: str | None = Field(default=None, min_length=1, max_length=16_000_000)
 
 
 class AsrTranscriptionRequest(BaseModel):

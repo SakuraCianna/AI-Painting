@@ -198,6 +198,11 @@ $env:AI_PAINTING_TEXT_IMAGE_URL="http://127.0.0.1:9010/generate"
 $env:AI_PAINTING_TEXT_IMAGE_MODEL="local-text-to-image"
 $env:AI_PAINTING_TEXT_IMAGE_WIDTH="512"
 $env:AI_PAINTING_TEXT_IMAGE_HEIGHT="512"
+$env:AI_PAINTING_IMAGE_EDIT_PROVIDER="openai_compatible"
+$env:AI_PAINTING_IMAGE_EDIT_BASE_URL="https://corenode.best/v1"
+$env:AI_PAINTING_IMAGE_EDIT_MODEL="gpt-image2"
+$env:AI_PAINTING_IMAGE_EDIT_SIZE="1024x768"
+$env:AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT="b64_json"
 ```
 
 说明:
@@ -225,6 +230,12 @@ $env:AI_PAINTING_TEXT_IMAGE_HEIGHT="512"
 - `AI_PAINTING_TEXT_IMAGE_MODEL`: HTTP 文字转图片模型名, 可选
 - `AI_PAINTING_TEXT_IMAGE_WIDTH`: 默认生成图片宽度, 默认 512
 - `AI_PAINTING_TEXT_IMAGE_HEIGHT`: 默认生成图片高度, 默认 512
+- `AI_PAINTING_IMAGE_EDIT_PROVIDER`: 图生图精修 Provider, 默认 `placeholder`, 可设置为 `openai_compatible` 或 `disabled`
+- `AI_PAINTING_IMAGE_EDIT_BASE_URL`: OpenAI 兼容图像编辑接口 Base URL
+- `AI_PAINTING_IMAGE_EDIT_API_KEY`: 图生图精修 API Key, 不要提交到 git
+- `AI_PAINTING_IMAGE_EDIT_MODEL`: 图生图精修模型名
+- `AI_PAINTING_IMAGE_EDIT_SIZE`: 图生图精修输出尺寸, 默认跟随画布尺寸
+- `AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT`: 图生图精修响应格式, 默认 `b64_json`
 
 本地 ASR HTTP 服务约定:
 
@@ -281,6 +292,15 @@ ASR 样本评测脚手架详见 [docs/evaluation/asr-benchmark.md](docs/evaluati
 4. 配置 `AI_PAINTING_IMAGE_PROVIDER=http` 和 `AI_PAINTING_TEXT_IMAGE_URL` 后, 后端会调用外部文字转图片服务
 5. HTTP 服务可以返回图片二进制, 也可以返回包含 `image_data_url`、`data_url`、`url`、`image_url` 或 `b64_json` 的 JSON
 6. 生成图片作为普通画布对象保存, 可以继续用语音移动、缩放、撤销和删除
+
+图生图精修:
+
+1. “精修我的图片”“丰富当前画面”“把当前作品风格化”会生成 `polish_image_asset` 计划
+2. 前端会把当前 SVG 画布转成 PNG data URL, 和用户提示词一起提交到后端
+3. 后端使用 `AI_PAINTING_IMAGE_EDIT_PROVIDER` 选择 Provider
+4. 配置 `openai_compatible` 后, 后端会调用 `{AI_PAINTING_IMAGE_EDIT_BASE_URL}/images/edits`
+5. 返回图片会作为覆盖整张画布的 `image` 对象加入作品, 原始矢量对象仍保留在下层
+6. 用户可以用“撤销”移除精修图, 回到可编辑源画布
 
 ## 项目结构
 

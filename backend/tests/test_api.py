@@ -6,6 +6,12 @@ import sqlite3
 from fastapi.testclient import TestClient
 
 
+SAMPLE_PNG_DATA_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
+
+
 def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     create_response = client.post("/api/artworks", json={"title": "语音练习", "width": 1024, "height": 768, "background": "#ffffff"})
     assert create_response.status_code == 200
@@ -250,6 +256,24 @@ def test_text_to_image_placeholder_generates_editable_image_object(client: TestC
     assert image_object["type"] == "image"
     assert image_object["geometry"]["src"].startswith("data:image/svg+xml;base64,")
     assert image_object["geometry"]["provider"] == "placeholder"
+
+
+def test_polish_image_placeholder_uses_canvas_snapshot(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "精修我的图片", "canvas_image_data_url": SAMPLE_PNG_DATA_URL},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "add_object"
+    image_object = body["artwork"]["objects"][0]
+    assert image_object["type"] == "image"
+    assert image_object["name"] == "精修版本"
+    assert image_object["geometry"]["provider"] == "placeholder"
+    assert "polished.image" in image_object["semantic_tags"]
 
 
 def test_left_window_spatial_selector_scales_only_one_window(client: TestClient) -> None:

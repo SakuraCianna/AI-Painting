@@ -164,6 +164,14 @@ def test_parse_text_to_image_asset_generation() -> None:
     assert plan.scene_plan.intent == "generate_asset"
 
 
+def test_parse_polish_current_image() -> None:
+    plan = parse_command("精修我的图片")
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    assert "精修当前画布" in plan.operations[0].payload["prompt"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "polish_artwork"
+
+
 def test_parse_window_shape_replacement_and_spatial_scale() -> None:
     replace_plan = parse_command("把窗户改成圆形")
     assert replace_plan.operations[0].operation_type == "replace_shape_many"

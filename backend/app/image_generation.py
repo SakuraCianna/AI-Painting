@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import html
 import os
+import re
 from typing import Any
 
 import httpx
@@ -10,6 +11,9 @@ import httpx
 
 class ImageGenerationError(RuntimeError):
     pass
+
+
+DATA_URL_PATTERN = re.compile(r"^data:(?P<mime>[-\w.+/]+);base64,(?P<data>.+)$", re.DOTALL)
 
 
 def _read_int_env(name: str, default: int) -> int:
@@ -48,6 +52,11 @@ def _svg_placeholder_data_url(prompt: str, width: int, height: int) -> str:
 
 
 def _extract_image_source(payload: dict[str, Any]) -> str | None:
+    data = payload.get("data")
+    if isinstance(data, list) and data:
+        first = data[0]
+        if isinstance(first, dict):
+            return _extract_image_source(first)
     for key in ("image_data_url", "data_url", "url", "image_url"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
@@ -63,6 +72,19 @@ def _extract_image_source(payload: dict[str, Any]) -> str | None:
         if isinstance(first, str):
             return first
     return None
+
+
+def _decode_image_data_url(data_url: str) -> tuple[str, bytes]:
+    match = DATA_URL_PATTERN.match(data_url.strip())
+    if not match:
+        raise ImageGenerationError("画布图片必须是 base64 data URL")
+    mime = match.group("mime")
+    if mime not in {"image/png", "image/jpeg", "image/webp"}:
+        raise ImageGenerationError("画布图片只支持 PNG, JPEG 或 WebP")
+    try:
+        return mime, base64.b64decode(match.group("data"), validate=True)
+    except ValueError as exc:
+        raise ImageGenerationError("画布图片 base64 无法解析") from exc
 
 
 async def _generate_with_http(prompt: str, width: int, height: int, style: str | None) -> tuple[str, str]:
@@ -99,6 +121,44 @@ async def _generate_with_http(prompt: str, width: int, height: int, style: str |
     return image_source, "http"
 
 
+async def _edit_with_openai_compatible(prompt: str, image_data_url: str, width: int, height: int) -> tuple[str, str]:
+    base_url = os.getenv("AI_PAINTING_IMAGE_EDIT_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("AI_PAINTING_IMAGE_EDIT_API_KEY")
+    if not base_url:
+        raise ImageGenerationError("未配置 AI_PAINTING_IMAGE_EDIT_BASE_URL")
+    if not api_key:
+        raise ImageGenerationError("未配置 AI_PAINTING_IMAGE_EDIT_API_KEY")
+    mime, image_bytes = _decode_image_data_url(image_data_url)
+    endpoint = os.getenv("AI_PAINTING_IMAGE_EDIT_ENDPOINT") or f"{base_url}/images/edits"
+    model = os.getenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")
+    timeout = float(os.getenv("AI_PAINTING_IMAGE_EDIT_TIMEOUT", "120"))
+    size = os.getenv("AI_PAINTING_IMAGE_EDIT_SIZE") or f"{width}x{height}"
+    response_format = os.getenv("AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT", "b64_json")
+    fields = {
+        "model": model,
+        "prompt": prompt,
+        "size": size,
+        "response_format": response_format,
+    }
+    files = {
+        "image": ("canvas.png", image_bytes, mime),
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(endpoint, headers=headers, data=fields, files=files)
+    if response.status_code >= 400:
+        raise ImageGenerationError(f"图生图精修请求失败: HTTP {response.status_code}")
+    try:
+        image_source = _extract_image_source(response.json())
+    except ValueError as exc:
+        raise ImageGenerationError("图生图精修响应不是 JSON") from exc
+    if not image_source:
+        raise ImageGenerationError("图生图精修响应缺少图片地址")
+    return image_source, "openai_compatible"
+
+
 async def generate_image_object(payload: dict[str, Any]) -> dict[str, Any]:
     prompt = str(payload.get("prompt") or payload.get("text") or "").strip()
     if not prompt:
@@ -125,6 +185,41 @@ async def generate_image_object(payload: dict[str, Any]) -> dict[str, Any]:
         "geometry": {
             "x": int(payload.get("x", 256)),
             "y": int(payload.get("y", 128)),
+            "width": width,
+            "height": height,
+            "src": src,
+            "prompt": prompt,
+            "provider": provider_name,
+            "preserveAspectRatio": payload.get("preserveAspectRatio", "xMidYMid slice"),
+        },
+        "style": {"opacity": float(payload.get("opacity", 1))},
+    }
+
+
+async def polish_image_object(payload: dict[str, Any], *, fallback_width: int, fallback_height: int) -> dict[str, Any]:
+    prompt = str(payload.get("prompt") or "精修当前画布, 保留主要构图和对象关系, 丰富细节, 提升整体质感").strip()
+    image_data_url = str(payload.get("input_image_data_url") or "").strip()
+    if not image_data_url:
+        raise ImageGenerationError("精修当前图片需要前端提供画布截图")
+    width = _bounded_dimension(payload.get("width"), fallback_width)
+    height = _bounded_dimension(payload.get("height"), fallback_height)
+    provider = os.getenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder").strip().lower()
+    if provider in {"openai", "openai_compatible", "gpt_image"}:
+        src, provider_name = await _edit_with_openai_compatible(prompt, image_data_url, width, height)
+    elif provider in {"disabled", "none", "off"}:
+        raise ImageGenerationError("图生图精修 Provider 未启用")
+    else:
+        src = _svg_placeholder_data_url(f"精修预览: {prompt}", width, height)
+        provider_name = "placeholder"
+    return {
+        "type": "image",
+        "name": str(payload.get("name") or "精修版本"),
+        "layer_id": str(payload.get("layer_id") or "foreground"),
+        "group_id": payload.get("group_id"),
+        "semantic_tags": ["generated.image", "image", "polished.image"],
+        "geometry": {
+            "x": int(payload.get("x", 0)),
+            "y": int(payload.get("y", 0)),
             "width": width,
             "height": height,
             "src": src,

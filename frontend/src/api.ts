@@ -42,10 +42,13 @@ export function fetchArtwork(artworkId: string): Promise<Artwork> {
   return requestJson<Artwork>(`/api/artworks/${artworkId}`);
 }
 
-export function submitVoiceCommand(artworkId: string, text: string): Promise<CommandExecutionResponse> {
+export function submitVoiceCommand(artworkId: string, text: string, canvasImageDataUrl?: string): Promise<CommandExecutionResponse> {
   return requestJson<CommandExecutionResponse>(`/api/artworks/${artworkId}/commands`, {
     method: "POST",
-    body: JSON.stringify({ text })
+    body: JSON.stringify({
+      text,
+      ...(canvasImageDataUrl ? { canvas_image_data_url: canvasImageDataUrl } : {})
+    })
   });
 }
 

@@ -1,4 +1,4 @@
-export async function exportSvgAsPng(svgId: string, filename: string): Promise<void> {
+export async function svgToPngDataUrl(svgId: string): Promise<string> {
   const svg = document.getElementById(svgId);
   if (!(svg instanceof SVGSVGElement)) {
     throw new Error("没有找到可导出的画布");
@@ -9,7 +9,7 @@ export async function exportSvgAsPng(svgId: string, filename: string): Promise<v
   const blob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
       const canvas = document.createElement("canvas");
@@ -23,11 +23,7 @@ export async function exportSvgAsPng(svgId: string, filename: string): Promise<v
       }
       context.drawImage(image, 0, 0);
       URL.revokeObjectURL(url);
-      const link = document.createElement("a");
-      link.href = canvas.toDataURL("image/png");
-      link.download = filename;
-      link.click();
-      resolve();
+      resolve(canvas.toDataURL("image/png"));
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
@@ -35,4 +31,12 @@ export async function exportSvgAsPng(svgId: string, filename: string): Promise<v
     };
     image.src = url;
   });
+}
+
+export async function exportSvgAsPng(svgId: string, filename: string): Promise<void> {
+  const dataUrl = await svgToPngDataUrl(svgId);
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  link.click();
 }
