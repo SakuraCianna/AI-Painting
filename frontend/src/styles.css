@@ -46,6 +46,28 @@ textarea {
   background: var(--surface-container);
 }
 
+.error-workspace {
+  grid-template-columns: 1fr;
+  place-items: center;
+}
+
+.error-boundary {
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 48px));
+  padding: 24px;
+  border: 1px solid #f9dedc;
+  border-radius: 8px;
+  background: #fff8f7;
+  color: var(--error);
+  box-shadow: var(--shadow-1);
+}
+
+.error-boundary strong {
+  color: var(--error);
+  font-size: 20px;
+}
+
 .stage-panel {
   display: grid;
   grid-template-rows: minmax(0, 1fr);

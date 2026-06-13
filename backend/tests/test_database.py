@@ -3,7 +3,9 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from app.database import init_db
+import pytest
+
+from app.database import _ensure_columns, connect_db, init_db
 
 
 def test_init_db_migrates_old_drawing_object_metadata_columns(tmp_path: Path) -> None:
@@ -55,3 +57,13 @@ def test_init_db_migrates_old_drawing_object_metadata_columns(tmp_path: Path) ->
     migrated.close()
     assert {"layer_id", "group_id", "semantic_tags_json", "transform_json"}.issubset(object_columns)
     assert {"command_group_id", "operation_index"}.issubset(operation_columns)
+
+
+def test_ensure_columns_rejects_unapproved_table_names(tmp_path: Path) -> None:
+    db_path = tmp_path / "safe.sqlite3"
+    init_db(str(db_path))
+
+    with connect_db(str(db_path)) as connection:
+        with pytest.raises(ValueError, match="不允许"):
+            _ensure_columns(connection, "drawing_objects); DROP TABLE operations; --", {})
+        assert connection.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'operations'").fetchone()

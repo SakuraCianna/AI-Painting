@@ -331,6 +331,15 @@ def normalize_text(text: str) -> str:
         "导出图片": "导出 png",
         "导出为png": "导出 png",
         "导出为 png": "导出 png",
+        "导出svg": "导出 svg",
+        "导出为svg": "导出 svg",
+        "导出为 svg": "导出 svg",
+        "导出项目json": "导出 json",
+        "导出项目 json": "导出 json",
+        "导出工程json": "导出 json",
+        "导出工程 json": "导出 json",
+        "导出为json": "导出 json",
+        "导出为 json": "导出 json",
     }
     for source, target in replacements.items():
         normalized = normalized.replace(source, target)
@@ -1414,6 +1423,10 @@ def parse_command(text: str) -> CommandPlan:
     elif "保存" in normalized:
         title_match = TITLE_PATTERN.search(normalized)
         operations.append(OperationRequest(operation_type="save_artwork", payload={"title": title_match.group(1) if title_match else None}))
+    elif "导出 svg" in normalized or "导出svg" in normalized:
+        operations.append(OperationRequest(operation_type="export_artwork", payload={"format": "svg"}))
+    elif "导出 json" in normalized or "导出json" in normalized:
+        operations.append(OperationRequest(operation_type="export_artwork", payload={"format": "json"}))
     elif "导出 png" in normalized or "导出png" in normalized:
         operations.append(OperationRequest(operation_type="export_artwork", payload={"format": "png"}))
     elif "新建" in normalized and "画布" in normalized:

@@ -48,7 +48,10 @@ def _parse_latency(raw_latency: str) -> dict[str, Any]:
 def _row_value(row: Mapping[str, Any], key: str) -> Any:
     if hasattr(row, "get"):
         return row.get(key)
-    return row[key]
+    try:
+        return row[key]
+    except (KeyError, IndexError):
+        return None
 
 
 def summarize_latency_rows(rows: Iterable[Mapping[str, Any]], *, artwork_id: str | None = None, limit: int = 200) -> LatencyMetricsSummary:

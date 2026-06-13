@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -17,6 +18,13 @@ OPERATION_COLUMNS: dict[str, str] = {
     "command_group_id": "TEXT",
     "operation_index": "INTEGER NOT NULL DEFAULT 0",
 }
+
+ALLOWED_MIGRATION_COLUMNS: dict[str, dict[str, str]] = {
+    "drawing_objects": DRAWING_OBJECT_COLUMNS,
+    "operations": OPERATION_COLUMNS,
+}
+
+SQLITE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def get_database_path() -> str:
@@ -129,13 +137,27 @@ def _ensure_operation_columns(connection: sqlite3.Connection) -> None:
 
 
 def _ensure_columns(connection: sqlite3.Connection, table_name: str, columns: dict[str, str]) -> None:
+    allowed_columns = ALLOWED_MIGRATION_COLUMNS.get(table_name)
+    if allowed_columns is None:
+        raise ValueError(f"不允许的迁移表: {table_name}")
+    for column_name, column_definition in columns.items():
+        if allowed_columns.get(column_name) != column_definition:
+            raise ValueError(f"不允许的迁移列: {table_name}.{column_name}")
+    quoted_table = _quote_sqlite_identifier(table_name)
     existing_columns = {
         row["name"]
-        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        for row in connection.execute(f"PRAGMA table_info({quoted_table})").fetchall()
     }
     for column_name, column_definition in columns.items():
         if column_name not in existing_columns:
-            connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
+            quoted_column = _quote_sqlite_identifier(column_name)
+            connection.execute(f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} {column_definition}")
+
+
+def _quote_sqlite_identifier(identifier: str) -> str:
+    if not SQLITE_IDENTIFIER_PATTERN.fullmatch(identifier):
+        raise ValueError(f"不允许的数据库标识符: {identifier}")
+    return f'"{identifier}"'
 
 
 def get_db() -> Iterator[sqlite3.Connection]:

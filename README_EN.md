@@ -78,6 +78,7 @@ The product design is therefore **vector-first, generative-enhanced**:
 | Agent templates | First version supported | Living room, flowchart, system architecture diagram, custom ER diagram, custom swimlane diagram, infographic, poster, UI wireframe, custom org chart, Gantt chart |
 | Text-to-image | Provider pipeline supported | "Generate an anime character" |
 | Image-to-image | Provider pipeline supported | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点" |
+| Voice export | Supported | "Export PNG", "导出 SVG", "导出项目 JSON" |
 | Local ASR | Scaffold supported | Qwen3-ASR HTTP service |
 | Production validation | In progress | Real ASR samples, real image quality, and no-mouse E2E validation still need more work |
 
@@ -110,6 +111,8 @@ Confirm clear
 Undo
 Redo
 Export PNG
+导出 SVG
+导出项目 JSON
 ```
 
 ### Architecture
