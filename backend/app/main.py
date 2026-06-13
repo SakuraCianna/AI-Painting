@@ -145,12 +145,22 @@ def _source_prompt_for_image(source_object: DrawingObject) -> str | None:
     return None
 
 
-def _compose_image_edit_prompt(user_prompt: str, source_prompt: str | None, target_region: str | None) -> str:
+def _compose_image_edit_prompt(
+    user_prompt: str,
+    source_prompt: str | None,
+    target_region: str | None,
+    target_subject: str | None,
+    adjustment: str | None,
+) -> str:
     parts = []
     if source_prompt:
         parts.append(f"原图提示词: {source_prompt}")
+    if target_subject:
+        parts.append(f"目标对象: {target_subject}")
     if target_region:
         parts.append(f"局部精修目标: {target_region}")
+    if adjustment:
+        parts.append(f"调整方式: {adjustment}")
     parts.append(f"本次用户指令: {user_prompt}")
     parts.append("保留原图主体构图、身份特征、对象关系和整体风格, 只调整用户明确指定的部分")
     return "。".join(parts)
@@ -188,13 +198,25 @@ def _resolve_polish_source_payload(
     payload["input_image_data_url"] = source_image or canvas_image_data_url
     source_prompt = _source_prompt_for_image(source_object)
     target_region = str(payload.get("target_region") or "").strip() or None
-    payload["prompt"] = _compose_image_edit_prompt(str(payload.get("prompt") or ""), source_prompt, target_region)
+    target_subject = str(payload.get("target_subject") or "").strip() or None
+    adjustment = str(payload.get("adjustment") or "").strip() or None
+    payload["prompt"] = _compose_image_edit_prompt(
+        str(payload.get("prompt") or ""),
+        source_prompt,
+        target_region,
+        target_subject,
+        adjustment,
+    )
     if source_prompt:
         payload["source_prompt"] = source_prompt
     payload["source_object_id"] = source_object.id
     payload["source_object_name"] = source_object.name
     if target_region:
         payload["target_region"] = target_region
+    if target_subject:
+        payload["target_subject"] = target_subject
+    if adjustment:
+        payload["adjustment"] = adjustment
     for key in ("x", "y", "width", "height", "preserveAspectRatio"):
         if source_object.geometry.get(key) is not None:
             payload[key] = source_object.geometry[key]

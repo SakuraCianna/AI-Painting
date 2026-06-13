@@ -262,6 +262,34 @@ def test_image_edit_uses_official_openai_fallback_after_proxy_failure(monkeypatc
     assert calls[1]["fields"]["size"] == "auto"
 
 
+def test_polish_image_object_persists_subject_region_adjustment_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
+
+    image_object = asyncio.run(
+        polish_image_object(
+            {
+                "input_image_data_url": SAMPLE_PNG_DATA_URL,
+                "prompt": "精修右边人物的眼睛",
+                "source_prompt": "双人肖像",
+                "source_object_id": "source-1",
+                "source_object_name": "双人肖像图",
+                "target_subject": "右边的人",
+                "target_region": "眼睛",
+                "adjustment": "调亮",
+            },
+            fallback_width=1024,
+            fallback_height=768,
+        )
+    )
+
+    assert image_object["geometry"]["target_subject"] == "右边的人"
+    assert image_object["geometry"]["target_region"] == "眼睛"
+    assert image_object["geometry"]["adjustment"] == "调亮"
+    assert image_object["geometry"]["source_prompt"] == "双人肖像"
+    assert "polished.region" in image_object["semantic_tags"]
+    assert "polished.subject" in image_object["semantic_tags"]
+
+
 def test_text_image_uses_official_openai_fallback_after_proxy_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
 
