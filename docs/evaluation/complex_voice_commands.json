@@ -297,10 +297,11 @@
     "expected_target_rank": 2
   },
   {
-    "id": "programmatic-swimlane-clarification",
+    "id": "programmatic-swimlane-agent-template",
     "text": "画一个泳道图，包含销售、运营和交付",
-    "tier": "planner_expected",
-    "reason": "泳道图属于结构精确类图形, 需要先拆成泳道、节点和关系后再程序渲染"
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line"]
   },
   {
     "id": "replace-window-shape",
