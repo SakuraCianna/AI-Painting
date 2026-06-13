@@ -458,6 +458,42 @@ def test_agent_template_builds_er_diagram(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_extracts_custom_er_entities_and_relationships(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(
+        main.build_command_plan_with_metrics(
+            "画一个图书馆借阅ER图，实体包括读者、图书、借阅记录、馆员，关系包括读者借阅图书、馆员管理图书"
+        )
+    )
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "er_diagram_scene"
+    assert result.plan.scene_plan.expected_object_count == 20
+
+    objects = [operation.payload["object"] for operation in result.plan.operations]
+    labels = [
+        obj["geometry"]["content"]
+        for obj in objects
+        if obj["type"] == "text" and "content" in obj["geometry"]
+    ]
+    assert {"读者", "图书", "借阅记录", "馆员"}.issubset(labels)
+    assert "读者借阅图书" in result.plan.explanation
+    assert "馆员管理图书" in result.plan.explanation
+
+    semantic_tags = [tag for obj in objects for tag in obj["semantic_tags"]]
+    assert "er_diagram.entity.reader" in semantic_tags
+    assert "er_diagram.entity.book" in semantic_tags
+    assert "er_diagram.entity.loan" in semantic_tags
+    assert "er_diagram.entity.librarian" in semantic_tags
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_template_builds_org_chart(monkeypatch) -> None:
     from app import main
 
