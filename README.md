@@ -1,7 +1,5 @@
 # AI Painting
 
-<div align="center">
-
 **A voice-first drawing agent for editable diagrams, vector scenes, and image refinement.**
 
 **一款纯语音控制的可编辑绘图 Agent, 面向结构图、矢量场景、文生图与图生图精修。**
@@ -14,8 +12,6 @@
 [![Coverage](https://img.shields.io/badge/Coverage-85%25%20gate-34A853)](#quality)
 
 [简体中文](#简体中文) | [English](#english)
-
-</div>
 
 ---
 
