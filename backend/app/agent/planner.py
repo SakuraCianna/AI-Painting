@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -45,6 +46,23 @@ AGENT_SCENE_HINTS = (
     "草图",
     "原型",
 )
+SWIMLANE_DEFAULT_LANES = ("销售", "运营", "交付")
+SWIMLANE_PALETTE = (
+    ("#e8f0fe", "#1a73e8", "#d2e3fc"),
+    ("#e6f4ea", "#34a853", "#ceead6"),
+    ("#fef7e0", "#fbbc04", "#feefc3"),
+    ("#fce8e6", "#ea4335", "#fad2cf"),
+)
+SWIMLANE_STEP_NAMES = {
+    "销售": "线索录入",
+    "运营": "资源排期",
+    "交付": "交付验收",
+    "产品": "需求确认",
+    "设计": "方案设计",
+    "研发": "开发实现",
+    "开发": "开发实现",
+    "测试": "测试验收",
+}
 
 
 class DrawingAgentError(RuntimeError):
@@ -1447,28 +1465,74 @@ def _gantt_chart_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _extract_swimlane_names(text: str) -> list[str]:
+    match = re.search(r"(?:泳道(?:包括|包含|有|为|是)|包括|包含|有)([^。,.，；;]+)", text)
+    if match is None:
+        return list(SWIMLANE_DEFAULT_LANES)
+
+    names: list[str] = []
+    raw_names = match.group(1)
+    for raw_name in re.split(r"[、,，/和与及]+", raw_names):
+        name = raw_name.strip()
+        name = re.sub(r"^(分别是|分别为|为|是)", "", name)
+        name = re.sub(r"(泳道|部门|角色)$", "", name).strip()
+        if 1 <= len(name) <= 8 and name not in names:
+            names.append(name)
+    if len(names) < 2:
+        return list(SWIMLANE_DEFAULT_LANES)
+    return names[:4]
+
+
+def _swimlane_step_lane_indexes(lane_count: int) -> list[int]:
+    if lane_count == 2:
+        return [0, 0, 1, 1]
+    if lane_count == 3:
+        return [0, 0, 1, 2]
+    return [0, 1, 2, 3]
+
+
+def _swimlane_step_name(lane_name: str, index: int) -> str:
+    if lane_name == "销售" and index == 1:
+        return "方案确认"
+    return SWIMLANE_STEP_NAMES.get(lane_name, f"{lane_name}处理")
+
+
 def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
-    lanes = [
-        ("销售", 160, "#e8f0fe", "#1a73e8"),
-        ("运营", 310, "#e6f4ea", "#34a853"),
-        ("交付", 460, "#fef7e0", "#fbbc04"),
+    lane_names = _extract_swimlane_names(text)
+    lane_count = len(lane_names)
+    lane_height = 132 if lane_count <= 3 else 104
+    lane_gap = 150 if lane_count <= 3 else 116
+    lane_start_y = 160 if lane_count <= 3 else 140
+    lane_rows = [
+        (lane_name, lane_start_y + index * lane_gap, *SWIMLANE_PALETTE[index % len(SWIMLANE_PALETTE)])
+        for index, lane_name in enumerate(lane_names)
     ]
-    steps = [
-        ("线索录入", 250, 205, "#d2e3fc", "销售收集客户线索"),
-        ("方案确认", 520, 205, "#d2e3fc", "销售确认解决方案"),
-        ("资源排期", 520, 355, "#ceead6", "运营排期并协调资源"),
-        ("交付验收", 760, 505, "#feefc3", "交付完成验收"),
-    ]
+    step_lane_indexes = _swimlane_step_lane_indexes(lane_count)
+    step_xs = [250, 470, 640, 760]
+    steps = []
+    for index, lane_index in enumerate(step_lane_indexes):
+        lane_name, lane_y, _, _, step_fill = lane_rows[lane_index]
+        step_name = _swimlane_step_name(lane_name, index)
+        step_y = lane_y + round((lane_height - 58) / 2)
+        steps.append(
+            {
+                "name": step_name,
+                "x": step_xs[index],
+                "y": step_y,
+                "fill": step_fill,
+                "note": f"{lane_name}泳道执行{step_name}",
+            }
+        )
     objects: list[AgentSceneObject] = []
 
-    for index, (lane_name, y, fill, stroke) in enumerate(lanes):
+    for index, (lane_name, y, fill, stroke, _) in enumerate(lane_rows):
         lane_id = f"swimlane-lane-{index + 1}"
         objects.append(
             _object(
                 lane_id,
                 "rect",
                 f"{lane_name}泳道",
-                {"x": 150, "y": y, "width": 760, "height": 132, "radius": 18},
+                {"x": 150, "y": y, "width": 760, "height": lane_height, "radius": 18},
                 fill,
                 stroke=stroke,
                 stroke_width=2,
@@ -1484,7 +1548,7 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
                 f"{lane_id}-label",
                 "text",
                 f"{lane_name}泳道标签",
-                {"x": 90, "y": y + 70, "content": lane_name, "fontSize": 24},
+                {"x": 90, "y": y + round(lane_height / 2) + 4, "content": lane_name, "fontSize": 24},
                 "#202124",
                 stroke="transparent",
                 stroke_width=0,
@@ -1496,15 +1560,15 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
             )
         )
 
-    for index, (step_name, x, y, fill, note) in enumerate(steps):
+    for index, step in enumerate(steps):
         step_id = f"swimlane-step-{index + 1}"
         objects.append(
             _object(
                 step_id,
                 "rect",
-                f"{step_name}节点",
-                {"x": x, "y": y, "width": 150, "height": 58, "radius": 16},
-                fill,
+                f"{step['name']}节点",
+                {"x": step["x"], "y": step["y"], "width": 150, "height": 58, "radius": 16},
+                step["fill"],
                 stroke="#3c4043",
                 stroke_width=2,
                 layer_id="middle",
@@ -1518,8 +1582,8 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
             _object(
                 f"{step_id}-label",
                 "text",
-                f"{step_name}标签",
-                {"x": x + 75, "y": y + 34, "content": step_name, "fontSize": 20},
+                f"{step['name']}标签",
+                {"x": step["x"] + 75, "y": step["y"] + 34, "content": step["name"], "fontSize": 20},
                 "#202124",
                 stroke="transparent",
                 stroke_width=0,
@@ -1531,12 +1595,31 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
             )
         )
 
-    connectors = [
-        ("swimlane-connector-1", 400, 234, 520, 234, "线索流转到方案确认"),
-        ("swimlane-connector-2", 595, 263, 595, 355, "方案确认后进入运营排期"),
-        ("swimlane-connector-3", 670, 384, 760, 505, "运营排期后交付验收"),
-        ("swimlane-connector-4", 835, 505, 835, 595, "验收结果回写流程"),
-    ]
+    connectors = []
+    for index in range(3):
+        current_step = steps[index]
+        next_step = steps[index + 1]
+        connectors.append(
+            (
+                f"swimlane-connector-{index + 1}",
+                current_step["x"] + 150,
+                current_step["y"] + 29,
+                next_step["x"],
+                next_step["y"] + 29,
+                f"{current_step['name']}流转到{next_step['name']}",
+            )
+        )
+    final_step = steps[-1]
+    connectors.append(
+        (
+            "swimlane-connector-4",
+            final_step["x"] + 75,
+            final_step["y"] + 58,
+            final_step["x"] + 75,
+            min(620, final_step["y"] + 96),
+            "流程结果回写",
+        )
+    )
     for index, (object_id, x1, y1, x2, y2, note) in enumerate(connectors):
         objects.append(
             _object(
@@ -1556,15 +1639,16 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
         )
 
     relations = [
-        AgentSceneRelation(subject="swimlane-step-1", relation="precedes", target="swimlane-step-2", note=steps[0][4]),
-        AgentSceneRelation(subject="swimlane-step-2", relation="handoff", target="swimlane-step-3", note=steps[1][4]),
-        AgentSceneRelation(subject="swimlane-step-3", relation="handoff", target="swimlane-step-4", note=steps[2][4]),
-        AgentSceneRelation(subject="swimlane-step-4", relation="reports", target="swimlane-step-1", note=steps[3][4]),
+        AgentSceneRelation(subject="swimlane-step-1", relation="precedes", target="swimlane-step-2", note=steps[0]["note"]),
+        AgentSceneRelation(subject="swimlane-step-2", relation="handoff", target="swimlane-step-3", note=steps[1]["note"]),
+        AgentSceneRelation(subject="swimlane-step-3", relation="handoff", target="swimlane-step-4", note=steps[2]["note"]),
+        AgentSceneRelation(subject="swimlane-step-4", relation="reports", target="swimlane-step-1", note=steps[3]["note"]),
     ]
+    lane_summary = "、".join(lane_names)
     return AgentSceneGraph(
         intent="compose_swimlane_diagram",
         domain="swimlane_diagram_scene",
-        summary="绘制销售、运营和交付三条泳道的跨职能流程图",
+        summary=f"绘制{lane_summary}泳道的跨职能流程图",
         background="#ffffff",
         objects=objects,
         relations=relations,
