@@ -52,6 +52,16 @@ def _copy_target(target: dict[str, Any]) -> dict[str, Any]:
         if isinstance(relative_to.get("target"), dict):
             relative_to["target"] = dict(relative_to["target"])
         copied["relative_to"] = relative_to
+    if isinstance(copied.get("relative_to_all"), list):
+        copied["relative_to_all"] = [
+            {
+                **relation,
+                "target": dict(relation["target"]) if isinstance(relation.get("target"), dict) else relation.get("target"),
+            }
+            if isinstance(relation, dict)
+            else relation
+            for relation in copied["relative_to_all"]
+        ]
     return copied
 
 
@@ -111,44 +121,53 @@ def _is_group_scope_target(text: str, target: dict[str, Any]) -> bool:
     return target.get("semantic_tag") == "tree" and "棵" in text
 
 
-def _relation_hint_for_clause(clause: str) -> dict[str, Any] | None:
+def _relation_hints_for_clause(clause: str) -> list[dict[str, Any]]:
+    relation_hints: list[dict[str, Any]] = []
     if "屋顶下面" in clause or "屋顶下方" in clause:
-        return {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+        relation_hints.append({"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}})
     if any(keyword in clause for keyword in ("靠近门", "门附近", "门旁边", "挨着门", "贴近门")):
-        return {
-            "relation": "near",
-            "max_distance": 260,
-            "target": {"selector": "all", "semantic_tag": "house.door"},
-        }
+        relation_hints.append(
+            {
+                "relation": "near",
+                "max_distance": 260,
+                "target": {"selector": "all", "semantic_tag": "house.door"},
+            }
+        )
     if any(keyword in clause for keyword in ("挡住标题", "遮住标题", "盖住标题", "覆盖标题", "压住标题", "遮挡标题")):
-        return {"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_hints.append({"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in clause for keyword in ("和标题重叠", "与标题重叠", "重叠标题")):
-        return {"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_hints.append({"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in clause for keyword in ("卡片里的", "卡片里面", "卡片内", "卡片中的", "卡片里")):
-        return {
-            "relation": "inside",
-            "margin": 8,
-            "target": {
-                "selector": "all",
-                "semantic_tags": [
-                    "poster.hero",
-                    "ui.hero",
-                    "ui.metric",
-                    "ui.chart",
-                    "infographic.metric_card",
-                    "org_chart.node",
-                ],
-            },
-        }
+        relation_hints.append(
+            {
+                "relation": "inside",
+                "margin": 8,
+                "target": {
+                    "selector": "all",
+                    "semantic_tags": [
+                        "poster.hero",
+                        "ui.hero",
+                        "ui.metric",
+                        "ui.chart",
+                        "infographic.metric_card",
+                        "org_chart.node",
+                    ],
+                },
+            }
+        )
     if any(keyword in clause for keyword in ("和标题同一行", "与标题同一行", "标题同一行")):
-        return {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_hints.append(
+            {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        )
     if any(keyword in clause for keyword in ("和标题同一列", "与标题同一列", "标题同一列")):
-        return {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_hints.append(
+            {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        )
     if any(keyword in clause for keyword in ("标题前面的", "标题上层的", "图层在标题前面", "盖在标题前面")):
-        return {"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_hints.append({"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in clause for keyword in ("标题后面的", "标题下层的", "图层在标题后面", "放在标题后面")):
-        return {"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
-    return None
+        relation_hints.append({"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
+    return relation_hints
 
 
 def _apply_query_hints(clause: str, target: dict[str, Any]) -> dict[str, Any]:
@@ -170,10 +189,13 @@ def _apply_query_hints(clause: str, target: dict[str, Any]) -> dict[str, Any]:
         enriched["selector"] = "all"
         enriched["position_rank"] = rank
 
-    relation_hint = _relation_hint_for_clause(clause)
-    if relation_hint:
+    relation_hints = _relation_hints_for_clause(clause)
+    if len(relation_hints) == 1:
         enriched["selector"] = "all"
-        enriched["relative_to"] = relation_hint
+        enriched["relative_to"] = relation_hints[0]
+    elif len(relation_hints) > 1:
+        enriched["selector"] = "all"
+        enriched["relative_to_all"] = relation_hints
 
     if "小物件" in clause or "小对象" in clause or "小图形" in clause:
         enriched["selector"] = "all"
@@ -228,6 +250,7 @@ def _target_is_specific(target: dict[str, Any] | None) -> bool:
                     "group_id",
                     "color_group",
                     "relative_to",
+                    "relative_to_all",
                     "position_rank",
                     "size_class",
                     "include_group_members",

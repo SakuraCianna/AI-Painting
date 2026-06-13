@@ -350,30 +350,37 @@ def _card_reference_selector() -> dict[str, Any]:
     }
 
 
-def _relation_selector_for_text(text: str) -> dict[str, Any] | None:
+def _relation_selectors_for_text(text: str) -> list[dict[str, Any]]:
+    relation_selectors: list[dict[str, Any]] = []
     if "屋顶下面" in text or "屋顶下方" in text:
-        return {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+        relation_selectors.append({"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}})
     if any(keyword in text for keyword in ("靠近门", "门附近", "门旁边", "挨着门", "贴近门")):
-        return {
-            "relation": "near",
-            "max_distance": 260,
-            "target": {"selector": "all", "semantic_tag": "house.door"},
-        }
+        relation_selectors.append(
+            {
+                "relation": "near",
+                "max_distance": 260,
+                "target": {"selector": "all", "semantic_tag": "house.door"},
+            }
+        )
     if any(keyword in text for keyword in ("挡住标题", "遮住标题", "盖住标题", "覆盖标题", "压住标题", "遮挡标题")):
-        return {"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_selectors.append({"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in text for keyword in ("和标题重叠", "与标题重叠", "重叠标题")):
-        return {"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_selectors.append({"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in text for keyword in ("卡片里的", "卡片里面", "卡片内", "卡片中的", "卡片里")):
-        return {"relation": "inside", "margin": 8, "target": _card_reference_selector()}
+        relation_selectors.append({"relation": "inside", "margin": 8, "target": _card_reference_selector()})
     if any(keyword in text for keyword in ("和标题同一行", "与标题同一行", "标题同一行")):
-        return {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_selectors.append(
+            {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        )
     if any(keyword in text for keyword in ("和标题同一列", "与标题同一列", "标题同一列")):
-        return {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_selectors.append(
+            {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        )
     if any(keyword in text for keyword in ("标题前面的", "标题上层的", "图层在标题前面", "盖在标题前面")):
-        return {"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+        relation_selectors.append({"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in text for keyword in ("标题后面的", "标题下层的", "图层在标题后面", "放在标题后面")):
-        return {"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
-    return None
+        relation_selectors.append({"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
+    return relation_selectors
 
 
 def _semantic_tags_for_text(text: str, shape: str | None = None, object_name: str | None = None) -> list[str]:
@@ -504,10 +511,13 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     if rank is not None and "position" in target:
         target["selector"] = "all"
         target["position_rank"] = rank
-    relation_selector = _relation_selector_for_text(text)
-    if relation_selector:
+    relation_selectors = _relation_selectors_for_text(text)
+    if len(relation_selectors) == 1:
         target["selector"] = "all"
-        target["relative_to"] = relation_selector
+        target["relative_to"] = relation_selectors[0]
+    elif len(relation_selectors) > 1:
+        target["selector"] = "all"
+        target["relative_to_all"] = relation_selectors
     return target
 
 
@@ -522,6 +532,7 @@ def _is_many_target(target: dict[str, Any]) -> bool:
             "color",
             "color_group",
             "relative_to",
+            "relative_to_all",
             "position_rank",
             "size_class",
             "include_group_members",

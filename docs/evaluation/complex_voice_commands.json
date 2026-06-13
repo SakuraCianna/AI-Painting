@@ -158,6 +158,12 @@
     "expected_operation_types": ["set_style_many"]
   },
   {
+    "id": "agent-edit-button-inside-card-same-row-as-title",
+    "text": "把卡片里和标题同一行的按钮改成绿色",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many"]
+  },
+  {
     "id": "agent-move-image-front-of-title",
     "text": "把标题上层的图片向右移动一点",
     "tier": "agent",

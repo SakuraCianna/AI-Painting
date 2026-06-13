@@ -722,6 +722,56 @@ def test_voice_command_edits_text_inside_card_and_button_on_title_row(client: Te
     assert objects_by_name["错行按钮"]["style"]["fill"] == "#2563eb"
 
 
+def test_voice_command_uses_chained_relative_selectors(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "主卡片",
+            "semantic_tags": ["ui.hero"],
+            "geometry": {"x": 160, "y": 120, "width": 520, "height": 280, "radius": 24},
+            "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 2},
+            "z_index": 1,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "text",
+            "name": "主标题",
+            "semantic_tags": ["poster.headline"],
+            "geometry": {"x": 260, "y": 250, "fontSize": 44, "content": "主标题"},
+            "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+            "z_index": 4,
+        },
+    )
+    for name, geometry in [
+        ("卡片内同一行按钮", {"x": 440, "y": 220, "width": 150, "height": 60, "radius": 18}),
+        ("卡片内错行按钮", {"x": 440, "y": 320, "width": 150, "height": 60, "radius": 18}),
+        ("卡片外同一行按钮", {"x": 740, "y": 220, "width": 150, "height": 60, "radius": 18}),
+    ]:
+        _seed_drawing_object(
+            artwork_id,
+            {
+                "type": "rect",
+                "name": name,
+                "semantic_tags": ["poster.cta"],
+                "geometry": geometry,
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+                "z_index": 5,
+            },
+        )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把卡片里和标题同一行的按钮改成绿色"})
+
+    assert response.status_code == 200
+    objects_by_name = {obj["name"]: obj for obj in response.json()["artwork"]["objects"]}
+    assert objects_by_name["卡片内同一行按钮"]["style"]["fill"] == "#16a34a"
+    assert objects_by_name["卡片内错行按钮"]["style"]["fill"] == "#2563eb"
+    assert objects_by_name["卡片外同一行按钮"]["style"]["fill"] == "#2563eb"
+
+
 def test_rename_latest_and_move_layer(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色圆形 命名为太阳 放到前景层"})

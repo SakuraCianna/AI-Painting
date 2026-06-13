@@ -524,6 +524,71 @@ def test_find_objects_supports_inside_same_axis_and_layer_relations(tmp_path: Pa
         assert [obj.name for obj in behind_matches] == ["标题下层图片"]
 
 
+def test_find_objects_supports_chained_relative_selectors(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "主卡片",
+                "semantic_tags": ["ui.hero"],
+                "geometry": {"x": 160, "y": 120, "width": 520, "height": 280, "radius": 24},
+                "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 2},
+                "z_index": 1,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "text",
+                "name": "主标题",
+                "semantic_tags": ["poster.headline"],
+                "geometry": {"x": 260, "y": 250, "fontSize": 44, "content": "主标题"},
+                "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+                "z_index": 4,
+            },
+        )
+        for name, geometry in [
+            ("卡片内同一行按钮", {"x": 440, "y": 220, "width": 150, "height": 60, "radius": 18}),
+            ("卡片内错行按钮", {"x": 440, "y": 320, "width": 150, "height": 60, "radius": 18}),
+            ("卡片外同一行按钮", {"x": 740, "y": 220, "width": 150, "height": 60, "radius": 18}),
+        ]:
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": "rect",
+                    "name": name,
+                    "semantic_tags": ["poster.cta"],
+                    "geometry": geometry,
+                    "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+                    "z_index": 5,
+                },
+            )
+
+        matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "semantic_tag": "poster.cta",
+                "relative_to_all": [
+                    {"relation": "inside", "margin": 8, "target": {"selector": "all", "semantic_tag": "ui.hero"}},
+                    {
+                        "relation": "same_row",
+                        "tolerance": 48,
+                        "target": {"selector": "all", "semantic_tag": "poster.headline"},
+                    },
+                ],
+            },
+        )
+
+        assert [obj.name for obj in matches] == ["卡片内同一行按钮"]
+
+
 def test_find_objects_supports_color_group_and_size_selector(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)
