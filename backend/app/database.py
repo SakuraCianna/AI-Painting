@@ -13,6 +13,11 @@ DRAWING_OBJECT_COLUMNS: dict[str, str] = {
     "transform_json": "TEXT NOT NULL DEFAULT '{}'",
 }
 
+OPERATION_COLUMNS: dict[str, str] = {
+    "command_group_id": "TEXT",
+    "operation_index": "INTEGER NOT NULL DEFAULT 0",
+}
+
 
 def get_database_path() -> str:
     return os.environ.get("AI_PAINTING_DB", str(Path("backend") / "data" / "ai_painting.sqlite3"))
@@ -100,24 +105,35 @@ def init_db(path: str | None = None) -> None:
             """
         )
         _ensure_drawing_object_columns(connection)
+        _ensure_operation_columns(connection)
         connection.executescript(
             """
             CREATE INDEX IF NOT EXISTS idx_drawing_objects_artwork_layer
                 ON drawing_objects (artwork_id, layer_id, z_index);
             CREATE INDEX IF NOT EXISTS idx_drawing_objects_artwork_group
                 ON drawing_objects (artwork_id, group_id, z_index);
+            CREATE INDEX IF NOT EXISTS idx_operations_artwork_group_status
+                ON operations (artwork_id, command_group_id, status, operation_index);
             """
         )
 
 
 def _ensure_drawing_object_columns(connection: sqlite3.Connection) -> None:
+    _ensure_columns(connection, "drawing_objects", DRAWING_OBJECT_COLUMNS)
+
+
+def _ensure_operation_columns(connection: sqlite3.Connection) -> None:
+    _ensure_columns(connection, "operations", OPERATION_COLUMNS)
+
+
+def _ensure_columns(connection: sqlite3.Connection, table_name: str, columns: dict[str, str]) -> None:
     existing_columns = {
         row["name"]
-        for row in connection.execute("PRAGMA table_info(drawing_objects)").fetchall()
+        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
     }
-    for column_name, column_definition in DRAWING_OBJECT_COLUMNS.items():
+    for column_name, column_definition in columns.items():
         if column_name not in existing_columns:
-            connection.execute(f"ALTER TABLE drawing_objects ADD COLUMN {column_name} {column_definition}")
+            connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
 
 
 def get_db() -> Iterator[sqlite3.Connection]:

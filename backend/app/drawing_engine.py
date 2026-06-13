@@ -13,7 +13,9 @@ from .repositories import (
     find_objects,
     get_artwork,
     get_last_operation,
+    list_operation_group,
     mark_operation_status,
+    new_id,
     record_operation,
     save_version,
     update_artwork,
@@ -211,6 +213,8 @@ def apply_operation(
     *,
     record: bool = True,
     clear_redo: bool = True,
+    command_group_id: str | None = None,
+    operation_index: int = 0,
     commit: bool = True,
 ) -> str:
     operation_type = operation.operation_type
@@ -366,16 +370,36 @@ def apply_operation(
         raise ValueError(f"Unsupported operation type: {operation_type}")
 
     if record and operation_type not in {"export_artwork"}:
-        record_operation(connection, artwork_id, operation_type, payload, inverse_payload, commit=commit)
+        record_operation(
+            connection,
+            artwork_id,
+            operation_type,
+            payload,
+            inverse_payload,
+            command_group_id=command_group_id,
+            operation_index=operation_index,
+            commit=commit,
+        )
     return message
 
 
 def apply_operation_plan(connection: sqlite3.Connection, artwork_id: str, operations: list[OperationRequest]) -> str:
     messages: list[str] = []
+    command_group_id = new_id() if operations else None
     try:
         clear_redo_stack(connection, artwork_id, commit=False)
-        for operation in operations:
-            messages.append(apply_operation(connection, artwork_id, operation, clear_redo=False, commit=False))
+        for operation_index, operation in enumerate(operations):
+            messages.append(
+                apply_operation(
+                    connection,
+                    artwork_id,
+                    operation,
+                    clear_redo=False,
+                    command_group_id=command_group_id,
+                    operation_index=operation_index,
+                    commit=False,
+                )
+            )
         connection.commit()
     except Exception:
         connection.rollback()
@@ -383,25 +407,41 @@ def apply_operation_plan(connection: sqlite3.Connection, artwork_id: str, operat
     return messages[-1] if messages else "未执行任何操作"
 
 
-def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> ArtworkResponse:
-    row = get_last_operation(connection, artwork_id, "applied")
-    if row is None:
-        return get_artwork(connection, artwork_id)
+def _row_command_group_id(row: sqlite3.Row) -> str | None:
+    if "command_group_id" not in row.keys():
+        return None
+    value = row["command_group_id"]
+    return str(value) if value else None
 
+
+def _operation_rows_for_history_step(
+    connection: sqlite3.Connection,
+    artwork_id: str,
+    row: sqlite3.Row,
+    status: str,
+) -> list[sqlite3.Row]:
+    command_group_id = _row_command_group_id(row)
+    if not command_group_id:
+        return [row]
+    rows = list_operation_group(connection, artwork_id, command_group_id, status)
+    return rows or [row]
+
+
+def _undo_operation_row(connection: sqlite3.Connection, artwork_id: str, row: sqlite3.Row, *, commit: bool) -> None:
     operation_type = row["operation_type"]
     inverse_payload = json.loads(row["inverse_payload_json"])
 
     if operation_type == "create_canvas":
-        update_artwork(connection, artwork_id, **inverse_payload)
+        update_artwork(connection, artwork_id, **inverse_payload, commit=commit)
     elif operation_type == "add_object":
-        delete_object(connection, artwork_id, inverse_payload["object_id"])
+        delete_object(connection, artwork_id, inverse_payload["object_id"], commit=commit)
     elif operation_type == "set_style":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_style", payload=inverse_payload), record=False)
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_style", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
     elif operation_type == "set_metadata":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_metadata", payload=inverse_payload), record=False)
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_metadata", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
     elif operation_type == "set_style_many":
         for item in inverse_payload["items"]:
-            update_object(connection, artwork_id, item["object_id"], style=item["style"])
+            update_object(connection, artwork_id, item["object_id"], style=item["style"], commit=commit)
     elif operation_type == "set_metadata_many":
         for item in inverse_payload["items"]:
             update_object(
@@ -413,15 +453,16 @@ def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> Artw
                 group_id=item.get("group_id"),
                 semantic_tags=item.get("semantic_tags", []),
                 transform=item.get("transform", {}),
+                commit=commit,
             )
     elif operation_type == "move_object":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="move_object", payload=inverse_payload), record=False)
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="move_object", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
     elif operation_type == "move_many":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="move_many", payload=inverse_payload), record=False)
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="move_many", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
     elif operation_type == "scale_object":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload=inverse_payload), record=False)
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
     elif operation_type == "scale_many":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False)
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
     elif operation_type == "replace_shape":
         update_object(
             connection,
@@ -430,17 +471,38 @@ def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> Artw
             object_type=inverse_payload["shape"],
             geometry=inverse_payload["geometry"],
             replace_geometry=True,
+            commit=commit,
         )
     elif operation_type == "replace_shape_many":
         for item in inverse_payload["items"]:
-            update_object(connection, artwork_id, item["object_id"], object_type=item["shape"], geometry=item["geometry"], replace_geometry=True)
+            update_object(connection, artwork_id, item["object_id"], object_type=item["shape"], geometry=item["geometry"], replace_geometry=True, commit=commit)
     elif operation_type == "delete_object":
-        add_object(connection, artwork_id, inverse_payload["object"])
+        add_object(connection, artwork_id, inverse_payload["object"], commit=commit)
     elif operation_type == "clear_canvas":
         for obj in inverse_payload.get("objects", []):
-            add_object(connection, artwork_id, obj)
+            add_object(connection, artwork_id, obj, commit=commit)
 
-    mark_operation_status(connection, row["id"], "undone")
+
+def _redo_operation_row(connection: sqlite3.Connection, artwork_id: str, row: sqlite3.Row, *, commit: bool) -> None:
+    operation = OperationRequest(operation_type=row["operation_type"], payload=json.loads(row["payload_json"]))
+    apply_operation(connection, artwork_id, operation, record=False, clear_redo=False, commit=commit)
+
+
+def undo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> ArtworkResponse:
+    row = get_last_operation(connection, artwork_id, "applied")
+    if row is None:
+        return get_artwork(connection, artwork_id)
+
+    rows = _operation_rows_for_history_step(connection, artwork_id, row, "applied")
+    try:
+        for operation_row in reversed(rows):
+            _undo_operation_row(connection, artwork_id, operation_row, commit=False)
+        for operation_row in rows:
+            mark_operation_status(connection, operation_row["id"], "undone", commit=False)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
     return get_artwork(connection, artwork_id)
 
 
@@ -449,7 +511,14 @@ def redo_last_operation(connection: sqlite3.Connection, artwork_id: str) -> Artw
     if row is None:
         return get_artwork(connection, artwork_id)
 
-    operation = OperationRequest(operation_type=row["operation_type"], payload=json.loads(row["payload_json"]))
-    apply_operation(connection, artwork_id, operation, record=False, clear_redo=False)
-    mark_operation_status(connection, row["id"], "applied")
+    rows = _operation_rows_for_history_step(connection, artwork_id, row, "undone")
+    try:
+        for operation_row in rows:
+            _redo_operation_row(connection, artwork_id, operation_row, commit=False)
+        for operation_row in rows:
+            mark_operation_status(connection, operation_row["id"], "applied", commit=False)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
     return get_artwork(connection, artwork_id)

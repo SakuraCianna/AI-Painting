@@ -114,6 +114,42 @@ def test_apply_operation_plan_rolls_back_when_a_step_fails(tmp_path: Path) -> No
         assert operation_count == 0
 
 
+def test_operation_plan_undo_and_redo_use_one_history_group(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        operations = [
+            OperationRequest(
+                operation_type="add_object",
+                payload={"object": {"type": "circle", "name": "圆形", "geometry": {"cx": 320, "cy": 384, "radius": 64}, "style": {"fill": "#2563eb"}}},
+            ),
+            OperationRequest(
+                operation_type="add_object",
+                payload={"object": {"type": "star", "name": "星形", "geometry": {"cx": 520, "cy": 384, "outerRadius": 72, "innerRadius": 32, "points": 5}, "style": {"fill": "#facc15"}}},
+            ),
+        ]
+
+        apply_operation_plan(connection, artwork_id, operations)
+
+        rows = connection.execute(
+            "SELECT command_group_id, operation_index, status FROM operations WHERE artwork_id = ? ORDER BY operation_index",
+            (artwork_id,),
+        ).fetchall()
+        assert len(rows) == 2
+        assert rows[0]["command_group_id"] == rows[1]["command_group_id"]
+        assert [row["operation_index"] for row in rows] == [0, 1]
+        assert [obj.type for obj in get_artwork(connection, artwork_id).objects] == ["circle", "star"]
+
+        undone = undo_last_operation(connection, artwork_id)
+        assert undone.objects == []
+        assert [
+            row["status"]
+            for row in connection.execute("SELECT status FROM operations WHERE artwork_id = ? ORDER BY operation_index", (artwork_id,)).fetchall()
+        ] == ["undone", "undone"]
+
+        redone = redo_last_operation(connection, artwork_id)
+        assert [obj.type for obj in redone.objects] == ["circle", "star"]
+
+
 def test_unsupported_operation_is_rejected(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)

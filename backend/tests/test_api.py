@@ -307,6 +307,16 @@ def test_complex_multi_star_plan_executes_as_one_voice_command(client: TestClien
     assert [obj["name"] for obj in objects] == ["星星1", "星星2", "星星3"]
     assert objects[0]["geometry"]["outerRadius"] > objects[1]["geometry"]["outerRadius"] > objects[2]["geometry"]["outerRadius"]
 
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    assert undo_response.json()["artwork"]["objects"] == []
+
+    redo_response = client.post(f"/api/artworks/{artwork_id}/redo")
+    assert redo_response.status_code == 200
+    redone_objects = redo_response.json()["artwork"]["objects"]
+    assert len(redone_objects) == 3
+    assert [obj["name"] for obj in redone_objects] == ["星星1", "星星2", "星星3"]
+
 
 def test_batch_recolor_move_and_undo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
@@ -327,12 +337,23 @@ def test_batch_recolor_move_and_undo(client: TestClient) -> None:
     undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
     assert undo_response.status_code == 200
     undone_objects = undo_response.json()["artwork"]["objects"]
-    assert any(obj["style"]["fill"] == "#16a34a" for obj in undone_objects)
+    assert not any(obj["style"]["fill"] == "#16a34a" for obj in undone_objects)
+    assert len([obj for obj in undone_objects if obj["style"]["fill"] == "#2563eb"]) == 2
+    assert len([obj for obj in undone_objects if obj["style"]["fill"] == "#dc2626"]) == 1
     assert all((obj["geometry"].get("cy") == 384 or obj["geometry"].get("y") == 314) for obj in undone_objects)
+
+    redo_response = client.post(f"/api/artworks/{artwork_id}/redo")
+    assert redo_response.status_code == 200
+    redone_objects = redo_response.json()["artwork"]["objects"]
+    assert len([obj for obj in redone_objects if obj["style"]["fill"] == "#16a34a"]) == 2
+    assert all((obj["geometry"].get("cy") == 364 or obj["geometry"].get("y") == 294) for obj in redone_objects)
+
+    client.post(f"/api/artworks/{artwork_id}/undo")
 
     second_undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
     assert second_undo_response.status_code == 200
     restored_objects = second_undo_response.json()["artwork"]["objects"]
+    assert len(restored_objects) == 2
     assert len([obj for obj in restored_objects if obj["style"]["fill"] == "#2563eb"]) == 2
 
 
