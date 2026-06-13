@@ -140,7 +140,124 @@ def _living_room_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _flowchart_scene_graph(text: str) -> AgentSceneGraph:
+    if any(keyword in text for keyword in ("架构", "结构图", "系统")):
+        labels = ["语音输入", "ASR服务", "意图分类", "任务规划", "绘图执行"]
+        summary = "绘制语音绘图系统结构图"
+    else:
+        labels = ["用户语音", "ASR识别", "Agent规划", "画布执行"]
+        summary = "绘制从语音输入到画布执行的流程图"
+
+    node_width = 138 if len(labels) >= 5 else 160
+    node_height = 92
+    gap = 36 if len(labels) >= 5 else 72
+    total_width = (node_width * len(labels)) + (gap * (len(labels) - 1))
+    start_x = (1024 - total_width) / 2
+    node_y = 338
+    objects = [
+        _object(
+            "diagram-title",
+            "text",
+            "流程图标题",
+            {"x": 512, "y": 190, "content": "语音绘图流程", "fontSize": 34},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="voice-flowchart",
+            semantic_tags=["diagram.title", "flowchart"],
+            z_index=20,
+        )
+    ]
+    relations: list[AgentSceneRelation] = []
+
+    for index, label in enumerate(labels):
+        x = round(start_x + index * (node_width + gap), 2)
+        node_id = f"flow-node-{index + 1}"
+        text_id = f"flow-label-{index + 1}"
+        fill = "#e8f0fe" if index in {0, len(labels) - 1} else "#f1f3f4"
+        stroke = "#1a73e8" if index in {0, len(labels) - 1} else "#5f6368"
+        objects.append(
+            _object(
+                node_id,
+                "rect",
+                label,
+                {"x": x, "y": node_y, "width": node_width, "height": node_height, "radius": 18},
+                fill,
+                stroke=stroke,
+                stroke_width=3,
+                layer_id="middle",
+                group_id="voice-flowchart",
+                semantic_tags=["diagram.node", "flowchart", f"flowchart.step.{index + 1}"],
+                z_index=index * 3,
+                role="process_node",
+            )
+        )
+        objects.append(
+            _object(
+                text_id,
+                "text",
+                f"{label}标签",
+                {"x": round(x + node_width / 2, 2), "y": node_y + node_height / 2, "content": label, "fontSize": 24},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="voice-flowchart",
+                semantic_tags=["diagram.label", "flowchart", f"flowchart.step.{index + 1}"],
+                z_index=(index * 3) + 1,
+                role="label",
+            )
+        )
+
+        if index > 0:
+            previous_node_id = f"flow-node-{index}"
+            arrow_id = f"flow-arrow-{index}"
+            previous_x = round(start_x + (index - 1) * (node_width + gap), 2)
+            objects.append(
+                _object(
+                    arrow_id,
+                    "arrow",
+                    f"{labels[index - 1]}到{label}",
+                    {
+                        "x1": round(previous_x + node_width + 8, 2),
+                        "y1": node_y + node_height / 2,
+                        "x2": round(x - 8, 2),
+                        "y2": node_y + node_height / 2,
+                    },
+                    "transparent",
+                    stroke="#5f6368",
+                    stroke_width=4,
+                    layer_id="middle",
+                    group_id="voice-flowchart",
+                    semantic_tags=["diagram.connector", "flowchart"],
+                    z_index=(index * 3) - 1,
+                    role="connector",
+                )
+            )
+            relations.append(
+                AgentSceneRelation(
+                    subject=previous_node_id,
+                    relation="flows_to",
+                    target=node_id,
+                    note=f"{labels[index - 1]}流向{label}",
+                )
+            )
+
+    return AgentSceneGraph(
+        intent="compose_diagram",
+        domain="diagram_scene",
+        summary=summary,
+        background="#ffffff",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
+    if any(keyword in normalized_text for keyword in ("流程图", "结构图", "架构图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+        return _flowchart_scene_graph(normalized_text)
     if "客厅" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _living_room_scene_graph(normalized_text)
     return None

@@ -123,6 +123,31 @@ def test_agent_living_room_command_executes_complex_scene(client: TestClient, mo
     assert "floor_lamp" in semantic_tags
 
 
+def test_agent_flowchart_command_executes_diagram_scene(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "diagram_scene"
+    objects = body["artwork"]["objects"]
+    assert len(objects) == 12
+    object_types = [obj["type"] for obj in objects]
+    assert object_types.count("rect") == 4
+    assert object_types.count("text") == 5
+    assert object_types.count("arrow") == 3
+    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
+    assert "diagram.node" in semantic_tags
+    assert "diagram.connector" in semantic_tags
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})

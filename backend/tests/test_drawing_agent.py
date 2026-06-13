@@ -122,6 +122,31 @@ def test_agent_template_builds_complex_living_room(monkeypatch) -> None:
     assert result.metrics.agent_planner_ms is not None
 
 
+def test_agent_template_builds_voice_flowchart(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "diagram_scene"
+    assert result.plan.scene_plan.expected_object_count == 12
+    assert len(result.plan.operations) == 12
+    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
+    assert object_types.count("rect") == 4
+    assert object_types.count("text") == 5
+    assert object_types.count("arrow") == 3
+    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
+    assert "diagram.node" in semantic_tags
+    assert "diagram.connector" in semantic_tags
+    assert "flowchart" in semantic_tags
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     from app import main
     from app.agent import planner
