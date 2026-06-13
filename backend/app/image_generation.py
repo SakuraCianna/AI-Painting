@@ -44,6 +44,10 @@ def _get_openai_api_key() -> str | None:
     return os.getenv("AI_PAINTING_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 
+def _get_openai_base_url() -> str:
+    return (os.getenv("AI_PAINTING_OPENAI_BASE_URL") or os.getenv("OPENAI_BASE_URL") or OPENAI_OFFICIAL_BASE_URL).rstrip("/")
+
+
 def _official_image_size(default: str = "auto") -> str:
     configured = os.getenv("AI_PAINTING_OPENAI_IMAGE_SIZE", default).strip()
     return configured if configured in OFFICIAL_IMAGE_SIZES else "auto"
@@ -186,7 +190,7 @@ async def _generate_with_openai_compatible(prompt: str, width: int, height: int,
         openai_key = _get_openai_api_key()
         if not openai_key:
             raise primary_error
-        official_base_url = os.getenv("AI_PAINTING_OPENAI_BASE_URL", OPENAI_OFFICIAL_BASE_URL).rstrip("/")
+        official_base_url = _get_openai_base_url()
         official_endpoint = f"{official_base_url}/images/generations"
         official_body = {
             "model": os.getenv("AI_PAINTING_OPENAI_IMAGE_MODEL", body["model"]),
@@ -253,7 +257,7 @@ async def _edit_with_openai_compatible(prompt: str, image_data_url: str, width: 
         openai_key = _get_openai_api_key()
         if not openai_key:
             raise primary_error
-        official_base_url = os.getenv("AI_PAINTING_OPENAI_BASE_URL", OPENAI_OFFICIAL_BASE_URL).rstrip("/")
+        official_base_url = _get_openai_base_url()
         official_endpoint = f"{official_base_url}/images/edits"
         official_fields = {
             "model": os.getenv("AI_PAINTING_OPENAI_IMAGE_MODEL", model),

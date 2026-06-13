@@ -45,7 +45,10 @@ def test_image_edit_uses_official_openai_fallback_after_proxy_failure(monkeypatc
     monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_API_KEY", "proxy-key")
     monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")
     monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_SIZE", "1024x768")
-    monkeypatch.setenv("AI_PAINTING_OPENAI_API_KEY", "official-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "official-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.example/v1")
+    monkeypatch.delenv("AI_PAINTING_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("AI_PAINTING_OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("AI_PAINTING_OPENAI_IMAGE_SIZE", raising=False)
     monkeypatch.setattr(image_generation, "_post_image_edit_multipart", fake_post)
 
@@ -54,7 +57,7 @@ def test_image_edit_uses_official_openai_fallback_after_proxy_failure(monkeypatc
     assert image_object["geometry"]["provider"] == "openai_official"
     assert [call["endpoint"] for call in calls] == [
         "https://corenode.best/v1/images/edits",
-        "https://api.openai.com/v1/images/edits",
+        "https://api.openai.example/v1/images/edits",
     ]
     assert calls[0]["api_key"] == "proxy-key"
     assert calls[1]["api_key"] == "official-key"
@@ -84,7 +87,10 @@ def test_text_image_uses_official_openai_fallback_after_proxy_failure(monkeypatc
     monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_API_KEY", "proxy-key")
     monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_MODEL", "gpt-image-2")
     monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_SIZE", "1024x768")
-    monkeypatch.setenv("AI_PAINTING_OPENAI_API_KEY", "official-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "official-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.example/v1")
+    monkeypatch.delenv("AI_PAINTING_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("AI_PAINTING_OPENAI_BASE_URL", raising=False)
     monkeypatch.setenv("AI_PAINTING_OPENAI_IMAGE_SIZE", "1024x1024")
     monkeypatch.setattr(image_generation, "_post_image_generation_json", fake_post)
 
@@ -93,7 +99,7 @@ def test_text_image_uses_official_openai_fallback_after_proxy_failure(monkeypatc
     assert image_object["geometry"]["provider"] == "openai_official"
     assert [call["endpoint"] for call in calls] == [
         "https://corenode.best/v1/images/generations",
-        "https://api.openai.com/v1/images/generations",
+        "https://api.openai.example/v1/images/generations",
     ]
     assert calls[0]["api_key"] == "proxy-key"
     assert calls[1]["api_key"] == "official-key"

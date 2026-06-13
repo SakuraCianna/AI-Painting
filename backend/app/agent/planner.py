@@ -15,7 +15,27 @@ from .validator import SceneGraphValidationError
 
 
 COMPLEX_HINTS = ("然后", "并且", "同时", "接着", "再", "之后", "最后", "一排", "围绕", "组合", "场景")
-AGENT_SCENE_HINTS = ("客厅", "卧室", "厨房", "办公室", "教室", "城市", "花园", "海报", "信息图", "流程图", "结构图", "ui", "界面", "线框图", "草图", "原型")
+AGENT_SCENE_HINTS = (
+    "客厅",
+    "卧室",
+    "厨房",
+    "办公室",
+    "教室",
+    "城市",
+    "花园",
+    "海报",
+    "信息图",
+    "流程图",
+    "结构图",
+    "组织结构",
+    "团队架构",
+    "组织架构",
+    "ui",
+    "界面",
+    "线框图",
+    "草图",
+    "原型",
+)
 
 
 class DrawingAgentError(RuntimeError):
@@ -1014,7 +1034,197 @@ def _ui_wireframe_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _org_chart_scene_graph(text: str) -> AgentSceneGraph:
+    title = "产品团队组织结构图" if "产品" in text else "团队组织结构图"
+    top_role = "负责人"
+    middle_roles = ["产品组", "设计组", "研发组"]
+    bottom_roles = ["用户研究", "交互设计", "前端开发", "后端开发"]
+    summary = "绘制团队组织结构图, 包含负责人、职能小组和执行角色"
+
+    objects = [
+        _object(
+            "org-title",
+            "text",
+            "组织结构图标题",
+            {"x": 512, "y": 92, "content": title, "fontSize": 36},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="org-chart",
+            semantic_tags=["org_chart.title", "org_chart"],
+            z_index=30,
+        ),
+        _object(
+            "org-lead-card",
+            "rect",
+            "负责人卡片",
+            {"x": 422, "y": 145, "width": 180, "height": 82, "radius": 18},
+            "#e8f0fe",
+            stroke="#1a73e8",
+            stroke_width=3,
+            layer_id="middle",
+            group_id="org-chart",
+            semantic_tags=["org_chart.node", "org_chart.lead", "org_chart"],
+            z_index=0,
+            role="lead_node",
+        ),
+        _object(
+            "org-lead-label",
+            "text",
+            "负责人标签",
+            {"x": 512, "y": 188, "content": top_role, "fontSize": 24},
+            "#174ea6",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="org-chart",
+            semantic_tags=["org_chart.label", "org_chart.lead", "org_chart"],
+            z_index=1,
+            role="node_label",
+        ),
+        _object(
+            "org-main-connector",
+            "line",
+            "主层级连接线",
+            {"x1": 512, "y1": 227, "x2": 512, "y2": 288},
+            "transparent",
+            stroke="#5f6368",
+            stroke_width=4,
+            layer_id="middle",
+            group_id="org-chart",
+            semantic_tags=["org_chart.connector", "org_chart"],
+            z_index=2,
+            role="connector",
+        ),
+        _object(
+            "org-branch-connector",
+            "line",
+            "部门横向连接线",
+            {"x1": 232, "y1": 288, "x2": 792, "y2": 288},
+            "transparent",
+            stroke="#5f6368",
+            stroke_width=4,
+            layer_id="middle",
+            group_id="org-chart",
+            semantic_tags=["org_chart.connector", "org_chart"],
+            z_index=3,
+            role="connector",
+        ),
+    ]
+
+    department_positions = [172, 422, 672]
+    for index, role_name in enumerate(middle_roles):
+        x = department_positions[index]
+        objects.append(
+            _object(
+                f"org-dept-card-{index + 1}",
+                "rect",
+                f"{role_name}卡片",
+                {"x": x, "y": 315, "width": 180, "height": 76, "radius": 18},
+                ["#e6f4ea", "#fef7e0", "#fce8e6"][index],
+                stroke=["#34a853", "#fbbc04", "#ea4335"][index],
+                stroke_width=3,
+                layer_id="middle",
+                group_id="org-chart",
+                semantic_tags=["org_chart.node", "org_chart.department", f"org_chart.department.{index + 1}", "org_chart"],
+                z_index=4 + index * 2,
+                role="department_node",
+            )
+        )
+        objects.append(
+            _object(
+                f"org-dept-label-{index + 1}",
+                "text",
+                f"{role_name}标签",
+                {"x": x + 90, "y": 356, "content": role_name, "fontSize": 22},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="org-chart",
+                semantic_tags=["org_chart.label", "org_chart.department", f"org_chart.department.{index + 1}", "org_chart"],
+                z_index=5 + index * 2,
+                role="node_label",
+            )
+        )
+
+    bottom_positions = [142, 342, 542, 742]
+    for index, role_name in enumerate(bottom_roles):
+        x = bottom_positions[index]
+        objects.append(
+            _object(
+                f"org-role-card-{index + 1}",
+                "rect",
+                f"{role_name}卡片",
+                {"x": x, "y": 505, "width": 140, "height": 68, "radius": 16},
+                "#ffffff",
+                stroke="#dadce0",
+                stroke_width=2,
+                layer_id="middle",
+                group_id="org-chart",
+                semantic_tags=["org_chart.node", "org_chart.role", f"org_chart.role.{index + 1}", "org_chart"],
+                z_index=12 + index * 2,
+                role="role_node",
+            )
+        )
+        objects.append(
+            _object(
+                f"org-role-label-{index + 1}",
+                "text",
+                f"{role_name}标签",
+                {"x": x + 70, "y": 541, "content": role_name, "fontSize": 18},
+                "#3c4043",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="org-chart",
+                semantic_tags=["org_chart.label", "org_chart.role", f"org_chart.role.{index + 1}", "org_chart"],
+                z_index=13 + index * 2,
+                role="node_label",
+            )
+        )
+
+    objects.append(
+        _object(
+            "org-role-connector",
+            "line",
+            "执行层连接线",
+            {"x1": 212, "y1": 470, "x2": 812, "y2": 470},
+            "transparent",
+            stroke="#9aa0a6",
+            stroke_width=3,
+            layer_id="middle",
+            group_id="org-chart",
+            semantic_tags=["org_chart.connector", "org_chart.role_connector", "org_chart"],
+            z_index=20,
+            role="connector",
+        )
+    )
+
+    relations = [
+        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-1", note="负责人管理产品组"),
+        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-2", note="负责人管理设计组"),
+        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-3", note="负责人管理研发组"),
+        AgentSceneRelation(subject="org-dept-card-1", relation="owns", target="org-role-card-1", note="产品组负责用户研究"),
+        AgentSceneRelation(subject="org-dept-card-2", relation="owns", target="org-role-card-2", note="设计组负责交互设计"),
+        AgentSceneRelation(subject="org-dept-card-3", relation="owns", target="org-role-card-3", note="研发组负责前端开发"),
+        AgentSceneRelation(subject="org-dept-card-3", relation="owns", target="org-role-card-4", note="研发组负责后端开发"),
+    ]
+    return AgentSceneGraph(
+        intent="compose_org_chart",
+        domain="org_chart_scene",
+        summary=summary,
+        background="#ffffff",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
+    if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+        return _org_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("ui", "界面", "线框图", "原型", "草图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _ui_wireframe_scene_graph(normalized_text)
     if "海报" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
