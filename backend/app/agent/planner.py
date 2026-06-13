@@ -1483,6 +1483,24 @@ def _extract_swimlane_names(text: str) -> list[str]:
     return names[:4]
 
 
+def _split_short_chinese_list(raw_items: str, *, max_items: int) -> list[str]:
+    items: list[str] = []
+    for raw_item in re.split(r"[、,，/和与及]+", raw_items):
+        item = raw_item.strip()
+        item = re.sub(r"^(分别是|分别为|为|是)", "", item)
+        item = re.sub(r"(泳道|部门|角色|节点|步骤)$", "", item).strip()
+        if 1 <= len(item) <= 10 and item not in items:
+            items.append(item)
+    return items[:max_items]
+
+
+def _extract_swimlane_step_names(text: str) -> list[str]:
+    match = re.search(r"(?:流程节点|流程步骤|节点|步骤)(?:包括|包含|有|为|是)([^。,.，；;]+)", text)
+    if match is None:
+        return []
+    return _split_short_chinese_list(match.group(1), max_items=4)
+
+
 def _swimlane_step_lane_indexes(lane_count: int) -> list[int]:
     if lane_count == 2:
         return [0, 0, 1, 1]
@@ -1499,6 +1517,7 @@ def _swimlane_step_name(lane_name: str, index: int) -> str:
 
 def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
     lane_names = _extract_swimlane_names(text)
+    custom_step_names = _extract_swimlane_step_names(text)
     lane_count = len(lane_names)
     lane_height = 132 if lane_count <= 3 else 104
     lane_gap = 150 if lane_count <= 3 else 116
@@ -1512,7 +1531,7 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
     steps = []
     for index, lane_index in enumerate(step_lane_indexes):
         lane_name, lane_y, _, _, step_fill = lane_rows[lane_index]
-        step_name = _swimlane_step_name(lane_name, index)
+        step_name = custom_step_names[index] if index < len(custom_step_names) else _swimlane_step_name(lane_name, index)
         step_y = lane_y + round((lane_height - 58) / 2)
         steps.append(
             {
@@ -1645,10 +1664,11 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
         AgentSceneRelation(subject="swimlane-step-4", relation="reports", target="swimlane-step-1", note=steps[3]["note"]),
     ]
     lane_summary = "、".join(lane_names)
+    step_summary = "、".join(step["name"] for step in steps)
     return AgentSceneGraph(
         intent="compose_swimlane_diagram",
         domain="swimlane_diagram_scene",
-        summary=f"绘制{lane_summary}泳道的跨职能流程图",
+        summary=f"绘制{lane_summary}泳道的跨职能流程图, 节点包括{step_summary}",
         background="#ffffff",
         objects=objects,
         relations=relations,
