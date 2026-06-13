@@ -255,7 +255,206 @@ def _flowchart_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _infographic_scene_graph(text: str) -> AgentSceneGraph:
+    if "销售" in text or "营收" in text:
+        title = "销售增长信息图"
+        metrics = [
+            ("营收", "128万", "#e8f0fe"),
+            ("转化率", "18%", "#e6f4ea"),
+            ("复购率", "42%", "#fef7e0"),
+        ]
+        bars = [("一月", 120), ("二月", 168), ("三月", 220)]
+        summary = "绘制销售增长信息图, 包含关键指标卡片和柱状图"
+    else:
+        title = "项目进展信息图"
+        metrics = [
+            ("完成度", "76%", "#e8f0fe"),
+            ("任务数", "24", "#e6f4ea"),
+            ("风险项", "3", "#fce8e6"),
+        ]
+        bars = [("设计", 170), ("开发", 225), ("测试", 145)]
+        summary = "绘制项目进展信息图, 包含指标卡片和阶段柱状图"
+
+    objects = [
+        _object(
+            "infographic-title",
+            "text",
+            "信息图标题",
+            {"x": 512, "y": 92, "content": title, "fontSize": 38},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="infographic",
+            semantic_tags=["infographic.title", "infographic"],
+            z_index=30,
+        ),
+        _object(
+            "infographic-subtitle",
+            "text",
+            "信息图副标题",
+            {"x": 512, "y": 142, "content": "语音生成的可编辑数据版式", "fontSize": 20},
+            "#5f6368",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="infographic",
+            semantic_tags=["infographic.subtitle", "infographic"],
+            z_index=31,
+        ),
+    ]
+
+    card_width = 240
+    card_height = 120
+    for index, (label, value, fill) in enumerate(metrics):
+        x = 112 + index * 280
+        objects.extend(
+            [
+                _object(
+                    f"metric-card-{index + 1}",
+                    "rect",
+                    f"{label}指标卡",
+                    {"x": x, "y": 205, "width": card_width, "height": card_height, "radius": 22},
+                    fill,
+                    stroke="#dadce0",
+                    stroke_width=2,
+                    layer_id="middle",
+                    group_id="infographic",
+                    semantic_tags=["infographic.metric_card", "infographic", f"metric.{index + 1}"],
+                    z_index=index * 3,
+                    role="metric_card",
+                ),
+                _object(
+                    f"metric-value-{index + 1}",
+                    "text",
+                    f"{label}数值",
+                    {"x": x + card_width / 2, "y": 252, "content": value, "fontSize": 34},
+                    "#202124",
+                    stroke="transparent",
+                    stroke_width=0,
+                    layer_id="foreground",
+                    group_id="infographic",
+                    semantic_tags=["infographic.metric_value", "infographic", f"metric.{index + 1}"],
+                    z_index=(index * 3) + 1,
+                    role="metric_value",
+                ),
+                _object(
+                    f"metric-label-{index + 1}",
+                    "text",
+                    f"{label}标签",
+                    {"x": x + card_width / 2, "y": 292, "content": label, "fontSize": 20},
+                    "#5f6368",
+                    stroke="transparent",
+                    stroke_width=0,
+                    layer_id="foreground",
+                    group_id="infographic",
+                    semantic_tags=["infographic.metric_label", "infographic", f"metric.{index + 1}"],
+                    z_index=(index * 3) + 2,
+                    role="metric_label",
+                ),
+            ]
+        )
+
+    objects.extend(
+        [
+            _object(
+                "chart-panel",
+                "rect",
+                "柱状图区",
+                {"x": 120, "y": 390, "width": 784, "height": 255, "radius": 24},
+                "#ffffff",
+                stroke="#dadce0",
+                stroke_width=2,
+                layer_id="middle",
+                group_id="infographic",
+                semantic_tags=["infographic.chart_panel", "infographic", "bar_chart"],
+                z_index=12,
+                role="chart_panel",
+            ),
+            _object(
+                "chart-y-axis",
+                "line",
+                "柱状图纵轴",
+                {"x1": 205, "y1": 590, "x2": 205, "y2": 430},
+                "transparent",
+                stroke="#5f6368",
+                stroke_width=3,
+                layer_id="foreground",
+                group_id="infographic",
+                semantic_tags=["infographic.axis", "bar_chart"],
+                z_index=13,
+            ),
+            _object(
+                "chart-x-axis",
+                "line",
+                "柱状图横轴",
+                {"x1": 205, "y1": 590, "x2": 820, "y2": 590},
+                "transparent",
+                stroke="#5f6368",
+                stroke_width=3,
+                layer_id="foreground",
+                group_id="infographic",
+                semantic_tags=["infographic.axis", "bar_chart"],
+                z_index=14,
+            ),
+        ]
+    )
+
+    for index, (label, height) in enumerate(bars):
+        x = 305 + index * 165
+        bar_y = 590 - height
+        objects.append(
+            _object(
+                f"bar-{index + 1}",
+                "rect",
+                f"{label}柱形",
+                {"x": x, "y": bar_y, "width": 78, "height": height, "radius": 14},
+                ["#1a73e8", "#34a853", "#fbbc04"][index],
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="middle",
+                group_id="infographic",
+                semantic_tags=["infographic.bar", "bar_chart", f"bar.{index + 1}"],
+                z_index=15 + index,
+                role="bar",
+            )
+        )
+        objects.append(
+            _object(
+                f"bar-label-{index + 1}",
+                "text",
+                f"{label}标签",
+                {"x": x + 39, "y": 622, "content": label, "fontSize": 19},
+                "#5f6368",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="infographic",
+                semantic_tags=["infographic.bar_label", "bar_chart", f"bar.{index + 1}"],
+                z_index=20 + index,
+                role="bar_label",
+            )
+        )
+
+    relations = [
+        AgentSceneRelation(subject="metric-card-1", relation="supports", target="chart-panel", note="指标卡解释图表趋势"),
+        AgentSceneRelation(subject="metric-card-2", relation="supports", target="chart-panel", note="指标卡解释图表趋势"),
+        AgentSceneRelation(subject="metric-card-3", relation="supports", target="chart-panel", note="指标卡解释图表趋势"),
+    ]
+    return AgentSceneGraph(
+        intent="compose_infographic",
+        domain="infographic_scene",
+        summary=summary,
+        background="#f8fafc",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
+    if "信息图" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+        return _infographic_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("流程图", "结构图", "架构图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _flowchart_scene_graph(normalized_text)
     if "客厅" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
