@@ -838,6 +838,24 @@ def test_text_to_image_placeholder_generates_editable_image_object(client: TestC
     assert image_object["geometry"]["provider"] == "placeholder"
 
 
+def test_text_to_image_on_blank_canvas_uses_canvas_size(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"width": 1280, "height": 720}).json()["id"]
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一幅中国山水水墨画"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["requires_confirmation"] is False
+    assert body["plan"]["operations"][0]["operation_type"] == "add_object"
+    image_object = body["artwork"]["objects"][0]
+    assert image_object["type"] == "image"
+    assert image_object["geometry"]["x"] == 0
+    assert image_object["geometry"]["y"] == 0
+    assert image_object["geometry"]["width"] == 1280
+    assert image_object["geometry"]["height"] == 720
+    assert "中国山水水墨画" in image_object["geometry"]["prompt"]
+
+
 def test_polish_image_placeholder_uses_canvas_snapshot(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
     artwork_id = client.post("/api/artworks", json={}).json()["id"]

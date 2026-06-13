@@ -276,6 +276,7 @@ async def _resolve_generated_image_operations(
     canvas_image_data_url: str | None,
     canvas_width: int,
     canvas_height: int,
+    canvas_is_blank: bool,
 ) -> CommandPlan:
     image_operation_types = {"generate_image_asset", "polish_image_asset"}
     if not any(operation.operation_type in image_operation_types for operation in plan.operations):
@@ -290,11 +291,24 @@ async def _resolve_generated_image_operations(
             payload = _resolve_polish_source_payload(db, artwork_id, payload, canvas_image_data_url=canvas_image_data_url)
             if not payload.get("input_image_data_url"):
                 payload["input_image_data_url"] = canvas_image_data_url
-            payload.setdefault("width", canvas_width)
-            payload.setdefault("height", canvas_height)
+            if not payload.get("source_object_id"):
+                payload["x"] = 0
+                payload["y"] = 0
+                payload["width"] = canvas_width
+                payload["height"] = canvas_height
+            else:
+                payload.setdefault("width", canvas_width)
+                payload.setdefault("height", canvas_height)
             image_object = await polish_image_object(payload, fallback_width=canvas_width, fallback_height=canvas_height)
         else:
-            image_object = await generate_image_object(operation.payload)
+            payload = dict(operation.payload)
+            if canvas_is_blank:
+                payload["x"] = 0
+                payload["y"] = 0
+                payload["width"] = canvas_width
+                payload["height"] = canvas_height
+                payload.setdefault("preserveAspectRatio", "xMidYMid slice")
+            image_object = await generate_image_object(payload)
         resolved_operations.append(OperationRequest(operation_type="add_object", payload={"object": image_object}))
     next_plan = plan.model_copy(deep=True)
     next_plan.operations = resolved_operations
@@ -520,6 +534,7 @@ async def api_execute_command(
             canvas_image_data_url=request.canvas_image_data_url,
             canvas_width=current_artwork.width,
             canvas_height=current_artwork.height,
+            canvas_is_blank=len(current_artwork.objects) == 0,
         )
         if len(plan.operations) == 1 and plan.operations[0].operation_type == "undo":
             undo_last_operation(db, artwork_id)

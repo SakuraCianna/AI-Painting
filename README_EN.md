@@ -252,6 +252,8 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 | `AI_PAINTING_OPENAI_API_KEY` | Official OpenAI fallback API key | empty |
 | `AI_PAINTING_OPENAI_BASE_URL` | Official OpenAI fallback base URL | `https://api.openai.com/v1` |
 
+The OpenAI-compatible generation and edit request size is decided at runtime: blank-canvas generation uses the current canvas size, while image refinement keeps the source image dimensions. Fixed proxy size variables are no longer recommended.
+
 Never put real secrets in README, issues, pull requests, commit messages, or logs.
 
 ### Quality

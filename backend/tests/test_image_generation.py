@@ -262,6 +262,80 @@ def test_image_edit_uses_official_openai_fallback_after_proxy_failure(monkeypatc
     assert calls[1]["fields"]["size"] == "auto"
 
 
+def test_text_image_proxy_uses_requested_size_instead_of_env_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+
+    async def fake_post(
+        endpoint: str,
+        api_key: str,
+        body: dict[str, Any],
+        timeout: float,
+        provider_name: str,
+    ) -> tuple[str, str]:
+        calls.append({"endpoint": endpoint, "api_key": api_key, "body": body, "timeout": timeout, "provider_name": provider_name})
+        return "data:image/png;base64,ZmFrZQ==", provider_name
+
+    monkeypatch.setenv("AI_PAINTING_IMAGE_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_BASE_URL", "https://corenode.best/v1")
+    monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_API_KEY", "proxy-key")
+    monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("AI_PAINTING_TEXT_IMAGE_SIZE", "1024x768")
+    monkeypatch.delenv("AI_PAINTING_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(image_generation, "_post_image_generation_json", fake_post)
+
+    image_object = asyncio.run(generate_image_object({"prompt": "中国山水水墨画", "width": 1280, "height": 720}))
+
+    assert image_object["geometry"]["width"] == 1280
+    assert image_object["geometry"]["height"] == 720
+    assert calls[0]["body"]["size"] == "1280x720"
+
+
+def test_image_edit_proxy_uses_source_image_size_instead_of_env_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+
+    async def fake_post(
+        endpoint: str,
+        api_key: str,
+        fields: dict[str, Any],
+        files: dict[str, tuple[str, bytes, str]],
+        timeout: float,
+        provider_name: str,
+    ) -> tuple[str, str]:
+        calls.append(
+            {
+                "endpoint": endpoint,
+                "api_key": api_key,
+                "fields": fields,
+                "files": files,
+                "timeout": timeout,
+                "provider_name": provider_name,
+            }
+        )
+        return "data:image/png;base64,ZmFrZQ==", provider_name
+
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_BASE_URL", "https://corenode.best/v1")
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_API_KEY", "proxy-key")
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_SIZE", "1024x768")
+    monkeypatch.delenv("AI_PAINTING_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(image_generation, "_post_image_edit_multipart", fake_post)
+
+    image_object = asyncio.run(
+        polish_image_object(
+            {"input_image_data_url": SAMPLE_PNG_DATA_URL, "width": 640, "height": 360},
+            fallback_width=1024,
+            fallback_height=768,
+        )
+    )
+
+    assert image_object["geometry"]["width"] == 640
+    assert image_object["geometry"]["height"] == 360
+    assert calls[0]["fields"]["size"] == "640x360"
+
+
 def test_polish_image_object_persists_subject_region_adjustment_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
 
