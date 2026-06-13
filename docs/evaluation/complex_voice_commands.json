@@ -189,6 +189,13 @@
     "expected_object_types": ["text", "rect", "text", "rect", "text", "arrow", "rect", "text", "arrow", "rect", "text", "arrow"]
   },
   {
+    "id": "agent-system-architecture",
+    "text": "画一个AI绘图系统架构图，包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "text", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line", "line"]
+  },
+  {
     "id": "agent-sales-infographic",
     "text": "画一个销售增长信息图，包含营收、转化率、复购率和三个月柱状图",
     "tier": "agent",

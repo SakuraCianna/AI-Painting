@@ -193,6 +193,14 @@ def test_parse_programmatic_diagram_requests_do_not_use_image_generation() -> No
     assert plan.scene_plan.intent == "clarify_programmatic_render"
     assert plan.scene_plan.steps[0].target["render_mode"] == "programmatic"
 
+    architecture_plan = parse_command("画一个AI绘图系统架构图，包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务")
+
+    assert all(operation.operation_type != "generate_image_asset" for operation in architecture_plan.operations)
+    assert architecture_plan.requires_confirmation is True
+    assert architecture_plan.scene_plan is not None
+    assert architecture_plan.scene_plan.intent == "clarify_programmatic_render"
+    assert architecture_plan.scene_plan.steps[0].target["render_mode"] == "programmatic"
+
 
 def test_parse_polish_current_image() -> None:
     plan = parse_command("精修我的图片")
