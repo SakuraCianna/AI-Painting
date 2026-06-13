@@ -98,6 +98,7 @@ AI Painting 的核心约束是:
 画一个语音绘图流程图, 从用户语音到 ASR, 再到规划器, 最后到画布执行
 画一个泳道图, 包含销售、运营和交付
 画一个泳道图, 泳道包括产品、设计、研发、测试
+画一个泳道图, 泳道包括产品、设计、研发、测试, 节点包括需求评审、原型设计、开发联调、验收发布
 画一个产品迭代项目排期甘特图, 包含需求、设计、开发、测试和上线里程碑
 把左边第二棵树改成黄色
 把卡片里和标题同一行的按钮改成绿色
@@ -432,6 +433,7 @@ Draw a cozy cabin with two trees on the left, a curved road on the right, and th
 Draw a voice drawing flowchart from user voice to ASR, then to the planner, then to canvas execution
 画一个泳道图, 包含销售、运营和交付
 画一个泳道图, 泳道包括产品、设计、研发、测试
+画一个泳道图, 泳道包括产品、设计、研发、测试, 节点包括需求评审、原型设计、开发联调、验收发布
 Draw a product iteration Gantt chart with requirements, design, development, testing, and launch milestones
 Change the second tree on the left to yellow
 Change the button inside the card and on the same row as the title to green
