@@ -304,6 +304,13 @@
     "expected_object_types": ["rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line"]
   },
   {
+    "id": "programmatic-custom-swimlane-agent-template",
+    "text": "画一个泳道图，泳道包括产品、设计、研发、测试",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line"]
+  },
+  {
     "id": "replace-window-shape",
     "text": "把窗户改成圆形",
     "tier": "rules",

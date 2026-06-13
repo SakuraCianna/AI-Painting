@@ -478,6 +478,34 @@ def test_agent_template_builds_swimlane_diagram(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_extracts_custom_swimlane_names(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个泳道图，泳道包括产品、设计、研发、测试"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "swimlane_diagram_scene"
+    assert result.plan.scene_plan.expected_object_count == 20
+    assert len(result.plan.operations) == 20
+
+    objects = [operation.payload["object"] for operation in result.plan.operations]
+    lane_labels = [
+        obj["geometry"]["content"]
+        for obj in objects
+        if "swimlane_diagram.lane_label" in obj["semantic_tags"]
+    ]
+    assert lane_labels == ["产品", "设计", "研发", "测试"]
+
+    object_types = [obj["type"] for obj in objects]
+    assert object_types.count("rect") == 8
+    assert object_types.count("text") == 8
+    assert object_types.count("line") == 4
+
+
 def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     from app import main
     from app.agent import planner
