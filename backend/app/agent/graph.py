@@ -32,7 +32,7 @@ def _classify_node(state: AgentGraphState) -> AgentGraphState:
     if scene_graph is not None:
         return {"domain": scene_graph.domain}
     text = state["normalized_text"]
-    if any(keyword in text for keyword in ("流程图", "结构图", "架构图")):
+    if any(keyword in text for keyword in ("流程图", "结构图", "架构图", "泳道图", "uml", "er图", "系统架构")):
         return {"domain": "diagram_scene"}
     if any(keyword in text for keyword in ("海报", "封面", "信息图")):
         return {"domain": "layout_scene"}

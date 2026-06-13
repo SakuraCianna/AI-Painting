@@ -27,6 +27,10 @@ AGENT_SCENE_HINTS = (
     "信息图",
     "流程图",
     "结构图",
+    "泳道图",
+    "uml",
+    "er图",
+    "系统架构",
     "甘特图",
     "排期图",
     "项目排期",
@@ -57,6 +61,8 @@ def should_use_drawing_agent(text: str, rule_plan: CommandPlan) -> bool:
     if is_voice_noise_input(text):
         return False
     if not is_drawing_agent_enabled():
+        return False
+    if any(operation.operation_type in {"generate_image_asset", "polish_image_asset"} for operation in rule_plan.operations):
         return False
     normalized = normalize_text(text)
     if _local_scene_graph_for_text(normalized) is not None:

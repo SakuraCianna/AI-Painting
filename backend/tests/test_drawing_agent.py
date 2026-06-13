@@ -200,6 +200,20 @@ def test_agent_template_builds_launch_poster(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_does_not_override_generative_art_request(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个复杂艺术海报，国风水墨质感"))
+
+    assert result.plan.planner_source == "rules"
+    assert result.plan.operations[0].operation_type == "generate_image_asset"
+    assert result.metrics.agent_attempted is False
+    assert result.metrics.llm_attempted is False
+
+
 def test_agent_template_builds_ui_wireframe(monkeypatch) -> None:
     from app import main
 

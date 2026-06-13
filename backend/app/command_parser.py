@@ -5,6 +5,7 @@ import math
 from typing import Any
 
 from .schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
+from .render_strategy import classify_render_strategy
 
 
 COLOR_MAP: dict[str, str] = {
@@ -824,9 +825,37 @@ def _portrait_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     )
 
 
+def _programmatic_render_clarification_plan(raw_text: str, normalized_text: str, matched_keywords: tuple[str, ...]) -> CommandPlan:
+    keywords = list(matched_keywords)
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=[],
+        scene_plan=ScenePlan(
+            intent="clarify_programmatic_render",
+            summary="识别到结构精确类图形, 当前应进入程序生成或结构化图表规划",
+            steps=[
+                ScenePlanStep(
+                    step_id="clarify-programmatic-render",
+                    title="确认结构化图表计划",
+                    intent="ask_clarification",
+                    target={"render_mode": "programmatic", "matched_keywords": keywords},
+                    operation_indexes=[],
+                )
+            ],
+            expected_object_count=None,
+        ),
+        confidence=0.42,
+        requires_confirmation=True,
+        clarification_question="这是结构精确类图形, 请补充节点、泳道、模块或关系, 我会优先用程序生成可编辑对象。",
+        risk_level="medium",
+        explanation="结构图、UML、ER、泳道图等不适合直接生图, 需要先拆成结构化计划",
+    )
+
+
 def _generated_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     prompt = normalized_text
-    for prefix in ("生成一张", "生成一个", "生成", "生图", "画一张"):
+    for prefix in ("生成一张", "生成一个", "生成一幅", "生成", "生图", "画一张", "画一个", "画一幅", "画一张图"):
         prompt = prompt.replace(prefix, "")
     prompt = prompt.strip() or normalized_text
     width, height = (1024, 768) if "背景" in normalized_text else (512, 512)
@@ -839,7 +868,7 @@ def _generated_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
         "y": 0 if layer_id == "background" else 128,
         "name": "生成背景" if layer_id == "background" else "生成图片",
         "layer_id": layer_id,
-        "semantic_tags": ["generated.image", "image"],
+        "semantic_tags": ["generated.image", "image", "render_strategy.generative_image"],
     }
     return CommandPlan(
         raw_text=raw_text,
@@ -937,6 +966,7 @@ def _cozy_cabin_scene_plan(raw_text: str, normalized_text: str) -> CommandPlan:
 
 def parse_command(text: str) -> CommandPlan:
     normalized = normalize_text(text)
+    render_strategy = classify_render_strategy(normalized)
     operations: list[OperationRequest] = []
     requires_confirmation = False
     risk_level = "low"
@@ -972,8 +1002,10 @@ def parse_command(text: str) -> CommandPlan:
                 payload={"width": width, "height": height, "background": _find_color(normalized, "#ffffff")},
             )
         )
-    elif any(keyword in normalized for keyword in IMAGE_POLISH_HINTS) and any(keyword in normalized for keyword in ("图片", "图像", "画面", "作品", "画布")):
+    elif render_strategy.mode == "image_polish" or (any(keyword in normalized for keyword in IMAGE_POLISH_HINTS) and any(keyword in normalized for keyword in ("图片", "图像", "画面", "作品", "画布"))):
         return _polish_image_plan(text, normalized)
+    elif render_strategy.mode == "generative_image":
+        return _generated_image_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("生成", "生图")) and any(keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材")):
         return _generated_image_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("人物肖像", "肖像", "头像")) and any(keyword in normalized for keyword in ("画", "创建", "添加")):
@@ -1049,6 +1081,9 @@ def parse_command(text: str) -> CommandPlan:
         shape = _find_shape(normalized)
         if shape:
             operations.append(OperationRequest(operation_type="add_object", payload={"object": _make_object(normalized, shape)}))
+
+    if not operations and render_strategy.mode == "programmatic":
+        return _programmatic_render_clarification_plan(text, normalized, render_strategy.matched_keywords)
 
     if not operations:
         return CommandPlan(

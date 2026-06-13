@@ -21,6 +21,8 @@ Drawing Agent 负责把用户语音转写后的自然语言拆成可验证、可
 ↓
 ASR
 ↓
+Render Strategy Router
+↓
 规则解析器
 ↓
 Drawing Agent Planner
@@ -61,6 +63,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
 - `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
 - `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、流程图模板、信息图模板、海报模板、UI 草图模板、组织结构图模板、甘特图模板和 Graph 调度
+- `backend/app/render_strategy.py`: 渲染策略分类器, 区分程序生成、生图模型和图生图精修
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
 
@@ -91,6 +94,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 6. 输出速度策略
 
 - 简单命令继续走规则解析, 不调用模型
+- 结构精确类图形优先走程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图
 - 已知复杂模板先用本地 Agent 模板, 例如客厅场景、语音绘图流程图、销售增长信息图、新品发布海报、产品 UI 草图、产品团队组织结构图和项目排期甘特图
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo
 - 模型输出校验失败时, Graph 会先尝试一次模型修复, 再进入编译

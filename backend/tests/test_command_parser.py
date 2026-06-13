@@ -171,9 +171,27 @@ def test_parse_text_to_image_asset_generation() -> None:
     plan = parse_command("生成一张人物肖像画")
     assert plan.operations[0].operation_type == "generate_image_asset"
     assert plan.operations[0].payload["width"] == 512
-    assert plan.operations[0].payload["semantic_tags"] == ["generated.image", "image"]
+    assert plan.operations[0].payload["semantic_tags"] == ["generated.image", "image", "render_strategy.generative_image"]
     assert plan.scene_plan is not None
     assert plan.scene_plan.intent == "generate_asset"
+
+
+def test_parse_artistic_image_requests_use_generation_strategy() -> None:
+    plan = parse_command("画一个二次元动漫人物")
+
+    assert plan.operations[0].operation_type == "generate_image_asset"
+    assert "二次元动漫人物" in plan.operations[0].payload["prompt"]
+    assert "render_strategy.generative_image" in plan.operations[0].payload["semantic_tags"]
+
+
+def test_parse_programmatic_diagram_requests_do_not_use_image_generation() -> None:
+    plan = parse_command("画一个泳道图, 包含销售、运营和交付")
+
+    assert all(operation.operation_type != "generate_image_asset" for operation in plan.operations)
+    assert plan.requires_confirmation is True
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "clarify_programmatic_render"
+    assert plan.scene_plan.steps[0].target["render_mode"] == "programmatic"
 
 
 def test_parse_polish_current_image() -> None:
