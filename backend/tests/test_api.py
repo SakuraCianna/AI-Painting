@@ -897,6 +897,42 @@ def test_partial_polish_generated_image_uses_source_image_prompt(client: TestCli
     assert "polished.region" in polished["semantic_tags"]
 
 
+def test_partial_polish_generated_image_uses_spatial_target(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    image_specs = [
+        ("右侧城市", "一张科幻城市概念图, 夜空和霓虹灯", 560),
+        ("左侧森林", "一张水彩森林背景, 清晨阳光", 96),
+    ]
+    for name, prompt, x in image_specs:
+        _seed_drawing_object(
+            artwork_id,
+            {
+                "type": "image",
+                "name": name,
+                "semantic_tags": ["generated.image", "image"],
+                "geometry": {
+                    "x": x,
+                    "y": 120,
+                    "width": 360,
+                    "height": 260,
+                    "src": SAMPLE_PNG_DATA_URL,
+                    "prompt": prompt,
+                },
+                "style": {"opacity": 1},
+            },
+        )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把右边那张生成图的天空精修一下"})
+
+    assert response.status_code == 200
+    polished = response.json()["artwork"]["objects"][-1]
+    assert polished["name"] == "精修版本: 右侧城市"
+    assert polished["geometry"]["source_prompt"] == "一张科幻城市概念图, 夜空和霓虹灯"
+    assert polished["geometry"]["target_region"] == "天空"
+    assert "夜空和霓虹灯" in polished["geometry"]["prompt"]
+
+
 def test_left_window_spatial_selector_scales_only_one_window(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子 红色屋顶 蓝色门 两扇窗户"})

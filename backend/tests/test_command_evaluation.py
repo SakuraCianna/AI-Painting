@@ -40,6 +40,14 @@ def test_rules_tier_complex_voice_commands_match_expected_plans() -> None:
             assert plan.operations[0].payload["target"]["semantic_tag"] == case["expected_target_semantic_tag"], case["id"]
         if case.get("expected_target_layer_id"):
             assert plan.operations[0].payload["target"]["layer_id"] == case["expected_target_layer_id"], case["id"]
+        if case.get("expected_target_position"):
+            assert plan.operations[0].payload["target"]["position"] == case["expected_target_position"], case["id"]
+        if case.get("expected_target_rank"):
+            assert plan.operations[0].payload["target"]["rank"] == case["expected_target_rank"], case["id"]
+        if case.get("expected_target_corner"):
+            assert plan.operations[0].payload["target"]["corner"] == case["expected_target_corner"], case["id"]
+        if case.get("expected_target_region"):
+            assert plan.operations[0].payload["target_region"] == case["expected_target_region"], case["id"]
 
 
 def test_planner_expected_commands_require_clarification_in_rules_layer() -> None:

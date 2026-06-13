@@ -163,6 +163,21 @@ IMAGE_PROMPT_TARGET_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("二次元", "二次元"),
     ("水墨", "水墨"),
 )
+IMAGE_OBJECT_TARGET_HINTS = (
+    "图片",
+    "图像",
+    "照片",
+    "生成图",
+    "生成图片",
+    "生成出来的图",
+    "素材图",
+)
+IMAGE_CORNER_TARGET_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("右上角", "top_right"),
+    ("左上角", "top_left"),
+    ("右下角", "bottom_right"),
+    ("左下角", "bottom_left"),
+)
 IMAGE_REGION_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("眼睛", "眼睛"),
     ("脸部", "脸部"),
@@ -517,7 +532,7 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     shape = _find_shape(text)
     if shape and many_hint:
         target["type"] = shape
-    is_image_target = any(keyword in text for keyword in ("图片", "图像", "照片"))
+    is_image_target = any(keyword in text for keyword in IMAGE_OBJECT_TARGET_HINTS)
     if is_image_target:
         target["selector"] = "all"
         target["type"] = "image"
@@ -1090,6 +1105,47 @@ def _find_image_region_target(text: str) -> str | None:
     return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
 
 
+def _find_image_corner_target(text: str) -> str | None:
+    matches = [(text.rfind(keyword), len(keyword), value) for keyword, value in IMAGE_CORNER_TARGET_KEYWORDS if keyword in text]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
+
+
+def _image_target_selector(text: str, *, target_region: str | None = None) -> dict[str, Any]:
+    target: dict[str, Any] = {"selector": "latest", "type": "image"}
+    if any(keyword in text for keyword in IMAGE_OBJECT_TARGET_HINTS):
+        target["selector"] = "all"
+
+    corner = _find_image_corner_target(text)
+    if corner:
+        target["selector"] = "all"
+        target["corner"] = corner
+    elif "左边" in text or "左侧" in text:
+        target["selector"] = "all"
+        target["position"] = "leftmost"
+    elif "右边" in text or "右侧" in text:
+        target["selector"] = "all"
+        target["position"] = "rightmost"
+    elif "上方" in text or "顶部" in text:
+        target["selector"] = "all"
+        target["position"] = "topmost"
+    elif "下方" in text or "底部" in text:
+        target["selector"] = "all"
+        target["position"] = "bottommost"
+
+    rank = _extract_position_rank(text)
+    if rank is not None:
+        target["selector"] = "all"
+        target["rank"] = rank
+
+    prompt_target = _find_image_prompt_target(text)
+    if prompt_target and prompt_target != target_region:
+        target["selector"] = "all"
+        target["prompt_contains"] = prompt_target
+    return target
+
+
 def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     style_prompt = normalized_text
     replacements = {
@@ -1104,11 +1160,8 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
         style_prompt = style_prompt.replace(source, target)
     if style_prompt == normalized_text:
         style_prompt = f"{normalized_text}, 保留当前画布的主体构图和对象位置"
-    target: dict[str, Any] = {"selector": "latest", "type": "image"}
-    prompt_target = _find_image_prompt_target(normalized_text)
-    if prompt_target:
-        target = {"selector": "all", "type": "image", "prompt_contains": prompt_target}
     target_region = _find_image_region_target(normalized_text)
+    target = _image_target_selector(normalized_text, target_region=target_region)
     if target_region:
         style_prompt = f"{style_prompt}, 局部精修目标: {target_region}, 保留其他区域"
     return CommandPlan(
