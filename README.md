@@ -79,7 +79,7 @@ AI Painting 的核心约束是:
 | 高级选择 | 已支持 | “把屋顶下面的门改成绿色” |
 | 复合撤销 | 已支持 | 一次撤销整条语音计划 |
 | 清空确认 | 已支持 | “清空画布” -> “确认清空” |
-| Agent 模板 | 已支持第一版 | 客厅、流程图、自定义泳道图、信息图、海报、UI 草图、组织结构图、甘特图 |
+| Agent 模板 | 已支持第一版 | 客厅、流程图、自定义泳道图、信息图、海报、UI 草图、自定义组织结构图、甘特图 |
 | 文生图 | Provider 链路已支持 | “生成一张二次元动漫人物” |
 | 图生图精修 | Provider 链路已支持 | “把右边那个人的眼睛调亮”“继续把他的头发柔和一点” |
 | 本地 ASR | 服务脚手架已支持 | Qwen3-ASR HTTP 服务 |
@@ -92,6 +92,7 @@ AI Painting 的核心约束是:
 画一个房子, 红色屋顶, 蓝色门, 两扇窗户
 画一个温馨的小屋, 左边有两棵树, 右边有一条弯曲小路, 天空有三朵云
 画一个语音绘图流程图, 从用户语音到 ASR, 再到规划器, 最后到画布执行
+画一个产品团队组织结构图, 包括负责人、产品经理、设计负责人、研发负责人、用户研究员、交互设计师、前端工程师、后端工程师
 画一个泳道图, 包含销售、运营和交付
 画一个泳道图, 泳道包括产品、设计、研发、测试
 画一个泳道图, 泳道包括产品、设计、研发、测试, 节点包括需求评审、原型设计、开发联调、验收发布
@@ -414,7 +415,7 @@ The product design is therefore **vector-first, generative-enhanced**:
 | Advanced selection | Supported | "Change the door below the roof to green" |
 | Grouped undo | Supported | Undo one full voice plan at a time |
 | Clear confirmation | Supported | "Clear canvas" -> "Confirm clear" |
-| Agent templates | First version supported | Living room, flowchart, custom swimlane diagram, infographic, poster, UI wireframe, org chart, Gantt chart |
+| Agent templates | First version supported | Living room, flowchart, custom swimlane diagram, infographic, poster, UI wireframe, custom org chart, Gantt chart |
 | Text-to-image | Provider pipeline supported | "Generate an anime character" |
 | Image-to-image | Provider pipeline supported | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点" |
 | Local ASR | Scaffold supported | Qwen3-ASR HTTP service |
@@ -427,6 +428,7 @@ Create a horizontal white canvas
 Draw a house with a red roof, blue door, and two windows
 Draw a cozy cabin with two trees on the left, a curved road on the right, and three clouds in the sky
 Draw a voice drawing flowchart from user voice to ASR, then to the planner, then to canvas execution
+画一个产品团队组织结构图, 包括负责人、产品经理、设计负责人、研发负责人、用户研究员、交互设计师、前端工程师、后端工程师
 画一个泳道图, 包含销售、运营和交付
 画一个泳道图, 泳道包括产品、设计、研发、测试
 画一个泳道图, 泳道包括产品、设计、研发、测试, 节点包括需求评审、原型设计、开发联调、验收发布

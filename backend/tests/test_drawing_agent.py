@@ -425,6 +425,47 @@ def test_agent_template_builds_org_chart(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_extracts_custom_org_chart_names(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(
+        main.build_command_plan_with_metrics(
+            "画一个产品团队组织结构图，包括负责人、产品经理、设计负责人、研发负责人、用户研究员、交互设计师、前端工程师、后端工程师"
+        )
+    )
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "org_chart_scene"
+    assert result.plan.scene_plan.expected_object_count == 20
+    objects = [operation.payload["object"] for operation in result.plan.operations]
+    labels = [
+        obj["geometry"]["content"]
+        for obj in objects
+        if obj["type"] == "text"
+        and (
+            "org_chart.lead" in obj["semantic_tags"]
+            or "org_chart.department" in obj["semantic_tags"]
+            or "org_chart.role" in obj["semantic_tags"]
+        )
+    ]
+    assert labels == [
+        "负责人",
+        "产品经理",
+        "设计负责人",
+        "研发负责人",
+        "用户研究员",
+        "交互设计师",
+        "前端工程师",
+        "后端工程师",
+    ]
+    assert "产品经理" in result.plan.explanation
+    assert "后端工程师" in result.plan.explanation
+
+
 def test_agent_template_builds_gantt_chart(monkeypatch) -> None:
     from app import main
 
