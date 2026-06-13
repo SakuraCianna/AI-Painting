@@ -334,13 +334,16 @@ AI Painting 的长期目标不是做一个普通文生图工具, 而是做一款
 - 增加 UI 草图本地 Agent 模板 - 已完成第一版
 - 增加组织结构图本地 Agent 模板 - 已完成第一版, 支持自定义负责人、部门和执行角色名称
 - 增加甘特图本地 Agent 模板 - 已完成第一版
+- 增加开放场景构图器 - 已完成第一版, 支持草地、太阳、树、小路、长椅、云、山、河、花和小屋组合
 - 增加渲染策略分类器, 区分程序生成、生图和图生图精修 - 已完成第一版
 - 增加导出 SVG 和项目 JSON - 已完成第一版, 支持语音触发前端下载当前 SVG 画布和 artwork JSON
 - 数据库迁移 SQL 标识符白名单化 - 已完成第一版
 - 延迟指标 SQLite Row 缺失列兼容 - 已完成第一版
 - 前端 React Error Boundary - 已完成第一版
+- 画布 runtime 适配层 - 已完成第一版, 支持 SVG renderer 能力标记和 `layer_id` / `z_index` 稳定排序
+- 引入 ruff/mypy/pre-commit - 已完成第一版, mypy 当前为渐进式门禁, pyright 和大文件拆分待完善
 - 调研画布底座迁移成本
-- 引入 ruff/mypy/pyright、pre-commit 和大文件拆分计划
+- 拆分 `planner.py`、`repositories.py` 和 `command_parser.py` 大文件
 
 ## 6. 参考资料
 

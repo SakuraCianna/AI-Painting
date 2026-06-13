@@ -580,10 +580,7 @@ def _bounds_overlap(
     first_left, first_top, first_right, first_bottom = first
     second_left, second_top, second_right, second_bottom = second
     return not (
-        first_right + margin < second_left
-        or first_left - margin > second_right
-        or first_bottom + margin < second_top
-        or first_top - margin > second_bottom
+        first_right + margin < second_left or first_left - margin > second_right or first_bottom + margin < second_top or first_top - margin > second_bottom
     )
 
 
@@ -596,10 +593,7 @@ def _bounds_contains(
     outer_left, outer_top, outer_right, outer_bottom = outer
     inner_left, inner_top, inner_right, inner_bottom = inner
     return (
-        inner_left >= outer_left - margin
-        and inner_top >= outer_top - margin
-        and inner_right <= outer_right + margin
-        and inner_bottom <= outer_bottom + margin
+        inner_left >= outer_left - margin and inner_top >= outer_top - margin and inner_right <= outer_right + margin and inner_bottom <= outer_bottom + margin
     )
 
 
@@ -733,12 +727,7 @@ def _filter_objects_by_relation(
     if not references:
         return []
     return [
-        obj
-        for obj in objects
-        if any(
-            obj.id != reference.id and _relation_matches(obj, reference, relation, relation_selector)
-            for reference in references
-        )
+        obj for obj in objects if any(obj.id != reference.id and _relation_matches(obj, reference, relation, relation_selector) for reference in references)
     ]
 
 

@@ -144,10 +144,7 @@ def _ensure_columns(connection: sqlite3.Connection, table_name: str, columns: di
         if allowed_columns.get(column_name) != column_definition:
             raise ValueError(f"不允许的迁移列: {table_name}.{column_name}")
     quoted_table = _quote_sqlite_identifier(table_name)
-    existing_columns = {
-        row["name"]
-        for row in connection.execute(f"PRAGMA table_info({quoted_table})").fetchall()
-    }
+    existing_columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({quoted_table})").fetchall()}
     for column_name, column_definition in columns.items():
         if column_name not in existing_columns:
             quoted_column = _quote_sqlite_identifier(column_name)

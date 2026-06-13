@@ -29,11 +29,14 @@ def test_canvas_save_export_and_empty_clear_operations(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)
 
-        assert apply_operation(
-            connection,
-            artwork_id,
-            OperationRequest(operation_type="create_canvas", payload={"width": 800, "height": 600, "background": "#f8fafc"}),
-        ) == "已更新画布"
+        assert (
+            apply_operation(
+                connection,
+                artwork_id,
+                OperationRequest(operation_type="create_canvas", payload={"width": 800, "height": 600, "background": "#f8fafc"}),
+            )
+            == "已更新画布"
+        )
         assert apply_operation(connection, artwork_id, OperationRequest(operation_type="save_artwork", payload={"title": "版本一"})) == "已保存作品版本"
         assert apply_operation(connection, artwork_id, OperationRequest(operation_type="export_artwork", payload={})) == "已准备导出"
         assert apply_operation(connection, artwork_id, OperationRequest(operation_type="clear_canvas", payload={})) == "画布已经是空的"
@@ -124,7 +127,14 @@ def test_operation_plan_undo_and_redo_use_one_history_group(tmp_path: Path) -> N
             ),
             OperationRequest(
                 operation_type="add_object",
-                payload={"object": {"type": "star", "name": "星形", "geometry": {"cx": 520, "cy": 384, "outerRadius": 72, "innerRadius": 32, "points": 5}, "style": {"fill": "#facc15"}}},
+                payload={
+                    "object": {
+                        "type": "star",
+                        "name": "星形",
+                        "geometry": {"cx": 520, "cy": 384, "outerRadius": 72, "innerRadius": 32, "points": 5},
+                        "style": {"fill": "#facc15"},
+                    }
+                },
             ),
         ]
 
@@ -142,8 +152,7 @@ def test_operation_plan_undo_and_redo_use_one_history_group(tmp_path: Path) -> N
         undone = undo_last_operation(connection, artwork_id)
         assert undone.objects == []
         assert [
-            row["status"]
-            for row in connection.execute("SELECT status FROM operations WHERE artwork_id = ? ORDER BY operation_index", (artwork_id,)).fetchall()
+            row["status"] for row in connection.execute("SELECT status FROM operations WHERE artwork_id = ? ORDER BY operation_index", (artwork_id,)).fetchall()
         ] == ["undone", "undone"]
 
         redone = redo_last_operation(connection, artwork_id)
@@ -724,7 +733,9 @@ def test_scale_and_replace_shape_reject_invalid_payload_without_mutating_object(
             apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload={"target": {"object_id": object_id}, "factor": 0}))
 
         with pytest.raises(ValueError, match="Unsupported replacement shape"):
-            apply_operation(connection, artwork_id, OperationRequest(operation_type="replace_shape", payload={"target": {"object_id": object_id}, "shape": "image"}))
+            apply_operation(
+                connection, artwork_id, OperationRequest(operation_type="replace_shape", payload={"target": {"object_id": object_id}, "shape": "image"})
+            )
 
         obj = get_artwork(connection, artwork_id).objects[0]
         assert obj.type == "circle"

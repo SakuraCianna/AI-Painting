@@ -509,13 +509,9 @@ def _relation_selectors_for_text(text: str) -> list[dict[str, Any]]:
     if any(keyword in text for keyword in ("卡片里的", "卡片里面", "卡片内", "卡片中的", "卡片里")):
         relation_selectors.append({"relation": "inside", "margin": 8, "target": _card_reference_selector()})
     if any(keyword in text for keyword in ("和标题同一行", "与标题同一行", "标题同一行")):
-        relation_selectors.append(
-            {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
-        )
+        relation_selectors.append({"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in text for keyword in ("和标题同一列", "与标题同一列", "标题同一列")):
-        relation_selectors.append(
-            {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
-        )
+        relation_selectors.append({"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in text for keyword in ("标题前面的", "标题上层的", "图层在标题前面", "盖在标题前面")):
         relation_selectors.append({"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in text for keyword in ("标题后面的", "标题下层的", "图层在标题后面", "放在标题后面")):
@@ -560,10 +556,7 @@ def _needs_scene_planner(text: str) -> bool:
 
 def _scene_clarification_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     scene_tags = _scene_semantic_tags(normalized_text)
-    question = (
-        "这是一条多元素场景指令, 我需要先拆成对象计划。"
-        "请补充主要对象数量、位置或风格, 例如先说“确认按小屋、树、小路和云朵生成”。"
-    )
+    question = "这是一条多元素场景指令, 我需要先拆成对象计划。请补充主要对象数量、位置或风格, 例如先说“确认按小屋、树、小路和云朵生成”。"
     return CommandPlan(
         raw_text=raw_text,
         normalized_text=normalized_text,
@@ -801,25 +794,33 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
     if shape == "rect":
         width = _extract_number(text, "宽", 220)
         height = _extract_number(text, "高", 140)
-        return _decorate_object(text, {
-            "type": "rect",
-            "name": "矩形",
-            "geometry": {"x": x - width // 2, "y": y - height // 2, "width": width, "height": height, "radius": 8},
-            "style": style,
-        })
+        return _decorate_object(
+            text,
+            {
+                "type": "rect",
+                "name": "矩形",
+                "geometry": {"x": x - width // 2, "y": y - height // 2, "width": width, "height": height, "radius": 8},
+                "style": style,
+            },
+        )
     if shape == "ellipse":
         return _decorate_object(text, {"type": "ellipse", "name": "椭圆", "geometry": {"cx": x, "cy": y, "rx": 140, "ry": 80}, "style": style})
     if shape == "triangle":
         return _decorate_object(text, {"type": "triangle", "name": "三角形", "geometry": {"x": x, "y": y, "size": 180}, "style": style})
     if shape in {"line", "arrow"}:
-        return _decorate_object(text, {
-            "type": shape,
-            "name": "箭头" if shape == "arrow" else "线条",
-            "geometry": {"x1": x - 120, "y1": y + 80, "x2": x + 120, "y2": y - 80},
-            "style": {**style, "fill": "transparent", "strokeWidth": 4},
-        })
+        return _decorate_object(
+            text,
+            {
+                "type": shape,
+                "name": "箭头" if shape == "arrow" else "线条",
+                "geometry": {"x1": x - 120, "y1": y + 80, "x2": x + 120, "y2": y - 80},
+                "style": {**style, "fill": "transparent", "strokeWidth": 4},
+            },
+        )
     if shape == "star":
-        return _decorate_object(text, {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style})
+        return _decorate_object(
+            text, {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style}
+        )
     if shape == "polygon":
         sides = 6 if "六边形" in text else 5 if "五边形" in text else 5
         return _decorate_object(
@@ -860,12 +861,15 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
         )
     content_match = CONTENT_PATTERN.search(text)
     content = content_match.group(1).strip() if content_match else "语音文字"
-    return _decorate_object(text, {
-        "type": "text",
-        "name": "文字",
-        "geometry": {"x": x, "y": y, "fontSize": 48, "content": content},
-        "style": {**style, "fill": style["fill"], "stroke": "transparent"},
-    })
+    return _decorate_object(
+        text,
+        {
+            "type": "text",
+            "name": "文字",
+            "geometry": {"x": x, "y": y, "fontSize": 48, "content": content},
+            "style": {**style, "fill": style["fill"], "stroke": "transparent"},
+        },
+    )
 
 
 def _extract_count(text: str, default: int = 1) -> int:
@@ -1065,35 +1069,123 @@ def _portrait_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     operations = [
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "ellipse", "name": "肩膀", "layer_id": "middle", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.shoulder"], "geometry": {"cx": 512, "cy": 600, "rx": 220, "ry": 92}, "style": {"fill": "#dbeafe", "stroke": "#1e3a8a", "strokeWidth": 3, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "ellipse",
+                    "name": "肩膀",
+                    "layer_id": "middle",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.shoulder"],
+                    "geometry": {"cx": 512, "cy": 600, "rx": 220, "ry": 92},
+                    "style": {"fill": "#dbeafe", "stroke": "#1e3a8a", "strokeWidth": 3, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "rect", "name": "脖子", "layer_id": "middle", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.neck"], "geometry": {"x": 462, "y": 455, "width": 100, "height": 112, "radius": 24}, "style": {"fill": skin, "stroke": "#7c2d12", "strokeWidth": 2, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "rect",
+                    "name": "脖子",
+                    "layer_id": "middle",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.neck"],
+                    "geometry": {"x": 462, "y": 455, "width": 100, "height": 112, "radius": 24},
+                    "style": {"fill": skin, "stroke": "#7c2d12", "strokeWidth": 2, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "ellipse", "name": "脸部", "layer_id": "middle", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.face"], "geometry": {"cx": 512, "cy": 340, "rx": 132, "ry": 162}, "style": {"fill": skin, "stroke": "#7c2d12", "strokeWidth": 3, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "ellipse",
+                    "name": "脸部",
+                    "layer_id": "middle",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.face"],
+                    "geometry": {"cx": 512, "cy": 340, "rx": 132, "ry": 162},
+                    "style": {"fill": skin, "stroke": "#7c2d12", "strokeWidth": 3, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "path", "name": "头发", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.hair"], "geometry": {"commands": [{"cmd": "M", "x": 380, "y": 330}, {"cmd": "C", "x1": 395, "y1": 160, "x2": 620, "y2": 125, "x": 650, "y": 320}, {"cmd": "C", "x1": 610, "y1": 245, "x2": 540, "y2": 235, "x": 505, "y": 245}, {"cmd": "C", "x1": 455, "y1": 240, "x2": 420, "y2": 270, "x": 380, "y": 330}, {"cmd": "Z"}]}, "style": {"fill": hair, "stroke": "#111827", "strokeWidth": 3, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "头发",
+                    "layer_id": "foreground",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.hair"],
+                    "geometry": {
+                        "commands": [
+                            {"cmd": "M", "x": 380, "y": 330},
+                            {"cmd": "C", "x1": 395, "y1": 160, "x2": 620, "y2": 125, "x": 650, "y": 320},
+                            {"cmd": "C", "x1": 610, "y1": 245, "x2": 540, "y2": 235, "x": 505, "y": 245},
+                            {"cmd": "C", "x1": 455, "y1": 240, "x2": 420, "y2": 270, "x": 380, "y": 330},
+                            {"cmd": "Z"},
+                        ]
+                    },
+                    "style": {"fill": hair, "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "circle", "name": "左眼", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.eye"], "geometry": {"cx": 462, "cy": 340, "radius": 12}, "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 2, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "circle",
+                    "name": "左眼",
+                    "layer_id": "foreground",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.eye"],
+                    "geometry": {"cx": 462, "cy": 340, "radius": 12},
+                    "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "circle", "name": "右眼", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.eye"], "geometry": {"cx": 562, "cy": 340, "radius": 12}, "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 2, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "circle",
+                    "name": "右眼",
+                    "layer_id": "foreground",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.eye"],
+                    "geometry": {"cx": 562, "cy": 340, "radius": 12},
+                    "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 2, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "path", "name": "鼻子", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.nose"], "geometry": {"commands": [{"cmd": "M", "x": 512, "y": 358}, {"cmd": "C", "x1": 500, "y1": 392, "x2": 535, "y2": 398, "x": 516, "y": 418}]}, "style": {"fill": "transparent", "stroke": "#92400e", "strokeWidth": 4, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "鼻子",
+                    "layer_id": "foreground",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.nose"],
+                    "geometry": {"commands": [{"cmd": "M", "x": 512, "y": 358}, {"cmd": "C", "x1": 500, "y1": 392, "x2": 535, "y2": 398, "x": 516, "y": 418}]},
+                    "style": {"fill": "transparent", "stroke": "#92400e", "strokeWidth": 4, "opacity": 1},
+                }
+            },
         ),
         OperationRequest(
             operation_type="add_object",
-            payload={"object": {"type": "path", "name": "嘴巴", "layer_id": "foreground", "group_id": "portrait", "semantic_tags": ["portrait", "portrait.mouth"], "geometry": {"commands": [{"cmd": "M", "x": 462, "y": 435}, {"cmd": "C", "x1": 492, "y1": 468, "x2": 542, "y2": 468, "x": 572, "y": 435}]}, "style": {"fill": "transparent", "stroke": "#dc2626", "strokeWidth": 5, "opacity": 1}}},
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "嘴巴",
+                    "layer_id": "foreground",
+                    "group_id": "portrait",
+                    "semantic_tags": ["portrait", "portrait.mouth"],
+                    "geometry": {"commands": [{"cmd": "M", "x": 462, "y": 435}, {"cmd": "C", "x1": 492, "y1": 468, "x2": 542, "y2": 468, "x": 572, "y": 435}]},
+                    "style": {"fill": "transparent", "stroke": "#dc2626", "strokeWidth": 5, "opacity": 1},
+                }
+            },
         ),
     ]
     return CommandPlan(
@@ -1358,19 +1450,136 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
 
 def _cozy_cabin_scene_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     operations = [
-        OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "浅蓝天空", "layer_id": "background", "group_id": "cabin-scene", "semantic_tags": ["scene", "sky"], "geometry": {"x": 0, "y": 0, "width": 1024, "height": 768, "radius": 0}, "style": {"fill": "#dbeafe", "stroke": "#dbeafe", "strokeWidth": 0, "opacity": 1}}}),
-        OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "太阳", "layer_id": "background", "group_id": "cabin-scene", "semantic_tags": ["sun", "shape.circle"], "geometry": {"cx": 820, "cy": 130, "radius": 58}, "style": {"fill": "#facc15", "stroke": "#f97316", "strokeWidth": 3, "opacity": 1}}}),
-        OperationRequest(operation_type="add_object", payload={"object": {"type": "path", "name": "云朵1", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["cloud", "path"], "geometry": {"commands": _path_commands_for_text("云", 260, 140)}, "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 3, "opacity": 1}}}),
-        OperationRequest(operation_type="add_object", payload={"object": {"type": "path", "name": "云朵2", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["cloud", "path"], "geometry": {"commands": _path_commands_for_text("云", 520, 105)}, "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 3, "opacity": 1}}}),
-        OperationRequest(operation_type="add_object", payload={"object": {"type": "path", "name": "弯曲小路", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["road", "path"], "geometry": {"commands": _path_commands_for_text("小路", 690, 610)}, "style": {"fill": "transparent", "stroke": "#a16207", "strokeWidth": 18, "opacity": 1}}}),
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "rect",
+                    "name": "浅蓝天空",
+                    "layer_id": "background",
+                    "group_id": "cabin-scene",
+                    "semantic_tags": ["scene", "sky"],
+                    "geometry": {"x": 0, "y": 0, "width": 1024, "height": 768, "radius": 0},
+                    "style": {"fill": "#dbeafe", "stroke": "#dbeafe", "strokeWidth": 0, "opacity": 1},
+                }
+            },
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "circle",
+                    "name": "太阳",
+                    "layer_id": "background",
+                    "group_id": "cabin-scene",
+                    "semantic_tags": ["sun", "shape.circle"],
+                    "geometry": {"cx": 820, "cy": 130, "radius": 58},
+                    "style": {"fill": "#facc15", "stroke": "#f97316", "strokeWidth": 3, "opacity": 1},
+                }
+            },
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "云朵1",
+                    "layer_id": "middle",
+                    "group_id": "cabin-scene",
+                    "semantic_tags": ["cloud", "path"],
+                    "geometry": {"commands": _path_commands_for_text("云", 260, 140)},
+                    "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 3, "opacity": 1},
+                }
+            },
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "云朵2",
+                    "layer_id": "middle",
+                    "group_id": "cabin-scene",
+                    "semantic_tags": ["cloud", "path"],
+                    "geometry": {"commands": _path_commands_for_text("云", 520, 105)},
+                    "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 3, "opacity": 1},
+                }
+            },
+        ),
+        OperationRequest(
+            operation_type="add_object",
+            payload={
+                "object": {
+                    "type": "path",
+                    "name": "弯曲小路",
+                    "layer_id": "middle",
+                    "group_id": "cabin-scene",
+                    "semantic_tags": ["road", "path"],
+                    "geometry": {"commands": _path_commands_for_text("小路", 690, 610)},
+                    "style": {"fill": "transparent", "stroke": "#a16207", "strokeWidth": 18, "opacity": 1},
+                }
+            },
+        ),
     ]
     operations.extend(_house_plan(raw_text, normalized_text).operations)
     operations.extend(
         [
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "左树树干", "layer_id": "middle", "group_id": "tree-left", "semantic_tags": ["tree", "tree.trunk", "cabin-scene"], "geometry": {"x": 180, "y": 450, "width": 38, "height": 120, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "左树树冠", "layer_id": "middle", "group_id": "tree-left", "semantic_tags": ["tree", "tree.crown", "cabin-scene"], "geometry": {"cx": 200, "cy": 405, "radius": 76}, "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 3, "opacity": 1}}}),
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "远处小树树干", "layer_id": "middle", "group_id": "tree-far", "semantic_tags": ["tree", "tree.trunk", "cabin-scene"], "geometry": {"x": 105, "y": 485, "width": 28, "height": 86, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "远处小树树冠", "layer_id": "middle", "group_id": "tree-far", "semantic_tags": ["tree", "tree.crown", "cabin-scene"], "geometry": {"cx": 120, "cy": 452, "radius": 54}, "style": {"fill": "#22c55e", "stroke": "#15803d", "strokeWidth": 3, "opacity": 1}}}),
+            OperationRequest(
+                operation_type="add_object",
+                payload={
+                    "object": {
+                        "type": "rect",
+                        "name": "左树树干",
+                        "layer_id": "middle",
+                        "group_id": "tree-left",
+                        "semantic_tags": ["tree", "tree.trunk", "cabin-scene"],
+                        "geometry": {"x": 180, "y": 450, "width": 38, "height": 120, "radius": 8},
+                        "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1},
+                    }
+                },
+            ),
+            OperationRequest(
+                operation_type="add_object",
+                payload={
+                    "object": {
+                        "type": "circle",
+                        "name": "左树树冠",
+                        "layer_id": "middle",
+                        "group_id": "tree-left",
+                        "semantic_tags": ["tree", "tree.crown", "cabin-scene"],
+                        "geometry": {"cx": 200, "cy": 405, "radius": 76},
+                        "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 3, "opacity": 1},
+                    }
+                },
+            ),
+            OperationRequest(
+                operation_type="add_object",
+                payload={
+                    "object": {
+                        "type": "rect",
+                        "name": "远处小树树干",
+                        "layer_id": "middle",
+                        "group_id": "tree-far",
+                        "semantic_tags": ["tree", "tree.trunk", "cabin-scene"],
+                        "geometry": {"x": 105, "y": 485, "width": 28, "height": 86, "radius": 8},
+                        "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1},
+                    }
+                },
+            ),
+            OperationRequest(
+                operation_type="add_object",
+                payload={
+                    "object": {
+                        "type": "circle",
+                        "name": "远处小树树冠",
+                        "layer_id": "middle",
+                        "group_id": "tree-far",
+                        "semantic_tags": ["tree", "tree.crown", "cabin-scene"],
+                        "geometry": {"cx": 120, "cy": 452, "radius": 54},
+                        "style": {"fill": "#22c55e", "stroke": "#15803d", "strokeWidth": 3, "opacity": 1},
+                    }
+                },
+            ),
         ]
     )
     for operation in operations[0:5]:
@@ -1441,8 +1650,10 @@ def parse_command(text: str) -> CommandPlan:
         return _polish_image_plan(text, normalized)
     elif render_strategy.mode == "generative_image":
         return _generated_image_plan(text, normalized)
-    elif render_strategy.mode != "programmatic" and any(keyword in normalized for keyword in ("生成", "生图")) and any(
-        keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材")
+    elif (
+        render_strategy.mode != "programmatic"
+        and any(keyword in normalized for keyword in ("生成", "生图"))
+        and any(keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材"))
     ):
         return _generated_image_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("人物肖像", "肖像", "头像")) and any(keyword in normalized for keyword in ("画", "创建", "添加")):
@@ -1486,7 +1697,11 @@ def parse_command(text: str) -> CommandPlan:
             dx = amount if "右" in normalized else -amount if "左" in normalized else 0
             dy = amount if "下" in normalized else -amount if "上" in normalized else 0
             operations.append(OperationRequest(operation_type="move_many", payload={"target": {"selector": "all"}, "dx": dx, "dy": dy}))
-    elif any(keyword in normalized for keyword in ("改成", "换成", "变成")) and (replacement_shape := _find_replacement_shape(normalized)) and "画" not in normalized:
+    elif (
+        any(keyword in normalized for keyword in ("改成", "换成", "变成"))
+        and (replacement_shape := _find_replacement_shape(normalized))
+        and "画" not in normalized
+    ):
         target = _target_selector(normalized, include_color=False)
         operation_type = "replace_shape_many" if _is_many_target(target) else "replace_shape"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "shape": replacement_shape}))

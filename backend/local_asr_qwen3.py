@@ -105,9 +105,7 @@ class Qwen3AsrRuntime:
             import torch
             from qwen_asr import Qwen3ASRModel
         except ImportError as exc:
-            raise RuntimeError(
-                "未安装 Qwen3-ASR 本地依赖, 请执行 pip install -r backend\\requirements-local-asr.txt"
-            ) from exc
+            raise RuntimeError("未安装 Qwen3-ASR 本地依赖, 请执行 pip install -r backend\\requirements-local-asr.txt") from exc
 
         self._model = Qwen3ASRModel.from_pretrained(
             self.settings.model_id,

@@ -389,12 +389,7 @@ def apply_operation(
         if not targets:
             raise KeyError("No matching drawing objects exist")
         style_updates = _validated_style(payload.get("style", {}))
-        inverse_payload = {
-            "items": [
-                {"object_id": obj.id, "style": {key: obj.style.get(key) for key in style_updates}}
-                for obj in targets
-            ]
-        }
+        inverse_payload = {"items": [{"object_id": obj.id, "style": {key: obj.style.get(key) for key in style_updates}} for obj in targets]}
         payload["target"] = {"object_ids": [obj.id for obj in targets]}
         for obj in targets:
             update_object(connection, artwork_id, obj.id, style=style_updates, commit=commit)
@@ -404,12 +399,7 @@ def apply_operation(
         if not targets:
             raise KeyError("No matching drawing objects exist")
         updates = _metadata_updates(payload)
-        inverse_payload = {
-            "items": [
-                {"object_id": obj.id, **{key: _metadata_snapshot(obj)[key] for key in updates}}
-                for obj in targets
-            ]
-        }
+        inverse_payload = {"items": [{"object_id": obj.id, **{key: _metadata_snapshot(obj)[key] for key in updates}} for obj in targets]}
         payload["target"] = {"object_ids": [obj.id for obj in targets]}
         for obj in targets:
             _apply_metadata_updates(connection, artwork_id, obj.id, updates, commit=commit)
@@ -470,9 +460,7 @@ def apply_operation(
         new_type = _validated_replacement_shape(payload.get("shape") or payload.get("type"))
         payload["target"] = {"object_ids": [obj.id for obj in targets]}
         payload["shape"] = new_type
-        inverse_payload = {
-            "items": [{"object_id": obj.id, "shape": obj.type, "geometry": obj.geometry} for obj in targets]
-        }
+        inverse_payload = {"items": [{"object_id": obj.id, "shape": obj.type, "geometry": obj.geometry} for obj in targets]}
         for obj in targets:
             _replace_object_shape(connection, artwork_id, obj.id, new_type, commit=commit)
         message = f"已替换 {len(targets)} 个对象形状"
@@ -566,9 +554,13 @@ def _undo_operation_row(connection: sqlite3.Connection, artwork_id: str, row: sq
     elif operation_type == "add_object":
         delete_object(connection, artwork_id, inverse_payload["object_id"], commit=commit)
     elif operation_type == "set_style":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_style", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
+        apply_operation(
+            connection, artwork_id, OperationRequest(operation_type="set_style", payload=inverse_payload), record=False, clear_redo=False, commit=commit
+        )
     elif operation_type == "set_metadata":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="set_metadata", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
+        apply_operation(
+            connection, artwork_id, OperationRequest(operation_type="set_metadata", payload=inverse_payload), record=False, clear_redo=False, commit=commit
+        )
     elif operation_type == "set_style_many":
         for item in inverse_payload["items"]:
             update_object(connection, artwork_id, item["object_id"], style=item["style"], commit=commit)
@@ -586,13 +578,21 @@ def _undo_operation_row(connection: sqlite3.Connection, artwork_id: str, row: sq
                 commit=commit,
             )
     elif operation_type == "move_object":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="move_object", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
+        apply_operation(
+            connection, artwork_id, OperationRequest(operation_type="move_object", payload=inverse_payload), record=False, clear_redo=False, commit=commit
+        )
     elif operation_type == "move_many":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="move_many", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
+        apply_operation(
+            connection, artwork_id, OperationRequest(operation_type="move_many", payload=inverse_payload), record=False, clear_redo=False, commit=commit
+        )
     elif operation_type == "scale_object":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
+        apply_operation(
+            connection, artwork_id, OperationRequest(operation_type="scale_object", payload=inverse_payload), record=False, clear_redo=False, commit=commit
+        )
     elif operation_type == "scale_many":
-        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False, clear_redo=False, commit=commit)
+        apply_operation(
+            connection, artwork_id, OperationRequest(operation_type="scale_many", payload=inverse_payload), record=False, clear_redo=False, commit=commit
+        )
     elif operation_type == "replace_shape":
         update_object(
             connection,

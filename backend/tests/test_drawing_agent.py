@@ -122,6 +122,26 @@ def test_agent_template_builds_complex_living_room(monkeypatch) -> None:
     assert result.metrics.agent_planner_ms is not None
 
 
+def test_agent_open_composition_builds_mixed_scene_without_mimo(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个公园场景, 有草地、太阳、两棵树、一条小路和长椅"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.intent == "compose_open_scene"
+    assert result.plan.scene_plan.expected_object_count is not None
+    assert result.plan.scene_plan.expected_object_count >= 8
+    semantic_tags = {tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]}
+    assert {"scene.grass", "sun", "tree", "path", "bench"}.issubset(semantic_tags)
+    assert result.plan.requires_confirmation is False
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_edit_planner_builds_semantic_multi_step_edit(monkeypatch) -> None:
     from app import main
 
@@ -405,9 +425,7 @@ def test_agent_template_builds_system_architecture_diagram(monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
 
-    result = asyncio.run(
-        main.build_command_plan_with_metrics("画一个AI绘图系统架构图，包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务")
-    )
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个AI绘图系统架构图，包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务"))
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
@@ -464,11 +482,7 @@ def test_agent_template_extracts_custom_er_entities_and_relationships(monkeypatc
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
 
-    result = asyncio.run(
-        main.build_command_plan_with_metrics(
-            "画一个图书馆借阅ER图，实体包括读者、图书、借阅记录、馆员，关系包括读者借阅图书、馆员管理图书"
-        )
-    )
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个图书馆借阅ER图，实体包括读者、图书、借阅记录、馆员，关系包括读者借阅图书、馆员管理图书"))
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
@@ -476,11 +490,7 @@ def test_agent_template_extracts_custom_er_entities_and_relationships(monkeypatc
     assert result.plan.scene_plan.expected_object_count == 20
 
     objects = [operation.payload["object"] for operation in result.plan.operations]
-    labels = [
-        obj["geometry"]["content"]
-        for obj in objects
-        if obj["type"] == "text" and "content" in obj["geometry"]
-    ]
+    labels = [obj["geometry"]["content"] for obj in objects if obj["type"] == "text" and "content" in obj["geometry"]]
     assert {"读者", "图书", "借阅记录", "馆员"}.issubset(labels)
     assert "读者借阅图书" in result.plan.explanation
     assert "馆员管理图书" in result.plan.explanation
@@ -541,11 +551,7 @@ def test_agent_template_extracts_custom_org_chart_names(monkeypatch) -> None:
         obj["geometry"]["content"]
         for obj in objects
         if obj["type"] == "text"
-        and (
-            "org_chart.lead" in obj["semantic_tags"]
-            or "org_chart.department" in obj["semantic_tags"]
-            or "org_chart.role" in obj["semantic_tags"]
-        )
+        and ("org_chart.lead" in obj["semantic_tags"] or "org_chart.department" in obj["semantic_tags"] or "org_chart.role" in obj["semantic_tags"])
     ]
     assert labels == [
         "负责人",
@@ -629,11 +635,7 @@ def test_agent_template_extracts_custom_swimlane_names(monkeypatch) -> None:
     assert len(result.plan.operations) == 20
 
     objects = [operation.payload["object"] for operation in result.plan.operations]
-    lane_labels = [
-        obj["geometry"]["content"]
-        for obj in objects
-        if "swimlane_diagram.lane_label" in obj["semantic_tags"]
-    ]
+    lane_labels = [obj["geometry"]["content"] for obj in objects if "swimlane_diagram.lane_label" in obj["semantic_tags"]]
     assert lane_labels == ["产品", "设计", "研发", "测试"]
 
     object_types = [obj["type"] for obj in objects]
@@ -648,9 +650,7 @@ def test_agent_template_extracts_custom_swimlane_step_names(monkeypatch) -> None
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
 
-    result = asyncio.run(
-        main.build_command_plan_with_metrics("画一个泳道图，泳道包括产品、设计、研发、测试，节点包括需求评审、原型设计、开发联调、验收发布")
-    )
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个泳道图，泳道包括产品、设计、研发、测试，节点包括需求评审、原型设计、开发联调、验收发布"))
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
@@ -658,11 +658,7 @@ def test_agent_template_extracts_custom_swimlane_step_names(monkeypatch) -> None
     assert result.plan.scene_plan.expected_object_count == 20
 
     objects = [operation.payload["object"] for operation in result.plan.operations]
-    step_labels = [
-        obj["geometry"]["content"]
-        for obj in objects
-        if "swimlane_diagram.step_label" in obj["semantic_tags"]
-    ]
+    step_labels = [obj["geometry"]["content"] for obj in objects if "swimlane_diagram.step_label" in obj["semantic_tags"]]
     assert step_labels == ["需求评审", "原型设计", "开发联调", "验收发布"]
     assert "需求评审" in result.plan.explanation
     assert "验收发布" in result.plan.explanation
