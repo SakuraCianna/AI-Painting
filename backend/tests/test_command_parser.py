@@ -202,6 +202,19 @@ def test_parse_polish_current_image() -> None:
     assert plan.scene_plan.intent == "polish_artwork"
 
 
+def test_parse_partial_polish_generated_image_target() -> None:
+    plan = parse_command("把生成的人物肖像的眼睛精修一下")
+
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert payload["target"]["type"] == "image"
+    assert payload["target"]["prompt_contains"] == "肖像"
+    assert payload["target_region"] == "眼睛"
+    assert "眼睛" in payload["prompt"]
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.steps[0].target["target_region"] == "眼睛"
+
+
 def test_parse_window_shape_replacement_and_spatial_scale() -> None:
     replace_plan = parse_command("把窗户改成圆形")
     assert replace_plan.operations[0].operation_type == "replace_shape_many"

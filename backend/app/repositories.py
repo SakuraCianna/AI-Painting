@@ -310,6 +310,11 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
     name_contains = selector.get("name_contains")
     if name_contains:
         objects = [obj for obj in objects if obj.name and str(name_contains) in obj.name]
+    prompt_contains = selector.get("prompt_contains")
+    if prompt_contains:
+        prompt_text = str(prompt_contains).strip()
+        if prompt_text:
+            objects = [obj for obj in objects if prompt_text in _object_prompt_text(obj)]
     layer_id = selector.get("layer_id")
     if layer_id:
         objects = [obj for obj in objects if obj.layer_id == layer_id]
@@ -416,6 +421,16 @@ def _object_center(obj: DrawingObject) -> tuple[float, float]:
         if xs and ys:
             return sum(xs) / len(xs), sum(ys) / len(ys)
     return 0, 0
+
+
+def _object_prompt_text(obj: DrawingObject) -> str:
+    values = [
+        obj.geometry.get("prompt"),
+        obj.geometry.get("source_prompt"),
+        obj.geometry.get("edit_instruction"),
+        obj.name,
+    ]
+    return " ".join(str(value) for value in values if value)
 
 
 def _should_expand_group(selector: dict[str, Any]) -> bool:

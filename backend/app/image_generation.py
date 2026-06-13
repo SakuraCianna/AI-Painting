@@ -330,21 +330,30 @@ async def polish_image_object(payload: dict[str, Any], *, fallback_width: int, f
     else:
         src = _svg_placeholder_data_url(f"精修预览: {prompt}", width, height)
         provider_name = "placeholder"
+    semantic_tags = ["generated.image", "image", "polished.image"]
+    target_region = str(payload.get("target_region") or "").strip()
+    if target_region:
+        semantic_tags.append("polished.region")
+    geometry = {
+        "x": int(payload.get("x", 0)),
+        "y": int(payload.get("y", 0)),
+        "width": width,
+        "height": height,
+        "src": src,
+        "prompt": prompt,
+        "provider": provider_name,
+        "preserveAspectRatio": payload.get("preserveAspectRatio", "xMidYMid slice"),
+    }
+    for key in ("source_prompt", "source_object_id", "source_object_name", "target_region"):
+        value = payload.get(key)
+        if value:
+            geometry[key] = str(value)
     return {
         "type": "image",
         "name": str(payload.get("name") or "精修版本"),
         "layer_id": str(payload.get("layer_id") or "foreground"),
         "group_id": payload.get("group_id"),
-        "semantic_tags": ["generated.image", "image", "polished.image"],
-        "geometry": {
-            "x": int(payload.get("x", 0)),
-            "y": int(payload.get("y", 0)),
-            "width": width,
-            "height": height,
-            "src": src,
-            "prompt": prompt,
-            "provider": provider_name,
-            "preserveAspectRatio": payload.get("preserveAspectRatio", "xMidYMid slice"),
-        },
+        "semantic_tags": semantic_tags,
+        "geometry": geometry,
         "style": {"opacity": float(payload.get("opacity", 1))},
     }
