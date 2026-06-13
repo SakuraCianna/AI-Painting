@@ -333,6 +333,7 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 - [Requirements Document](需求文档.md)
 - [Drawing Agent Architecture](docs/agent-architecture.md)
 - [Gap Analysis](docs/status/voice-drawing-gap-analysis.md)
+- [Complex Command Evaluation](docs/evaluation/command-evaluation.md)
 - [ASR Benchmarking](docs/evaluation/asr-benchmark.md)
 - [Local Qwen3-ASR](docs/local-asr-qwen3.md)
 - [Docker Deployment](docs/docker-deploy.md)

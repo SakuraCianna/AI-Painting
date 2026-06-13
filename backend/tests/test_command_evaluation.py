@@ -9,14 +9,30 @@ from app import main
 
 
 EVALUATION_PATH = Path(__file__).resolve().parents[2] / "docs" / "evaluation" / "complex_voice_commands.json"
+ASR_TRANSCRIPTS_PATH = Path(__file__).resolve().parents[2] / "docs" / "evaluation" / "complex_voice_command_asr_transcripts.json"
 
 
 def test_complex_voice_command_evaluation_set_is_well_formed() -> None:
     cases = json.loads(EVALUATION_PATH.read_text(encoding="utf-8"))
     ids = [case["id"] for case in cases]
-    assert len(cases) >= 12
+    assert 50 <= len(cases) <= 100
     assert len(ids) == len(set(ids))
+    assert {"rules", "agent", "planner_expected"}.issubset({case["tier"] for case in cases})
     assert {case["tier"] for case in cases}.issubset({"rules", "agent", "planner_expected"})
+
+
+def test_complex_voice_command_asr_transcripts_cover_evaluation_set() -> None:
+    cases = json.loads(EVALUATION_PATH.read_text(encoding="utf-8"))
+    transcript_manifest = json.loads(ASR_TRANSCRIPTS_PATH.read_text(encoding="utf-8"))
+    entries = transcript_manifest["transcripts"]
+    case_ids = {case["id"] for case in cases}
+    transcript_case_ids = {entry["case_id"] for entry in entries}
+
+    assert transcript_manifest["metadata"]["status"] in {"reference_seed", "real_samples"}
+    assert case_ids.issubset(transcript_case_ids)
+    assert transcript_case_ids.issubset(case_ids)
+    assert all(entry["transcript"].strip() for entry in entries)
+    assert all(entry["source"] in {"reference", "xiaomi", "local", "web_speech"} for entry in entries)
 
 
 def test_rules_tier_complex_voice_commands_match_expected_plans() -> None:
