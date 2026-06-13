@@ -128,6 +128,59 @@ SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方"
 SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
 IMAGE_POLISH_HINTS = ("精修", "丰富", "润色", "美化", "增强", "提升质感", "重新渲染", "风格化")
 GROUP_SCOPE_HINTS = ("整个", "整座", "整棵", "整扇", "整组", "整张", "全部这", "这一整")
+IMAGE_POLISH_TARGET_HINTS = (
+    "图片",
+    "图像",
+    "画面",
+    "作品",
+    "画布",
+    "生成图",
+    "生成的",
+    "生成出来",
+    "照片",
+    "肖像",
+    "头像",
+    "人物",
+    "局部",
+    "部分",
+    "区域",
+    "背景",
+    "天空",
+    "眼睛",
+    "脸",
+    "头发",
+    "衣服",
+    "海报",
+)
+IMAGE_PROMPT_TARGET_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("人物肖像", "肖像"),
+    ("肖像", "肖像"),
+    ("头像", "头像"),
+    ("人物", "人物"),
+    ("海报", "海报"),
+    ("背景", "背景"),
+    ("科幻", "科幻"),
+    ("二次元", "二次元"),
+    ("水墨", "水墨"),
+)
+IMAGE_REGION_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("眼睛", "眼睛"),
+    ("脸部", "脸部"),
+    ("脸", "脸部"),
+    ("头发", "头发"),
+    ("衣服", "衣服"),
+    ("天空", "天空"),
+    ("背景", "背景"),
+    ("窗户", "窗户"),
+    ("门", "门"),
+    ("标题", "标题"),
+    ("文字", "文字"),
+    ("左上角", "左上角"),
+    ("右上角", "右上角"),
+    ("左下角", "左下角"),
+    ("右下角", "右下角"),
+    ("中间", "中间区域"),
+)
 VOICE_NOISE_EXACT_TOKENS = {
     "",
     "嗯",
@@ -447,6 +500,14 @@ def _scene_clarification_plan(raw_text: str, normalized_text: str) -> CommandPla
         clarification_question=question,
         risk_level="medium",
         explanation="识别到多主体或全局改造指令, 需要先确认拆解方案",
+    )
+
+
+def _is_image_polish_request(normalized_text: str, render_mode: str) -> bool:
+    if render_mode == "image_polish":
+        return True
+    return any(keyword in normalized_text for keyword in IMAGE_POLISH_HINTS) and any(
+        keyword in normalized_text for keyword in IMAGE_POLISH_TARGET_HINTS
     )
 
 
@@ -1015,6 +1076,20 @@ def _generated_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     )
 
 
+def _find_image_prompt_target(text: str) -> str | None:
+    matches = [(text.rfind(keyword), len(keyword), value) for keyword, value in IMAGE_PROMPT_TARGET_KEYWORDS if keyword in text]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
+
+
+def _find_image_region_target(text: str) -> str | None:
+    matches = [(text.rfind(keyword), len(keyword), value) for keyword, value in IMAGE_REGION_KEYWORDS if keyword in text]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
+
+
 def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     style_prompt = normalized_text
     replacements = {
@@ -1029,6 +1104,13 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
         style_prompt = style_prompt.replace(source, target)
     if style_prompt == normalized_text:
         style_prompt = f"{normalized_text}, 保留当前画布的主体构图和对象位置"
+    target: dict[str, Any] = {"selector": "latest", "type": "image"}
+    prompt_target = _find_image_prompt_target(normalized_text)
+    if prompt_target:
+        target = {"selector": "all", "type": "image", "prompt_contains": prompt_target}
+    target_region = _find_image_region_target(normalized_text)
+    if target_region:
+        style_prompt = f"{style_prompt}, 局部精修目标: {target_region}, 保留其他区域"
     return CommandPlan(
         raw_text=raw_text,
         normalized_text=normalized_text,
@@ -1043,13 +1125,23 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                     "height": 768,
                     "name": "精修版本",
                     "layer_id": "foreground",
+                    "target": target,
+                    "target_region": target_region,
                 },
             )
         ],
         scene_plan=ScenePlan(
             intent="polish_artwork",
             summary="将当前画布截图和精修提示词一起发送给图生图模型",
-            steps=[ScenePlanStep(step_id="polish-image", title="精修当前画布", intent="image_to_image", operation_indexes=[0])],
+            steps=[
+                ScenePlanStep(
+                    step_id="polish-image",
+                    title="精修当前画布",
+                    intent="image_to_image",
+                    target={"target": target, "target_region": target_region} if target_region else {"target": target},
+                    operation_indexes=[0],
+                )
+            ],
             expected_object_count=1,
         ),
         confidence=0.8,
@@ -1134,7 +1226,7 @@ def parse_command(text: str) -> CommandPlan:
                 payload={"width": width, "height": height, "background": _find_color(normalized, "#ffffff")},
             )
         )
-    elif render_strategy.mode == "image_polish" or (any(keyword in normalized for keyword in IMAGE_POLISH_HINTS) and any(keyword in normalized for keyword in ("图片", "图像", "画面", "作品", "画布"))):
+    elif _is_image_polish_request(normalized, render_strategy.mode):
         return _polish_image_plan(text, normalized)
     elif render_strategy.mode == "generative_image":
         return _generated_image_plan(text, normalized)

@@ -236,6 +236,12 @@
     "expected_operation_types": ["generate_image_asset"]
   },
   {
+    "id": "partial-generated-image-polish",
+    "text": "把人物肖像的眼睛精修一下",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"]
+  },
+  {
     "id": "programmatic-swimlane-clarification",
     "text": "画一个泳道图，包含销售、运营和交付",
     "tier": "planner_expected",

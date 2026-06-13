@@ -856,6 +856,47 @@ def test_polish_image_placeholder_uses_canvas_snapshot(client: TestClient, monke
     assert "polished.image" in image_object["semantic_tags"]
 
 
+def test_partial_polish_generated_image_uses_source_image_prompt(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    source_prompt = "一张二次元人物肖像, 银色短发, 蓝色眼睛"
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "image",
+            "name": "人物肖像",
+            "semantic_tags": ["generated.image", "image"],
+            "geometry": {
+                "x": 128,
+                "y": 96,
+                "width": 512,
+                "height": 512,
+                "src": SAMPLE_PNG_DATA_URL,
+                "prompt": source_prompt,
+            },
+            "style": {"opacity": 1},
+        },
+    )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把人物肖像的眼睛精修一下"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "add_object"
+    objects = body["artwork"]["objects"]
+    assert len(objects) == 2
+    polished = objects[-1]
+    assert polished["type"] == "image"
+    assert polished["name"] == "精修版本: 人物肖像"
+    assert polished["geometry"]["x"] == 128
+    assert polished["geometry"]["width"] == 512
+    assert polished["geometry"]["source_prompt"] == source_prompt
+    assert polished["geometry"]["target_region"] == "眼睛"
+    assert "蓝色眼睛" in polished["geometry"]["prompt"]
+    assert "眼睛" in polished["geometry"]["prompt"]
+    assert "polished.region" in polished["semantic_tags"]
+
+
 def test_left_window_spatial_selector_scales_only_one_window(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子 红色屋顶 蓝色门 两扇窗户"})

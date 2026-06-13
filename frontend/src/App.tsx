@@ -104,7 +104,8 @@ function getHistoricalLatency(summary: LatencyMetricsSummary | null, percentileN
 }
 
 function shouldAttachCanvasImage(text: string): boolean {
-  return /精修|丰富|润色|美化|增强|提升质感|重新渲染|风格化/.test(text) && /图片|图像|画面|作品|画布/.test(text);
+  return /精修|丰富|润色|美化|增强|提升质感|重新渲染|风格化/.test(text)
+    && /图片|图像|画面|作品|画布|生成图|生成的|生成出来|照片|肖像|头像|人物|局部|部分|区域|背景|天空|眼睛|脸|头发|衣服|海报/.test(text);
 }
 
 export default function App() {

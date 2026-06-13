@@ -20,6 +20,7 @@ from .agent import DrawingAgentError, plan_with_drawing_agent, should_use_drawin
 from .metrics import summarize_latency_rows
 from .repositories import (
     create_artwork,
+    find_objects,
     get_artwork,
     get_latest_voice_log_by_status,
     list_voice_latency_logs,
@@ -42,6 +43,7 @@ from .schemas import (
     OperationResponse,
     TtsSynthesisRequest,
     TtsSynthesisResponse,
+    DrawingObject,
 )
 from .tts import TtsProviderError, synthesize_with_xiaomi
 
@@ -128,9 +130,84 @@ def _with_plan_metadata(plan: CommandPlan, planner_source: str) -> CommandPlan:
     return plan
 
 
+def _data_url_or_none(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped if stripped.startswith("data:image/") else None
+
+
+def _source_prompt_for_image(source_object: DrawingObject) -> str | None:
+    for key in ("prompt", "source_prompt"):
+        value = source_object.geometry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _compose_image_edit_prompt(user_prompt: str, source_prompt: str | None, target_region: str | None) -> str:
+    parts = []
+    if source_prompt:
+        parts.append(f"原图提示词: {source_prompt}")
+    if target_region:
+        parts.append(f"局部精修目标: {target_region}")
+    parts.append(f"本次用户指令: {user_prompt}")
+    parts.append("保留原图主体构图、身份特征、对象关系和整体风格, 只调整用户明确指定的部分")
+    return "。".join(parts)
+
+
+def _resolve_polish_source_payload(
+    db: Connection,
+    artwork_id: str,
+    payload: dict[str, object],
+    *,
+    canvas_image_data_url: str | None,
+) -> dict[str, object]:
+    target = payload.get("target")
+    if not isinstance(target, dict):
+        payload["input_image_data_url"] = canvas_image_data_url
+        return payload
+
+    try:
+        matches = find_objects(db, artwork_id, target)
+    except KeyError:
+        matches = []
+    if not matches and target.get("prompt_contains"):
+        fallback_target = {key: value for key, value in target.items() if key != "prompt_contains"}
+        try:
+            matches = find_objects(db, artwork_id, fallback_target)
+        except KeyError:
+            matches = []
+    image_matches = [obj for obj in matches if obj.type == "image"]
+    if not image_matches:
+        payload["input_image_data_url"] = canvas_image_data_url
+        return payload
+
+    source_object = sorted(image_matches, key=lambda obj: obj.z_index)[-1]
+    source_image = _data_url_or_none(source_object.geometry.get("src"))
+    payload["input_image_data_url"] = source_image or canvas_image_data_url
+    source_prompt = _source_prompt_for_image(source_object)
+    target_region = str(payload.get("target_region") or "").strip() or None
+    payload["prompt"] = _compose_image_edit_prompt(str(payload.get("prompt") or ""), source_prompt, target_region)
+    if source_prompt:
+        payload["source_prompt"] = source_prompt
+    payload["source_object_id"] = source_object.id
+    payload["source_object_name"] = source_object.name
+    if target_region:
+        payload["target_region"] = target_region
+    for key in ("x", "y", "width", "height", "preserveAspectRatio"):
+        if source_object.geometry.get(key) is not None:
+            payload[key] = source_object.geometry[key]
+    if source_object.name:
+        payload["name"] = f"精修版本: {source_object.name}"
+    return payload
+
+
 async def _resolve_generated_image_operations(
     plan: CommandPlan,
     *,
+    db: Connection,
+    artwork_id: str,
     canvas_image_data_url: str | None,
     canvas_width: int,
     canvas_height: int,
@@ -145,9 +222,11 @@ async def _resolve_generated_image_operations(
             continue
         if operation.operation_type == "polish_image_asset":
             payload = dict(operation.payload)
-            payload["input_image_data_url"] = canvas_image_data_url
-            payload["width"] = canvas_width
-            payload["height"] = canvas_height
+            payload = _resolve_polish_source_payload(db, artwork_id, payload, canvas_image_data_url=canvas_image_data_url)
+            if not payload.get("input_image_data_url"):
+                payload["input_image_data_url"] = canvas_image_data_url
+            payload.setdefault("width", canvas_width)
+            payload.setdefault("height", canvas_height)
             image_object = await polish_image_object(payload, fallback_width=canvas_width, fallback_height=canvas_height)
         else:
             image_object = await generate_image_object(operation.payload)
@@ -371,6 +450,8 @@ async def api_execute_command(
     try:
         plan = await _resolve_generated_image_operations(
             plan,
+            db=db,
+            artwork_id=artwork_id,
             canvas_image_data_url=request.canvas_image_data_url,
             canvas_width=current_artwork.width,
             canvas_height=current_artwork.height,

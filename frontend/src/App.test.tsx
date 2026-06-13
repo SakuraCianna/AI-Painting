@@ -228,6 +228,29 @@ describe("App", () => {
     await waitFor(() => expect(screen.getAllByText("已精修图片").length).toBeGreaterThan(0));
   });
 
+  it("attaches the current canvas image when polishing a generated image region", async () => {
+    apiMocks.submitVoiceCommand.mockResolvedValue({
+      message: "已精修人物眼睛",
+      plan: makePlan({
+        raw_text: "把人物肖像的眼睛精修一下",
+        normalized_text: "把人物肖像的眼睛精修一下",
+        operations: [{ operation_type: "polish_image_asset", payload: { target_region: "眼睛" } }],
+      }),
+      artwork: makeArtwork(),
+      metrics: makeMetrics(),
+    });
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("把人物肖像的眼睛精修一下", null);
+    });
+
+    await waitFor(() =>
+      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith("artwork-1", "把人物肖像的眼睛精修一下", "data:image/png;base64,canvas")
+    );
+  });
+
   it("runs PNG export from command results and from the toolbar", async () => {
     apiMocks.submitVoiceCommand.mockResolvedValue({
       message: "已准备导出",

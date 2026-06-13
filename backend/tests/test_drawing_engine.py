@@ -589,6 +589,30 @@ def test_find_objects_supports_chained_relative_selectors(tmp_path: Path) -> Non
         assert [obj.name for obj in matches] == ["卡片内同一行按钮"]
 
 
+def test_find_objects_supports_generated_image_prompt_selector(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        for name, prompt, x in [
+            ("人物肖像", "一张二次元人物肖像, 眼睛明亮", 120),
+            ("科幻城市", "一张科幻城市概念图", 520),
+        ]:
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": "image",
+                    "name": name,
+                    "semantic_tags": ["generated.image", "image"],
+                    "geometry": {"x": x, "y": 120, "width": 320, "height": 240, "src": "data:image/png;base64,AA==", "prompt": prompt},
+                    "style": {"opacity": 1},
+                },
+            )
+
+        matches = find_objects(connection, artwork_id, {"selector": "all", "type": "image", "prompt_contains": "肖像"})
+
+        assert [obj.name for obj in matches] == ["人物肖像"]
+
+
 def test_find_objects_supports_color_group_and_size_selector(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)
