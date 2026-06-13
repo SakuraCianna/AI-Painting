@@ -75,7 +75,7 @@ The product design is therefore **vector-first, generative-enhanced**:
 | Advanced selection | Supported | "Change the door below the roof to green" |
 | Grouped undo | Supported | Undo one full voice plan at a time |
 | Clear confirmation | Supported | "Clear canvas" -> "Confirm clear" |
-| Agent templates | First version supported | Living room, flowchart, custom swimlane diagram, infographic, poster, UI wireframe, custom org chart, Gantt chart |
+| Agent templates | First version supported | Living room, flowchart, system architecture diagram, custom swimlane diagram, infographic, poster, UI wireframe, custom org chart, Gantt chart |
 | Text-to-image | Provider pipeline supported | "Generate an anime character" |
 | Image-to-image | Provider pipeline supported | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点" |
 | Local ASR | Scaffold supported | Qwen3-ASR HTTP service |
@@ -88,6 +88,7 @@ Create a horizontal white canvas
 Draw a house with a red roof, blue door, and two windows
 Draw a cozy cabin with two trees on the left, a curved road on the right, and three clouds in the sky
 Draw a voice drawing flowchart from user voice to ASR, then to the planner, then to canvas execution
+画一个AI绘图系统架构图, 包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务
 画一个产品团队组织结构图, 包括负责人、产品经理、设计负责人、研发负责人、用户研究员、交互设计师、前端工程师、后端工程师
 画一个泳道图, 包含销售、运营和交付
 画一个泳道图, 泳道包括产品、设计、研发、测试
@@ -133,7 +134,7 @@ flowchart TD
 
 | Intent | Default Path | Why |
 | --- | --- | --- |
-| Flowcharts, swimlane diagrams, UML, ER diagrams, Gantt charts, org charts | Programmatic rendering | Text must stay readable, relation lines must stay stable, and objects must remain editable |
+| Flowcharts, swimlane diagrams, system architecture diagrams, UML, ER diagrams, Gantt charts, org charts | Programmatic rendering | Text must stay readable, relation lines must stay stable, and objects must remain editable |
 | Houses, trees, sun, grass, simple scene compositions | Programmatic rendering | The object structure is explicit and works well with SVG semantic tags |
 | Ink painting, anime, realistic illustration, sci-fi scenes | Image generation | Visual style, consistency, and detail matter more than object-level editing |
 | Refinement, enrichment, style transfer, local repainting | Image-to-image | Existing composition should be preserved while specific areas are improved |

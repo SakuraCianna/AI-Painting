@@ -1428,7 +1428,9 @@ def parse_command(text: str) -> CommandPlan:
         return _polish_image_plan(text, normalized)
     elif render_strategy.mode == "generative_image":
         return _generated_image_plan(text, normalized)
-    elif any(keyword in normalized for keyword in ("生成", "生图")) and any(keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材")):
+    elif render_strategy.mode != "programmatic" and any(keyword in normalized for keyword in ("生成", "生图")) and any(
+        keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材")
+    ):
         return _generated_image_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("人物肖像", "肖像", "头像")) and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _portrait_plan(text, normalized)

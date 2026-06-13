@@ -310,6 +310,134 @@ def _flowchart_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _system_architecture_scene_graph(text: str) -> AgentSceneGraph:
+    title = "AI 绘图系统架构" if "ai" in text or "绘图" in text else "系统架构图"
+    summary = "绘制系统架构图, 包含前端、后端、ASR、Agent、数据库和图像生成服务"
+    objects = [
+        _object(
+            "arch-service-boundary",
+            "rect",
+            "后端服务层区域",
+            {"x": 300, "y": 132, "width": 624, "height": 474, "radius": 28},
+            "#f8fafc",
+            stroke="#dadce0",
+            stroke_width=2,
+            layer_id="background",
+            group_id="system-architecture",
+            semantic_tags=["system_architecture.boundary", "system_architecture"],
+            z_index=0,
+            role="architecture_boundary",
+        ),
+        _object(
+            "arch-title",
+            "text",
+            "系统架构图标题",
+            {"x": 512, "y": 82, "content": title, "fontSize": 34},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="system-architecture",
+            semantic_tags=["system_architecture.title", "system_architecture"],
+            z_index=30,
+            role="title",
+        ),
+        _object(
+            "arch-boundary-label",
+            "text",
+            "后端服务层标签",
+            {"x": 612, "y": 166, "content": "后端服务层", "fontSize": 18},
+            "#5f6368",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="system-architecture",
+            semantic_tags=["system_architecture.boundary_label", "system_architecture"],
+            z_index=31,
+            role="label",
+        ),
+    ]
+
+    components = [
+        ("arch-frontend", "前端工作台", 80, 300, 180, 96, "#e8f0fe", "#1a73e8", "system_architecture.client"),
+        ("arch-backend", "FastAPI 后端", 360, 290, 190, 116, "#e6f4ea", "#34a853", "system_architecture.backend"),
+        ("arch-asr", "ASR 服务", 660, 205, 190, 78, "#fef7e0", "#fbbc04", "system_architecture.asr"),
+        ("arch-agent", "Agent 规划器", 660, 330, 190, 88, "#e8f0fe", "#1a73e8", "system_architecture.agent"),
+        ("arch-database", "SQLite 数据库", 450, 505, 180, 78, "#f1f3f4", "#5f6368", "system_architecture.database"),
+        ("arch-image-provider", "图像生成服务", 710, 505, 190, 78, "#fce8e6", "#ea4335", "system_architecture.image_provider"),
+    ]
+    for index, (component_id, label, x, y, width, height, fill, stroke, semantic_tag) in enumerate(components):
+        objects.append(
+            _object(
+                component_id,
+                "rect",
+                f"{label}组件",
+                {"x": x, "y": y, "width": width, "height": height, "radius": 18},
+                fill,
+                stroke=stroke,
+                stroke_width=3,
+                layer_id="middle",
+                group_id="system-architecture",
+                semantic_tags=["system_architecture.component", semantic_tag, "system_architecture"],
+                z_index=2 + index * 2,
+                role="architecture_component",
+            )
+        )
+        objects.append(
+            _object(
+                f"{component_id}-label",
+                "text",
+                f"{label}标签",
+                {"x": x + width / 2, "y": y + height / 2, "content": label, "fontSize": 21},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="system-architecture",
+                semantic_tags=["system_architecture.label", semantic_tag, "system_architecture"],
+                z_index=3 + index * 2,
+                role="component_label",
+            )
+        )
+
+    connectors = [
+        ("arch-line-client-backend", "前端调用后端", "arch-frontend", "arch-backend", 260, 348, 360, 348),
+        ("arch-line-backend-asr", "后端调用ASR服务", "arch-backend", "arch-asr", 550, 314, 660, 244),
+        ("arch-line-backend-agent", "后端调用Agent规划器", "arch-backend", "arch-agent", 550, 352, 660, 374),
+        ("arch-line-agent-db", "Agent读取写入SQLite", "arch-agent", "arch-database", 705, 418, 540, 505),
+        ("arch-line-agent-image", "Agent调用图像生成服务", "arch-agent", "arch-image-provider", 755, 418, 805, 505),
+    ]
+    relations = []
+    for index, (line_id, name, source_id, target_id, x1, y1, x2, y2) in enumerate(connectors):
+        objects.append(
+            _object(
+                line_id,
+                "line",
+                name,
+                {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                "transparent",
+                stroke="#5f6368",
+                stroke_width=3,
+                layer_id="middle",
+                group_id="system-architecture",
+                semantic_tags=["system_architecture.connector", "system_architecture"],
+                z_index=20 + index,
+                role="connector",
+            )
+        )
+        relations.append(AgentSceneRelation(subject=source_id, relation="connects_to", target=target_id, note=name))
+
+    return AgentSceneGraph(
+        intent="compose_system_architecture",
+        domain="system_architecture_scene",
+        summary=summary,
+        background="#ffffff",
+        objects=objects,
+        relations=relations,
+        confidence=0.83,
+    )
+
+
 def _infographic_scene_graph(text: str) -> AgentSceneGraph:
     if "销售" in text or "营收" in text:
         title = "销售增长信息图"
@@ -1723,6 +1851,12 @@ def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
         return _gantt_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _org_chart_scene_graph(normalized_text)
+    if (
+        any(keyword in normalized_text for keyword in ("系统架构", "技术架构", "应用架构", "架构图"))
+        and not any(keyword in normalized_text for keyword in ("组织架构", "团队架构"))
+        and any(keyword in normalized_text for keyword in ("画", "创建", "生成"))
+    ):
+        return _system_architecture_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("ui", "界面", "线框图", "原型", "草图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _ui_wireframe_scene_graph(normalized_text)
     if "海报" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
