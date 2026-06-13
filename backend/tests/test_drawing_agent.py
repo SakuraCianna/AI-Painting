@@ -122,6 +122,43 @@ def test_agent_template_builds_complex_living_room(monkeypatch) -> None:
     assert result.metrics.agent_planner_ms is not None
 
 
+def test_agent_edit_planner_builds_semantic_multi_step_edit(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("把客厅的沙发改成绿色并向右移动一点"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.intent == "edit_scene"
+    assert [operation.operation_type for operation in result.plan.operations] == ["set_style_many", "move_many"]
+    assert result.plan.operations[0].payload["target"] == {"selector": "all", "semantic_tag": "sofa"}
+    assert result.plan.operations[0].payload["style"] == {"fill": "#16a34a", "stroke": "#16a34a"}
+    assert result.plan.operations[1].payload["target"] == {"selector": "all", "semantic_tag": "sofa"}
+    assert result.plan.operations[1].payload["dx"] == 20
+    assert result.plan.operations[1].payload["dy"] == 0
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
+def test_agent_edit_planner_supports_different_targets_per_clause(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("把流程图节点改成浅蓝色，同时把箭头加粗"))
+
+    assert result.plan.planner_source == "agent"
+    assert [operation.operation_type for operation in result.plan.operations] == ["set_style_many", "set_style_many"]
+    assert result.plan.operations[0].payload["target"] == {"selector": "all", "semantic_tag": "diagram.node"}
+    assert result.plan.operations[0].payload["style"] == {"fill": "#7dd3fc", "stroke": "#7dd3fc"}
+    assert result.plan.operations[1].payload["target"] == {"selector": "all", "semantic_tag": "diagram.connector"}
+    assert result.plan.operations[1].payload["style"] == {"strokeWidth": 5}
+
+
 def test_agent_template_builds_voice_flowchart(monkeypatch) -> None:
     from app import main
 

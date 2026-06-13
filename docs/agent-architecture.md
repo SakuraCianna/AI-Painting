@@ -61,8 +61,9 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/validator.py`: SceneGraph repair 与约束校验
 - `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 classify、build、repair、validate、repair_with_model、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
+- `backend/app/agent/edit_planner.py`: 语义编辑计划器, 将“把沙发改成绿色并向右移动一点”拆成 `set_style_many`、`move_many` 等受控操作
 - `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
-- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、流程图模板、信息图模板、海报模板、UI 草图模板、组织结构图模板、甘特图模板和 Graph 调度
+- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、语义编辑模板、流程图模板、信息图模板、海报模板、UI 草图模板、组织结构图模板、甘特图模板和 Graph 调度
 - `backend/app/render_strategy.py`: 渲染策略分类器, 区分程序生成、生图模型和图生图精修
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
@@ -96,6 +97,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - 简单命令继续走规则解析, 不调用模型
 - 结构精确类图形优先走程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图
 - 已知复杂模板先用本地 Agent 模板, 例如客厅场景、语音绘图流程图、销售增长信息图、新品发布海报、产品 UI 草图、产品团队组织结构图和项目排期甘特图
+- 已知语义编辑先用本地 Agent 编辑计划, 例如改沙发颜色并移动、改流程图节点颜色并加粗箭头
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo
 - 模型输出校验失败时, Graph 会先尝试一次模型修复, 再进入编译
 - Agent 输出限制对象数量和操作数量
@@ -118,6 +120,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - 扩展领域工具: 室内、人物、泳道图、看板图
 - 将当前本地流程图模板升级为 Mermaid / PlantUML 结构图执行器
 - 增加模型驱动的 SceneGraph repair 节点
+- 扩展对象查询 DSL, 支持“左边第二棵树”“屋顶下面的门”“所有暖色小物件”
 - 增加组级移动、缩放、撤销和局部重绘
 - 引入 Mermaid / PlantUML 执行器
 - 引入 Canvas 或 OffscreenCanvas 作为滤镜、笔刷和大图导出增强层

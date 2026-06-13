@@ -107,6 +107,18 @@
     "expected_object_types": ["rect", "rect", "ellipse", "rect", "rect", "rect", "rect", "ellipse", "rect", "line", "line", "line", "triangle", "ellipse"]
   },
   {
+    "id": "agent-edit-living-room-sofa",
+    "text": "把客厅的沙发改成绿色并向右移动一点",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many", "move_many"]
+  },
+  {
+    "id": "agent-edit-flowchart-nodes-and-arrows",
+    "text": "把流程图节点改成浅蓝色，同时把箭头加粗",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many", "set_style_many"]
+  },
+  {
     "id": "agent-voice-flowchart",
     "text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行",
     "tier": "agent",
