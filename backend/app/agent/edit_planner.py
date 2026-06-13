@@ -156,13 +156,9 @@ def _relation_hints_for_clause(clause: str) -> list[dict[str, Any]]:
             }
         )
     if any(keyword in clause for keyword in ("和标题同一行", "与标题同一行", "标题同一行")):
-        relation_hints.append(
-            {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
-        )
+        relation_hints.append({"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in clause for keyword in ("和标题同一列", "与标题同一列", "标题同一列")):
-        relation_hints.append(
-            {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
-        )
+        relation_hints.append({"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in clause for keyword in ("标题前面的", "标题上层的", "图层在标题前面", "盖在标题前面")):
         relation_hints.append({"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}})
     if any(keyword in clause for keyword in ("标题后面的", "标题下层的", "图层在标题后面", "放在标题后面")):

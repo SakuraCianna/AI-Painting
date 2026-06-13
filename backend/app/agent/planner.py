@@ -95,6 +95,20 @@ ER_ENTITY_ATTRIBUTES = {
     "借阅记录": "id, 借出时间, 归还状态",
     "馆员": "id, 姓名, 工号",
 }
+OPEN_SCENE_KEYWORDS = ("草地", "太阳", "树", "小路", "道路", "路", "长椅", "云", "山", "河", "花", "房子")
+OPEN_SCENE_COUNT_WORDS = {
+    "一": 1,
+    "两": 2,
+    "二": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+    "十": 10,
+}
 
 
 class DrawingAgentError(RuntimeError):
@@ -191,20 +205,170 @@ def _living_room_scene_graph(text: str) -> AgentSceneGraph:
     sofa_color = "#2563eb" if "蓝" in text else "#0b57d0"
     lamp_color = "#facc15" if warm else "#fde68a"
     objects = [
-        _object("wall", "rect", "客厅墙面", {"x": 0, "y": 0, "width": 1024, "height": 430}, wall_color, stroke=wall_color, layer_id="background", semantic_tags=["room.wall", "living_room"]),
-        _object("floor", "rect", "木地板", {"x": 0, "y": 430, "width": 1024, "height": 338}, "#e7e5e4", stroke="#d6d3d1", layer_id="background", semantic_tags=["room.floor", "living_room"]),
-        _object("rug", "ellipse", "圆角地毯", {"cx": 430, "cy": 635, "rx": 250, "ry": 72}, "#dbeafe", stroke="#93c5fd", stroke_width=3, group_id="living-room", semantic_tags=["rug", "living_room"], z_index=1),
-        _object("sofa-back", "rect", "沙发靠背", {"x": 245, "y": 345, "width": 350, "height": 120, "radius": 28}, sofa_color, stroke="#041e49", stroke_width=3, group_id="sofa", semantic_tags=["sofa", "living_room"], z_index=2),
-        _object("sofa-seat", "rect", "沙发坐垫", {"x": 220, "y": 430, "width": 400, "height": 115, "radius": 24}, "#3b82f6", stroke="#041e49", stroke_width=3, group_id="sofa", semantic_tags=["sofa", "sofa.seat", "living_room"], z_index=3),
-        _object("sofa-left-arm", "rect", "左扶手", {"x": 200, "y": 405, "width": 60, "height": 135, "radius": 18}, "#1d4ed8", stroke="#041e49", stroke_width=3, group_id="sofa", semantic_tags=["sofa.arm", "living_room"], z_index=4),
-        _object("sofa-right-arm", "rect", "右扶手", {"x": 580, "y": 405, "width": 60, "height": 135, "radius": 18}, "#1d4ed8", stroke="#041e49", stroke_width=3, group_id="sofa", semantic_tags=["sofa.arm", "living_room"], z_index=4),
-        _object("coffee-table", "ellipse", "椭圆茶几", {"cx": 430, "cy": 580, "rx": 135, "ry": 38}, "#92400e", stroke="#451a03", stroke_width=3, group_id="living-room", semantic_tags=["coffee_table", "living_room"], z_index=5),
-        _object("window", "rect", "窗户", {"x": 710, "y": 120, "width": 190, "height": 150, "radius": 8}, "#bfdbfe", stroke="#1e3a8a", stroke_width=4, group_id="window", semantic_tags=["window", "living_room"], z_index=2),
-        _object("window-vertical", "line", "窗户竖框", {"x1": 805, "y1": 120, "x2": 805, "y2": 270}, "transparent", stroke="#1e3a8a", stroke_width=3, group_id="window", semantic_tags=["window.frame", "living_room"], z_index=3),
-        _object("window-horizontal", "line", "窗户横框", {"x1": 710, "y1": 195, "x2": 900, "y2": 195}, "transparent", stroke="#1e3a8a", stroke_width=3, group_id="window", semantic_tags=["window.frame", "living_room"], z_index=3),
-        _object("lamp-stand", "line", "落地灯支架", {"x1": 155, "y1": 315, "x2": 155, "y2": 555}, "transparent", stroke="#374151", stroke_width=5, group_id="floor-lamp", semantic_tags=["floor_lamp", "living_room"], z_index=4),
-        _object("lamp-shade", "triangle", "落地灯灯罩", {"x": 155, "y": 315, "size": 105}, lamp_color, stroke="#92400e", stroke_width=3, group_id="floor-lamp", semantic_tags=["floor_lamp", "lamp.shade", "living_room"], z_index=5),
-        _object("lamp-base", "ellipse", "落地灯底座", {"cx": 155, "cy": 560, "rx": 48, "ry": 14}, "#6b7280", stroke="#374151", stroke_width=2, group_id="floor-lamp", semantic_tags=["floor_lamp", "lamp.base", "living_room"], z_index=5),
+        _object(
+            "wall",
+            "rect",
+            "客厅墙面",
+            {"x": 0, "y": 0, "width": 1024, "height": 430},
+            wall_color,
+            stroke=wall_color,
+            layer_id="background",
+            semantic_tags=["room.wall", "living_room"],
+        ),
+        _object(
+            "floor",
+            "rect",
+            "木地板",
+            {"x": 0, "y": 430, "width": 1024, "height": 338},
+            "#e7e5e4",
+            stroke="#d6d3d1",
+            layer_id="background",
+            semantic_tags=["room.floor", "living_room"],
+        ),
+        _object(
+            "rug",
+            "ellipse",
+            "圆角地毯",
+            {"cx": 430, "cy": 635, "rx": 250, "ry": 72},
+            "#dbeafe",
+            stroke="#93c5fd",
+            stroke_width=3,
+            group_id="living-room",
+            semantic_tags=["rug", "living_room"],
+            z_index=1,
+        ),
+        _object(
+            "sofa-back",
+            "rect",
+            "沙发靠背",
+            {"x": 245, "y": 345, "width": 350, "height": 120, "radius": 28},
+            sofa_color,
+            stroke="#041e49",
+            stroke_width=3,
+            group_id="sofa",
+            semantic_tags=["sofa", "living_room"],
+            z_index=2,
+        ),
+        _object(
+            "sofa-seat",
+            "rect",
+            "沙发坐垫",
+            {"x": 220, "y": 430, "width": 400, "height": 115, "radius": 24},
+            "#3b82f6",
+            stroke="#041e49",
+            stroke_width=3,
+            group_id="sofa",
+            semantic_tags=["sofa", "sofa.seat", "living_room"],
+            z_index=3,
+        ),
+        _object(
+            "sofa-left-arm",
+            "rect",
+            "左扶手",
+            {"x": 200, "y": 405, "width": 60, "height": 135, "radius": 18},
+            "#1d4ed8",
+            stroke="#041e49",
+            stroke_width=3,
+            group_id="sofa",
+            semantic_tags=["sofa.arm", "living_room"],
+            z_index=4,
+        ),
+        _object(
+            "sofa-right-arm",
+            "rect",
+            "右扶手",
+            {"x": 580, "y": 405, "width": 60, "height": 135, "radius": 18},
+            "#1d4ed8",
+            stroke="#041e49",
+            stroke_width=3,
+            group_id="sofa",
+            semantic_tags=["sofa.arm", "living_room"],
+            z_index=4,
+        ),
+        _object(
+            "coffee-table",
+            "ellipse",
+            "椭圆茶几",
+            {"cx": 430, "cy": 580, "rx": 135, "ry": 38},
+            "#92400e",
+            stroke="#451a03",
+            stroke_width=3,
+            group_id="living-room",
+            semantic_tags=["coffee_table", "living_room"],
+            z_index=5,
+        ),
+        _object(
+            "window",
+            "rect",
+            "窗户",
+            {"x": 710, "y": 120, "width": 190, "height": 150, "radius": 8},
+            "#bfdbfe",
+            stroke="#1e3a8a",
+            stroke_width=4,
+            group_id="window",
+            semantic_tags=["window", "living_room"],
+            z_index=2,
+        ),
+        _object(
+            "window-vertical",
+            "line",
+            "窗户竖框",
+            {"x1": 805, "y1": 120, "x2": 805, "y2": 270},
+            "transparent",
+            stroke="#1e3a8a",
+            stroke_width=3,
+            group_id="window",
+            semantic_tags=["window.frame", "living_room"],
+            z_index=3,
+        ),
+        _object(
+            "window-horizontal",
+            "line",
+            "窗户横框",
+            {"x1": 710, "y1": 195, "x2": 900, "y2": 195},
+            "transparent",
+            stroke="#1e3a8a",
+            stroke_width=3,
+            group_id="window",
+            semantic_tags=["window.frame", "living_room"],
+            z_index=3,
+        ),
+        _object(
+            "lamp-stand",
+            "line",
+            "落地灯支架",
+            {"x1": 155, "y1": 315, "x2": 155, "y2": 555},
+            "transparent",
+            stroke="#374151",
+            stroke_width=5,
+            group_id="floor-lamp",
+            semantic_tags=["floor_lamp", "living_room"],
+            z_index=4,
+        ),
+        _object(
+            "lamp-shade",
+            "triangle",
+            "落地灯灯罩",
+            {"x": 155, "y": 315, "size": 105},
+            lamp_color,
+            stroke="#92400e",
+            stroke_width=3,
+            group_id="floor-lamp",
+            semantic_tags=["floor_lamp", "lamp.shade", "living_room"],
+            z_index=5,
+        ),
+        _object(
+            "lamp-base",
+            "ellipse",
+            "落地灯底座",
+            {"cx": 155, "cy": 560, "rx": 48, "ry": 14},
+            "#6b7280",
+            stroke="#374151",
+            stroke_width=2,
+            group_id="floor-lamp",
+            semantic_tags=["floor_lamp", "lamp.base", "living_room"],
+            z_index=5,
+        ),
     ]
     relations = [
         AgentSceneRelation(subject="sofa-seat", relation="in_front_of", target="wall", note="沙发位于墙面前方"),
@@ -220,6 +384,370 @@ def _living_room_scene_graph(text: str) -> AgentSceneGraph:
         objects=objects,
         relations=relations,
         confidence=0.83,
+    )
+
+
+def _open_scene_count(text: str, keyword: str, *, default: int = 1, max_count: int = 5) -> int:
+    patterns = [
+        rf"([一二两三四五六七八九十\d]+)\s*[棵个条张座朵片]*\s*{re.escape(keyword)}",
+        rf"{re.escape(keyword)}\s*([一二两三四五六七八九十\d]+)\s*[棵个条张座朵片]*",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        token = match.group(1)
+        if token.isdigit():
+            return max(1, min(int(token), max_count))
+        if token in OPEN_SCENE_COUNT_WORDS:
+            return max(1, min(OPEN_SCENE_COUNT_WORDS[token], max_count))
+    return default
+
+
+def _has_open_scene_item(text: str, *keywords: str) -> bool:
+    return any(keyword in text for keyword in keywords)
+
+
+def _open_scene_item_kinds(text: str) -> set[str]:
+    kinds: set[str] = set()
+    if _has_open_scene_item(text, "草地", "草坪"):
+        kinds.add("grass")
+    if _has_open_scene_item(text, "太阳"):
+        kinds.add("sun")
+    if _has_open_scene_item(text, "树"):
+        kinds.add("tree")
+    if _has_open_scene_item(text, "小路", "道路", "路"):
+        kinds.add("path")
+    if _has_open_scene_item(text, "长椅"):
+        kinds.add("bench")
+    if _has_open_scene_item(text, "云"):
+        kinds.add("cloud")
+    if _has_open_scene_item(text, "山"):
+        kinds.add("mountain")
+    if _has_open_scene_item(text, "河", "河流", "溪流"):
+        kinds.add("river")
+    if _has_open_scene_item(text, "花"):
+        kinds.add("flower")
+    if _has_open_scene_item(text, "房子", "小屋"):
+        kinds.add("house")
+    return kinds
+
+
+def _tree_objects(index: int, x: int, y: int) -> list[AgentSceneObject]:
+    group_id = f"tree-{index}"
+    return [
+        _object(
+            f"{group_id}-trunk",
+            "rect",
+            f"树干{index}",
+            {"x": x + 28, "y": y + 98, "width": 36, "height": 104, "radius": 8},
+            "#8b5e34",
+            stroke="#5f3b18",
+            stroke_width=3,
+            layer_id="middle",
+            group_id=group_id,
+            semantic_tags=["tree", "tree.trunk", "landscape"],
+            z_index=20 + index,
+        ),
+        _object(
+            f"{group_id}-crown",
+            "circle",
+            f"树冠{index}",
+            {"cx": x + 46, "cy": y + 84, "radius": 72},
+            "#34a853",
+            stroke="#137333",
+            stroke_width=4,
+            layer_id="middle",
+            group_id=group_id,
+            semantic_tags=["tree", "tree.crown", "landscape"],
+            z_index=24 + index,
+        ),
+    ]
+
+
+def _bench_objects() -> list[AgentSceneObject]:
+    return [
+        _object(
+            "bench-seat",
+            "rect",
+            "长椅坐面",
+            {"x": 660, "y": 560, "width": 190, "height": 34, "radius": 10},
+            "#b45309",
+            stroke="#78350f",
+            stroke_width=3,
+            layer_id="foreground",
+            group_id="bench",
+            semantic_tags=["bench", "bench.seat", "landscape"],
+            z_index=70,
+        ),
+        _object(
+            "bench-back",
+            "rect",
+            "长椅靠背",
+            {"x": 675, "y": 508, "width": 160, "height": 42, "radius": 10},
+            "#d97706",
+            stroke="#78350f",
+            stroke_width=3,
+            layer_id="foreground",
+            group_id="bench",
+            semantic_tags=["bench", "bench.back", "landscape"],
+            z_index=69,
+        ),
+        _object(
+            "bench-left-leg",
+            "line",
+            "长椅左腿",
+            {"x1": 700, "y1": 594, "x2": 690, "y2": 650},
+            "transparent",
+            stroke="#374151",
+            stroke_width=5,
+            layer_id="foreground",
+            group_id="bench",
+            semantic_tags=["bench", "bench.leg", "landscape"],
+            z_index=68,
+        ),
+        _object(
+            "bench-right-leg",
+            "line",
+            "长椅右腿",
+            {"x1": 810, "y1": 594, "x2": 820, "y2": 650},
+            "transparent",
+            stroke="#374151",
+            stroke_width=5,
+            layer_id="foreground",
+            group_id="bench",
+            semantic_tags=["bench", "bench.leg", "landscape"],
+            z_index=68,
+        ),
+    ]
+
+
+def _cloud_objects() -> list[AgentSceneObject]:
+    return [
+        _object(
+            "cloud-left",
+            "ellipse",
+            "云朵左侧",
+            {"cx": 235, "cy": 120, "rx": 72, "ry": 34},
+            "#ffffff",
+            stroke="#d1d5db",
+            stroke_width=2,
+            layer_id="background",
+            group_id="cloud",
+            semantic_tags=["cloud", "sky"],
+            z_index=5,
+        ),
+        _object(
+            "cloud-right",
+            "ellipse",
+            "云朵右侧",
+            {"cx": 300, "cy": 115, "rx": 82, "ry": 38},
+            "#ffffff",
+            stroke="#d1d5db",
+            stroke_width=2,
+            layer_id="background",
+            group_id="cloud",
+            semantic_tags=["cloud", "sky"],
+            z_index=6,
+        ),
+    ]
+
+
+def _open_composition_scene_graph(text: str) -> AgentSceneGraph | None:
+    if not any(keyword in text for keyword in ("画", "创建", "生成")):
+        return None
+    if any(keyword in text for keyword in ("房子", "小屋")) and any(keyword in text for keyword in ("屋顶", "窗户", "门", "温馨")):
+        return None
+    item_kinds = _open_scene_item_kinds(text)
+    if not item_kinds:
+        return None
+    if not any(keyword in text for keyword in ("场景", "公园", "风景", "户外")) and len(item_kinds) < 4:
+        return None
+
+    objects: list[AgentSceneObject] = [
+        _object(
+            "open-sky",
+            "rect",
+            "天空背景",
+            {"x": 0, "y": 0, "width": 1024, "height": 470},
+            "#e8f0fe",
+            stroke="#e8f0fe",
+            stroke_width=0,
+            layer_id="background",
+            semantic_tags=["sky", "scene.background"],
+            z_index=-10,
+        )
+    ]
+    relations: list[AgentSceneRelation] = []
+
+    if _has_open_scene_item(text, "草地", "草坪"):
+        objects.append(
+            _object(
+                "open-grass",
+                "rect",
+                "草地",
+                {"x": 0, "y": 470, "width": 1024, "height": 298},
+                "#34a853",
+                stroke="#1e8e3e",
+                stroke_width=0,
+                layer_id="background",
+                semantic_tags=["scene.grass", "grass", "landscape"],
+                z_index=-5,
+            )
+        )
+
+    if _has_open_scene_item(text, "太阳"):
+        objects.append(
+            _object(
+                "open-sun",
+                "circle",
+                "太阳",
+                {"cx": 850, "cy": 130, "radius": 64},
+                "#fbbc04",
+                stroke="#f29900",
+                stroke_width=4,
+                layer_id="background",
+                semantic_tags=["sun", "sky"],
+                z_index=2,
+            )
+        )
+
+    if _has_open_scene_item(text, "云"):
+        objects.extend(_cloud_objects())
+
+    if _has_open_scene_item(text, "山"):
+        objects.append(
+            _object(
+                "open-mountain",
+                "triangle",
+                "远山",
+                {"x": 310, "y": 380, "size": 330},
+                "#94a3b8",
+                stroke="#64748b",
+                stroke_width=3,
+                layer_id="background",
+                semantic_tags=["mountain", "landscape"],
+                z_index=3,
+            )
+        )
+
+    if _has_open_scene_item(text, "小路", "道路", "路"):
+        objects.append(
+            _object(
+                "open-path",
+                "polygon",
+                "弯曲小路",
+                {
+                    "points": [
+                        {"x": 470, "y": 768},
+                        {"x": 610, "y": 768},
+                        {"x": 560, "y": 610},
+                        {"x": 525, "y": 470},
+                        {"x": 485, "y": 470},
+                        {"x": 420, "y": 768},
+                    ]
+                },
+                "#f3e8d1",
+                stroke="#d6b98c",
+                stroke_width=3,
+                layer_id="middle",
+                semantic_tags=["path", "landscape"],
+                z_index=10,
+            )
+        )
+
+    if _has_open_scene_item(text, "河", "河流", "溪流"):
+        objects.append(
+            _object(
+                "open-river",
+                "path",
+                "河流",
+                {"d": "M 45 620 C 190 560 315 690 460 625 C 620 552 755 660 980 585 L 1024 708 C 800 750 620 690 470 735 C 300 785 160 690 0 735 Z"},
+                "#7dd3fc",
+                stroke="#0284c7",
+                stroke_width=3,
+                layer_id="middle",
+                semantic_tags=["river", "landscape"],
+                z_index=11,
+            )
+        )
+
+    if _has_open_scene_item(text, "树"):
+        tree_count = _open_scene_count(text, "树", default=1, max_count=5)
+        tree_positions = [(150, 430), (835, 405), (285, 440), (705, 430), (500, 420)]
+        for index in range(tree_count):
+            x, y = tree_positions[index]
+            objects.extend(_tree_objects(index + 1, x, y))
+        relations.append(AgentSceneRelation(subject="tree-1-crown", relation="above", target="open-grass", note="树木位于草地上方"))
+
+    if _has_open_scene_item(text, "长椅"):
+        objects.extend(_bench_objects())
+        relations.append(AgentSceneRelation(subject="bench-seat", relation="on", target="open-grass", note="长椅放在草地上"))
+
+    if _has_open_scene_item(text, "花"):
+        flower_count = _open_scene_count(text, "花", default=3, max_count=6)
+        for index in range(flower_count):
+            x = 135 + index * 72
+            objects.append(
+                _object(
+                    f"flower-{index + 1}",
+                    "circle",
+                    f"小花{index + 1}",
+                    {"cx": x, "cy": 650 + (index % 2) * 28, "radius": 14},
+                    "#f472b6",
+                    stroke="#be185d",
+                    stroke_width=2,
+                    layer_id="foreground",
+                    group_id="flowers",
+                    semantic_tags=["flower", "landscape"],
+                    z_index=80 + index,
+                )
+            )
+
+    if _has_open_scene_item(text, "房子", "小屋"):
+        objects.extend(
+            [
+                _object(
+                    "open-house-body",
+                    "rect",
+                    "小屋主体",
+                    {"x": 92, "y": 430, "width": 170, "height": 140, "radius": 10},
+                    "#fef7e0",
+                    stroke="#1f2937",
+                    stroke_width=4,
+                    layer_id="middle",
+                    group_id="open-house",
+                    semantic_tags=["house", "house.body", "landscape"],
+                    z_index=30,
+                ),
+                _object(
+                    "open-house-roof",
+                    "triangle",
+                    "小屋屋顶",
+                    {"x": 177, "y": 390, "size": 220},
+                    "#ea4335",
+                    stroke="#1f2937",
+                    stroke_width=4,
+                    layer_id="middle",
+                    group_id="open-house",
+                    semantic_tags=["house", "house.roof", "landscape"],
+                    z_index=34,
+                ),
+            ]
+        )
+
+    if len(objects) <= 1:
+        return None
+
+    names = "、".join(object_item.name for object_item in objects if object_item.object_id != "open-sky")
+    return AgentSceneGraph(
+        intent="compose_open_scene",
+        domain="open_vector_scene",
+        summary=f"绘制包含{names}的开放式矢量场景",
+        background="#ffffff",
+        objects=objects,
+        relations=relations,
+        confidence=0.8,
     )
 
 
@@ -519,11 +1047,7 @@ def _relationship_cardinality(name: str) -> str:
 
 def _infer_relationship_endpoints(relationship_name: str, entity_names: list[str], fallback_index: int) -> tuple[int, int]:
     matched = sorted(
-        (
-            (index, relationship_name.find(entity_name))
-            for index, entity_name in enumerate(entity_names)
-            if entity_name in relationship_name
-        ),
+        ((index, relationship_name.find(entity_name)) for index, entity_name in enumerate(entity_names) if entity_name in relationship_name),
         key=lambda item: item[1],
     )
     if len(matched) >= 2:
@@ -537,11 +1061,7 @@ def _infer_relationship_endpoints(relationship_name: str, entity_names: list[str
 
 def _extract_er_relationships(text: str, entity_names: list[str]) -> list[dict[str, Any]]:
     match = re.search(r"(?:关系|关联)\s*(?:包括|包含|有)(.+?)(?:[。]|$)", text)
-    relationship_names = (
-        [_clean_er_token(name) for name in re.split(r"[、,，;；]+", match.group(1))]
-        if match
-        else []
-    )
+    relationship_names = [_clean_er_token(name) for name in re.split(r"[、,，;；]+", match.group(1))] if match else []
     relationships: list[dict[str, Any]] = []
     used_pairs: set[tuple[int, int]] = set()
 
@@ -2006,10 +2526,7 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
     lane_height = 132 if lane_count <= 3 else 104
     lane_gap = 150 if lane_count <= 3 else 116
     lane_start_y = 160 if lane_count <= 3 else 140
-    lane_rows = [
-        (lane_name, lane_start_y + index * lane_gap, *SWIMLANE_PALETTE[index % len(SWIMLANE_PALETTE)])
-        for index, lane_name in enumerate(lane_names)
-    ]
+    lane_rows = [(lane_name, lane_start_y + index * lane_gap, *SWIMLANE_PALETTE[index % len(SWIMLANE_PALETTE)]) for index, lane_name in enumerate(lane_names)]
     step_lane_indexes = _swimlane_step_lane_indexes(lane_count)
     step_xs = [250, 470, 640, 760]
     steps = []
@@ -2163,9 +2680,13 @@ def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
     if "泳道图" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _swimlane_diagram_scene_graph(normalized_text)
-    if any(keyword in normalized_text for keyword in ("甘特图", "排期图", "项目排期", "进度计划")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+    if any(keyword in normalized_text for keyword in ("甘特图", "排期图", "项目排期", "进度计划")) and any(
+        keyword in normalized_text for keyword in ("画", "创建", "生成")
+    ):
         return _gantt_chart_scene_graph(normalized_text)
-    if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+    if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(
+        keyword in normalized_text for keyword in ("画", "创建", "生成")
+    ):
         return _org_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("er图", "er 图", "实体关系图", "实体关系")) and any(
         keyword in normalized_text for keyword in ("画", "创建", "生成")
@@ -2177,7 +2698,9 @@ def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
         and any(keyword in normalized_text for keyword in ("画", "创建", "生成"))
     ):
         return _system_architecture_scene_graph(normalized_text)
-    if any(keyword in normalized_text for keyword in ("ui", "界面", "线框图", "原型", "草图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+    if any(keyword in normalized_text for keyword in ("ui", "界面", "线框图", "原型", "草图")) and any(
+        keyword in normalized_text for keyword in ("画", "创建", "生成")
+    ):
         return _ui_wireframe_scene_graph(normalized_text)
     if "海报" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _poster_scene_graph(normalized_text)
@@ -2187,6 +2710,9 @@ def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
         return _flowchart_scene_graph(normalized_text)
     if "客厅" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _living_room_scene_graph(normalized_text)
+    open_scene_graph = _open_composition_scene_graph(normalized_text)
+    if open_scene_graph is not None:
+        return open_scene_graph
     return None
 
 

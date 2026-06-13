@@ -71,11 +71,7 @@ def build_scene_graph_prompt(text: str, *, repair_context: str | None = None) ->
         "如果无法安全理解, 设置 requires_confirmation=true 并给 clarification_question。"
         "删除、清空、大量覆盖等高风险操作必须 requires_confirmation=true。"
     )
-    user_message = (
-        "请按这个 JSON Schema 输出 SceneGraph v2。"
-        f"Schema: {_scene_graph_schema_text()}"
-        f"用户语音: {text}"
-    )
+    user_message = f"请按这个 JSON Schema 输出 SceneGraph v2。Schema: {_scene_graph_schema_text()}用户语音: {text}"
     if repair_context:
         user_message += f"需要修复的上下文: {repair_context}"
     return [

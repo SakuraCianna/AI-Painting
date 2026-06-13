@@ -1,4 +1,5 @@
 import type { Artwork, DrawingObject } from "../types";
+import { getOrderedCanvasObjects, SVG_CANVAS_RUNTIME } from "./canvasRuntime";
 
 interface CanvasStageProps {
   artwork: Artwork | null;
@@ -86,7 +87,8 @@ function renderObject(object: DrawingObject) {
   const stroke = object.style.stroke ?? "#111827";
   const strokeWidth = object.style.strokeWidth ?? 2;
   const opacity = object.style.opacity ?? 1;
-  const common = { fill, stroke, strokeWidth, opacity };
+  const objectAttrs = { "data-object-id": object.id, "data-layer-id": object.layer_id };
+  const common = { fill, stroke, strokeWidth, opacity, ...objectAttrs };
 
   if (object.type === "circle") {
     return (
@@ -151,6 +153,7 @@ function renderObject(object: DrawingObject) {
         opacity={opacity}
         markerEnd={object.type === "arrow" ? "url(#arrow-head)" : undefined}
         strokeLinecap="round"
+        {...objectAttrs}
       />
     );
   }
@@ -208,6 +211,7 @@ function renderObject(object: DrawingObject) {
         height={numeric(object.geometry.height, 512)}
         opacity={opacity}
         preserveAspectRatio={String(object.geometry.preserveAspectRatio ?? "xMidYMid slice")}
+        {...objectAttrs}
       />
     );
   }
@@ -222,6 +226,7 @@ function renderObject(object: DrawingObject) {
       textAnchor="middle"
       dominantBaseline="middle"
       opacity={opacity}
+      {...objectAttrs}
     >
       {String(object.geometry.content ?? "语音文字")}
     </text>
@@ -232,6 +237,7 @@ export function CanvasStage({ artwork }: CanvasStageProps) {
   const width = artwork?.width ?? 1024;
   const height = artwork?.height ?? 768;
   const background = artwork?.background ?? "#ffffff";
+  const orderedObjects = getOrderedCanvasObjects(artwork?.objects ?? []);
 
   return (
     <div className="canvas-shell" aria-label="语音绘图画布">
@@ -241,6 +247,9 @@ export function CanvasStage({ artwork }: CanvasStageProps) {
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label={artwork?.title ?? "语音绘图作品"}
+        data-renderer={SVG_CANVAS_RUNTIME.renderer}
+        data-object-count={orderedObjects.length}
+        data-supports-semantic-editing={String(SVG_CANVAS_RUNTIME.supportsSemanticEditing)}
       >
         <defs>
           <marker id="arrow-head" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
@@ -248,7 +257,7 @@ export function CanvasStage({ artwork }: CanvasStageProps) {
           </marker>
         </defs>
         <rect x="0" y="0" width={width} height={height} fill={background} />
-        {artwork?.objects.map(renderObject)}
+        {orderedObjects.map(renderObject)}
       </svg>
     </div>
   );

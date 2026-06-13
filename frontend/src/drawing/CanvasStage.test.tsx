@@ -87,4 +87,21 @@ describe("CanvasStage", () => {
     expect(container.querySelector("line[marker-end]")).toHaveAttribute("marker-end", "url(#arrow-head)");
     expect(container.querySelector("image")).toHaveAttribute("preserveAspectRatio", "xMidYMid slice");
   });
+
+  it("orders objects by canvas layer and z index with runtime metadata", () => {
+    const objects = [
+      drawingObject({ id: "label", type: "text", layer_id: "foreground", z_index: 1, geometry: { content: "前景文字", x: 100, y: 80 } }),
+      drawingObject({ id: "sky", type: "rect", layer_id: "background", z_index: 0, geometry: { x: 0, y: 0, width: 640, height: 160 } }),
+      drawingObject({ id: "tree", type: "rect", layer_id: "middle", z_index: 5, geometry: { x: 260, y: 180, width: 80, height: 160 } }),
+    ];
+
+    const { container } = render(<CanvasStage artwork={artwork(objects)} />);
+    const svg = container.querySelector("svg");
+    const renderedIds = Array.from(container.querySelectorAll("[data-object-id]")).map((node) => node.getAttribute("data-object-id"));
+
+    expect(svg).toHaveAttribute("data-renderer", "svg");
+    expect(svg).toHaveAttribute("data-object-count", "3");
+    expect(svg).toHaveAttribute("data-supports-semantic-editing", "true");
+    expect(renderedIds).toEqual(["sky", "tree", "label"]);
+  });
 });

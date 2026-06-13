@@ -1,0 +1,36 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 160
+extend-exclude = [
+  "backend/app/__pycache__",
+  "backend/tests/__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "backend"
+plugins = ["pydantic.mypy"]
+files = [
+  "backend/app/agent/scene_graph.py",
+  "backend/app/agent/compiler.py",
+  "backend/app/agent/graph.py",
+  "backend/app/agent/validator.py",
+  "backend/app/asr_evaluation.py",
+  "backend/app/metrics.py",
+  "backend/app/render_strategy.py",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
+check_untyped_defs = true
+disallow_untyped_defs = false
+no_implicit_optional = true
+warn_unused_ignores = true
+show_error_codes = true

@@ -283,9 +283,7 @@ async def transcribe_audio_data_url(audio_data_url: str, language: str = "zh") -
 
     for provider in get_asr_provider_chain():
         if not is_provider_configured(provider):
-            attempts.append(
-                AsrProviderAttempt(provider=provider, status="skipped", message="未配置")
-            )
+            attempts.append(AsrProviderAttempt(provider=provider, status="skipped", message="未配置"))
             continue
 
         started_at = perf_counter()

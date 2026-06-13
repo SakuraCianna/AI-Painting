@@ -89,11 +89,7 @@ def summarize_asr_evaluation_results(results: Iterable[dict[str, Any]]) -> dict[
     result_list = list(results)
     success_results = [result for result in result_list if result.get("status") == "success"]
     cer_values = [float(result["score"]["cer"]) for result in success_results if result.get("score")]
-    latency_values = [
-        float(result["latency_ms"])
-        for result in success_results
-        if isinstance(result.get("latency_ms"), int | float)
-    ]
+    latency_values = [float(result["latency_ms"]) for result in success_results if isinstance(result.get("latency_ms"), int | float)]
     provider_counts: dict[str, int] = {}
     for result in success_results:
         provider = str(result.get("provider") or "unknown")

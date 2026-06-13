@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .scene_graph import AgentSceneGraph, AgentSceneObject, AgentSceneRelation
+from .scene_graph import AgentSceneGraph, AgentSceneObject
 
 
 ALLOWED_LAYER_IDS = {"background", "base", "middle", "foreground"}
@@ -84,16 +84,9 @@ def _repair_object(scene_object: AgentSceneObject, domain: str, canvas_width: in
 
 def repair_scene_graph(graph: AgentSceneGraph) -> AgentSceneGraph:
     repaired = graph.model_copy(deep=True)
-    repaired.objects = [
-        _repair_object(scene_object, repaired.domain, repaired.canvas_width, repaired.canvas_height)
-        for scene_object in repaired.objects
-    ]
+    repaired.objects = [_repair_object(scene_object, repaired.domain, repaired.canvas_width, repaired.canvas_height) for scene_object in repaired.objects]
     object_ids = {scene_object.object_id for scene_object in repaired.objects}
-    repaired.relations = [
-        relation
-        for relation in repaired.relations
-        if relation.subject in object_ids and relation.target in object_ids
-    ]
+    repaired.relations = [relation for relation in repaired.relations if relation.subject in object_ids and relation.target in object_ids]
     if repaired.risk_level == "high":
         repaired.requires_confirmation = True
         if not repaired.clarification_question:
