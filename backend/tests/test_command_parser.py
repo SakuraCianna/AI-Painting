@@ -278,6 +278,28 @@ def test_parse_follow_up_image_adjustment_only_polish() -> None:
     assert "调整方式: 调亮" in payload["prompt"]
 
 
+def test_parse_same_subject_follow_up_does_not_override_inherited_subject() -> None:
+    plan = parse_command("同一个人衣服亮一点")
+
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert payload["target"] == {"selector": "latest", "type": "image"}
+    assert payload["target_subject"] is None
+    assert payload["target_region"] == "衣服"
+    assert payload["adjustment"] == "调亮"
+
+
+def test_parse_apply_same_image_polish_to_left_subject() -> None:
+    plan = parse_command("左边那个也这样处理")
+
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert payload["target"] == {"selector": "latest", "type": "image"}
+    assert payload["target_subject"] == "左边的人"
+    assert payload["target_region"] is None
+    assert payload["adjustment"] is None
+
+
 def test_parse_window_shape_replacement_and_spatial_scale() -> None:
     replace_plan = parse_command("把窗户改成圆形")
     assert replace_plan.operations[0].operation_type == "replace_shape_many"

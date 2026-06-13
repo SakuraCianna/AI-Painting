@@ -145,7 +145,24 @@ def _source_prompt_for_image(source_object: DrawingObject) -> str | None:
     return None
 
 
-FOLLOW_UP_POLISH_HINTS = ("继续", "再", "刚才", "上一张", "上一版", "他的", "她的", "它的", "这个", "那个", "同一个")
+FOLLOW_UP_POLISH_HINTS = (
+    "继续",
+    "再",
+    "刚才",
+    "上一张",
+    "上一版",
+    "他的",
+    "她的",
+    "它的",
+    "这个",
+    "那个",
+    "同一个",
+    "也这样处理",
+    "也这样改",
+    "也同样处理",
+    "同样处理",
+    "照这样处理",
+)
 
 
 def _is_follow_up_polish_prompt(user_prompt: str) -> bool:
@@ -224,6 +241,7 @@ def _resolve_polish_source_payload(
     if _is_follow_up_polish_prompt(user_prompt):
         target_subject = target_subject or _image_context_value(source_object, "target_subject")
         target_region = target_region or _image_context_value(source_object, "target_region")
+        adjustment = adjustment or _image_context_value(source_object, "adjustment")
     payload["prompt"] = _compose_image_edit_prompt(
         user_prompt,
         source_prompt,

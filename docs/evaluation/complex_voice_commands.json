@@ -275,6 +275,21 @@
     "expected_adjustment": "调亮"
   },
   {
+    "id": "follow-up-generated-image-same-subject-region-polish",
+    "text": "同一个人衣服亮一点",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_region": "衣服",
+    "expected_adjustment": "调亮"
+  },
+  {
+    "id": "follow-up-generated-image-apply-same-to-left-subject",
+    "text": "左边那个也这样处理",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_subject": "左边的人"
+  },
+  {
     "id": "partial-generated-image-ranked-polish",
     "text": "把第二张生成图精修一下",
     "tier": "rules",
