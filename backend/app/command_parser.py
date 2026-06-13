@@ -124,6 +124,7 @@ SCENE_OBJECT_KEYWORDS: tuple[tuple[str, str], ...] = (
 SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方", "天空", "前景", "背景", "中间", "后面", "前面")
 SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
 IMAGE_POLISH_HINTS = ("精修", "丰富", "润色", "美化", "增强", "提升质感", "重新渲染", "风格化")
+GROUP_SCOPE_HINTS = ("整个", "整座", "整棵", "整扇", "整组", "整张", "全部这", "这一整")
 VOICE_NOISE_EXACT_TOKENS = {
     "",
     "嗯",
@@ -318,6 +319,12 @@ def _extract_position_rank(text: str) -> int | None:
     return rank if rank and rank > 0 else None
 
 
+def _is_group_scope_target(text: str, semantic_tag: str | None = None) -> bool:
+    if any(hint in text for hint in GROUP_SCOPE_HINTS):
+        return True
+    return semantic_tag == "tree" and "棵" in text
+
+
 def _semantic_tags_for_text(text: str, shape: str | None = None, object_name: str | None = None) -> list[str]:
     source = f"{text} {object_name or ''}"
     tags = {tag for keyword, tag in SEMANTIC_KEYWORDS if keyword in source}
@@ -392,9 +399,12 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     if shape and many_hint:
         target["type"] = shape
     semantic_tag = _target_semantic_tag(text)
-    if semantic_tag and semantic_tag not in {"house"}:
+    if semantic_tag and (semantic_tag not in {"house"} or _is_group_scope_target(text, semantic_tag)):
         target["selector"] = "all"
         target["semantic_tag"] = semantic_tag
+    if semantic_tag and _is_group_scope_target(text, semantic_tag):
+        target["selector"] = "all"
+        target["include_group_members"] = True
     if include_layer:
         layer_id = _extract_layer_id(text)
         if layer_id:
@@ -438,7 +448,18 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
 def _is_many_target(target: dict[str, Any]) -> bool:
     return target.get("selector") == "all" or any(
         key in target
-        for key in ("semantic_tag", "semantic_tags", "layer_id", "group_id", "color", "color_group", "relative_to", "position_rank", "size_class")
+        for key in (
+            "semantic_tag",
+            "semantic_tags",
+            "layer_id",
+            "group_id",
+            "color",
+            "color_group",
+            "relative_to",
+            "position_rank",
+            "size_class",
+            "include_group_members",
+        )
     )
 
 
@@ -970,14 +991,16 @@ def _cozy_cabin_scene_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     operations.extend(_house_plan(raw_text, normalized_text).operations)
     operations.extend(
         [
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "左树树干", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.trunk"], "geometry": {"x": 180, "y": 450, "width": 38, "height": 120, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "左树树冠", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.crown"], "geometry": {"cx": 200, "cy": 405, "radius": 76}, "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 3, "opacity": 1}}}),
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "远处小树树干", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.trunk"], "geometry": {"x": 105, "y": 485, "width": 28, "height": 86, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
-            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "远处小树树冠", "layer_id": "middle", "group_id": "cabin-scene", "semantic_tags": ["tree", "tree.crown"], "geometry": {"cx": 120, "cy": 452, "radius": 54}, "style": {"fill": "#22c55e", "stroke": "#15803d", "strokeWidth": 3, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "左树树干", "layer_id": "middle", "group_id": "tree-left", "semantic_tags": ["tree", "tree.trunk", "cabin-scene"], "geometry": {"x": 180, "y": 450, "width": 38, "height": 120, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "左树树冠", "layer_id": "middle", "group_id": "tree-left", "semantic_tags": ["tree", "tree.crown", "cabin-scene"], "geometry": {"cx": 200, "cy": 405, "radius": 76}, "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 3, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "rect", "name": "远处小树树干", "layer_id": "middle", "group_id": "tree-far", "semantic_tags": ["tree", "tree.trunk", "cabin-scene"], "geometry": {"x": 105, "y": 485, "width": 28, "height": 86, "radius": 8}, "style": {"fill": "#92400e", "stroke": "#451a03", "strokeWidth": 2, "opacity": 1}}}),
+            OperationRequest(operation_type="add_object", payload={"object": {"type": "circle", "name": "远处小树树冠", "layer_id": "middle", "group_id": "tree-far", "semantic_tags": ["tree", "tree.crown", "cabin-scene"], "geometry": {"cx": 120, "cy": 452, "radius": 54}, "style": {"fill": "#22c55e", "stroke": "#15803d", "strokeWidth": 3, "opacity": 1}}}),
         ]
     )
-    for operation in operations[5:10]:
-        operation.payload["object"]["group_id"] = "cabin-scene"
+    for operation in operations[0:5]:
+        tags = set(operation.payload["object"].get("semantic_tags", []))
+        tags.add("cabin-scene")
+        operation.payload["object"]["semantic_tags"] = sorted(tags)
     return CommandPlan(
         raw_text=raw_text,
         normalized_text=normalized_text,

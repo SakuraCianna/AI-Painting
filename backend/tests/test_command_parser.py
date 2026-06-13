@@ -221,6 +221,7 @@ def test_parse_object_query_dsl_selectors() -> None:
     assert ranked_target["semantic_tag"] == "tree"
     assert ranked_target["position"] == "leftmost"
     assert ranked_target["position_rank"] == 2
+    assert ranked_target["include_group_members"] is True
 
     relative_plan = parse_command("把屋顶下面的门改成绿色")
     relative_target = relative_plan.operations[0].payload["target"]
@@ -232,6 +233,12 @@ def test_parse_object_query_dsl_selectors() -> None:
     assert color_group_plan.operations[0].operation_type == "move_many"
     assert color_group_target["color_group"] == "warm"
     assert color_group_target["size_class"] == "small"
+
+    group_plan = parse_command("把整个房子向右移动一点")
+    group_target = group_plan.operations[0].payload["target"]
+    assert group_plan.operations[0].operation_type == "move_many"
+    assert group_target["semantic_tag"] == "house"
+    assert group_target["include_group_members"] is True
 
 
 def test_parse_cozy_cabin_scene_as_executable_plan() -> None:

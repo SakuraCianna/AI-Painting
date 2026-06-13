@@ -12,6 +12,7 @@ CREATE_KEYWORDS = ("画", "创建", "生成", "新建", "添加")
 CLAUSE_SPLIT_PATTERN = re.compile(r"(?:，|,|。|；|;|并且|同时|然后|接着|并)")
 NUMBER_PATTERN = re.compile(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:像素|px)?")
 POSITION_RANK_PATTERN = re.compile(r"第?\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|棵|扇|座|条|张|块|只|件)")
+GROUP_SCOPE_HINTS = ("整个", "整座", "整棵", "整扇", "整组", "整张", "全部这", "这一整")
 
 
 TARGET_RULES: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
@@ -19,6 +20,7 @@ TARGET_RULES: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
     (("房子的门", "小屋的门", "房子门", "门"), {"selector": "all", "semantic_tag": "house.door"}),
     (("屋顶",), {"selector": "all", "semantic_tag": "house.roof"}),
     (("房子主体", "墙体", "墙面"), {"selector": "all", "semantic_tag": "house.body"}),
+    (("房子", "小屋"), {"selector": "all", "semantic_tag": "house"}),
     (("树冠",), {"selector": "all", "semantic_tag": "tree.crown"}),
     (("树", "小树", "大树"), {"selector": "all", "semantic_tag": "tree"}),
     (("沙发",), {"selector": "all", "semantic_tag": "sofa"}),
@@ -93,8 +95,17 @@ def _extract_position_rank(text: str) -> int | None:
     return rank if rank and rank > 0 else None
 
 
+def _is_group_scope_target(text: str, target: dict[str, Any]) -> bool:
+    if any(hint in text for hint in GROUP_SCOPE_HINTS):
+        return True
+    return target.get("semantic_tag") == "tree" and "棵" in text
+
+
 def _apply_query_hints(clause: str, target: dict[str, Any]) -> dict[str, Any]:
     enriched = _copy_target(target)
+    if _is_group_scope_target(clause, enriched):
+        enriched["selector"] = "all"
+        enriched["include_group_members"] = True
     if "左边" in clause or "左侧" in clause:
         enriched["position"] = "leftmost"
     elif "右边" in clause or "右侧" in clause:
@@ -151,7 +162,18 @@ def _target_is_specific(target: dict[str, Any] | None) -> bool:
             target.get("selector") == "all"
             or any(
                 key in target
-                for key in ("semantic_tag", "semantic_tags", "type", "layer_id", "group_id", "color_group", "relative_to", "position_rank", "size_class")
+                for key in (
+                    "semantic_tag",
+                    "semantic_tags",
+                    "type",
+                    "layer_id",
+                    "group_id",
+                    "color_group",
+                    "relative_to",
+                    "position_rank",
+                    "size_class",
+                    "include_group_members",
+                )
             )
         )
     )
