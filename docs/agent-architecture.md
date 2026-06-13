@@ -62,7 +62,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 classify、build、repair、validate、repair_with_model、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
 - `backend/app/agent/edit_planner.py`: 语义编辑计划器, 将“把沙发改成绿色并向右移动一点”“把屋顶下面的门改成绿色”拆成 `set_style_many`、`move_many` 等受控操作
-- `backend/app/repositories.py`: 对象查询 DSL 执行层, 支持排序选择、相对位置、颜色温度和小物件筛选
+- `backend/app/repositories.py`: 对象查询 DSL 执行层, 支持排序选择、相对位置、颜色温度、小物件筛选和组级扩展
 - `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
 - `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、语义编辑模板、流程图模板、信息图模板、海报模板、UI 草图模板、组织结构图模板、甘特图模板和 Graph 调度
 - `backend/app/render_strategy.py`: 渲染策略分类器, 区分程序生成、生图模型和图生图精修
@@ -121,7 +121,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - 扩展领域工具: 室内、人物、泳道图、看板图
 - 将当前本地流程图模板升级为 Mermaid / PlantUML 结构图执行器
 - 增加模型驱动的 SceneGraph repair 节点
-- 扩展对象查询 DSL 到编组级语义选择, 例如把树干和树冠作为同一棵树移动或缩放
-- 增加组级移动、缩放、撤销和局部重绘
+- 完善编组编辑, 例如取消编组、组内排序、组级局部重绘和命名历史
+- 增加更细的语义关系选择, 例如“靠近门的那棵树”“挡住标题的图片”
 - 引入 Mermaid / PlantUML 执行器
 - 引入 Canvas 或 OffscreenCanvas 作为滤镜、笔刷和大图导出增强层

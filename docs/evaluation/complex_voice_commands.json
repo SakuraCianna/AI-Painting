@@ -139,6 +139,12 @@
     "expected_operation_types": ["move_many"]
   },
   {
+    "id": "agent-move-whole-sofa-group",
+    "text": "把整个沙发向右移动一点",
+    "tier": "agent",
+    "expected_operation_types": ["move_many"]
+  },
+  {
     "id": "agent-voice-flowchart",
     "text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行",
     "tier": "agent",

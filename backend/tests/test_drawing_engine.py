@@ -175,6 +175,44 @@ def test_find_objects_supports_position_rank_selector(tmp_path: Path) -> None:
         assert [obj.name for obj in matches] == ["中树"]
 
 
+def test_find_objects_expands_ranked_semantic_group(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        tree_parts = [
+            ("远树树干", "tree-far", "rect", {"x": 100, "y": 450, "width": 26, "height": 80}, "#92400e"),
+            ("远树树冠", "tree-far", "circle", {"cx": 115, "cy": 420, "radius": 50}, "#16a34a"),
+            ("左树树干", "tree-left", "rect", {"x": 220, "y": 430, "width": 34, "height": 110}, "#92400e"),
+            ("左树树冠", "tree-left", "circle", {"cx": 240, "cy": 380, "radius": 70}, "#22c55e"),
+        ]
+        for name, group_id, object_type, geometry, fill in tree_parts:
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": object_type,
+                    "name": name,
+                    "group_id": group_id,
+                    "semantic_tags": ["tree"],
+                    "geometry": geometry,
+                    "style": {"fill": fill, "stroke": fill, "strokeWidth": 2},
+                },
+            )
+
+        matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "semantic_tag": "tree",
+                "position": "leftmost",
+                "position_rank": 2,
+                "include_group_members": True,
+            },
+        )
+
+        assert {obj.name for obj in matches} == {"左树树干", "左树树冠"}
+
+
 def test_find_objects_supports_relative_selector(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)

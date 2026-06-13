@@ -205,6 +205,67 @@ def test_agent_query_dsl_moves_warm_small_objects_only(client: TestClient, monke
     assert after_y["#2563eb"] == before_y["#2563eb"]
 
 
+def test_group_query_moves_entire_sofa_including_arms(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    create_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个温馨客厅，有沙发、茶几、窗户和落地灯"})
+    assert create_response.status_code == 200
+    before_sofa_parts = [obj for obj in create_response.json()["artwork"]["objects"] if obj["group_id"] == "sofa"]
+    before_x = {obj["name"]: obj["geometry"].get("x") for obj in before_sofa_parts if "x" in obj["geometry"]}
+    assert {"左扶手", "右扶手"}.issubset(before_x)
+
+    move_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把整个沙发向右移动一点"})
+
+    assert move_response.status_code == 200
+    body = move_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    moved_sofa_parts = [obj for obj in body["artwork"]["objects"] if obj["group_id"] == "sofa"]
+    for obj in moved_sofa_parts:
+        if obj["name"] in before_x:
+            assert obj["geometry"]["x"] == before_x[obj["name"]] + 20
+
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    restored_sofa_parts = [obj for obj in undo_response.json()["artwork"]["objects"] if obj["group_id"] == "sofa"]
+    for obj in restored_sofa_parts:
+        if obj["name"] in before_x:
+            assert obj["geometry"]["x"] == before_x[obj["name"]]
+
+
+def test_group_query_recolors_second_tree_group(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    create_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云"},
+    )
+    assert create_response.status_code == 200
+    before_objects = create_response.json()["artwork"]["objects"]
+    before_left_tree = [obj for obj in before_objects if obj["group_id"] == "tree-left"]
+    before_far_tree = [obj for obj in before_objects if obj["group_id"] == "tree-far"]
+    assert len(before_left_tree) == 2
+    assert len(before_far_tree) == 2
+
+    edit_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把左边第二棵树改成黄色"})
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    edited_left_tree = [obj for obj in body["artwork"]["objects"] if obj["group_id"] == "tree-left"]
+    edited_far_tree = [obj for obj in body["artwork"]["objects"] if obj["group_id"] == "tree-far"]
+    assert all(obj["style"]["fill"] == "#facc15" for obj in edited_left_tree)
+    assert any(obj["style"]["fill"] != "#facc15" for obj in edited_far_tree)
+
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    restored_left_tree = [obj for obj in undo_response.json()["artwork"]["objects"] if obj["group_id"] == "tree-left"]
+    assert [obj["style"]["fill"] for obj in restored_left_tree] == [obj["style"]["fill"] for obj in before_left_tree]
+
+
 def test_agent_flowchart_command_executes_diagram_scene(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)

@@ -234,7 +234,8 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
         return [row_to_object(row) for row in rows]
 
     if selector.get("selector") == "latest":
-        return [find_latest_object(connection, artwork_id, selector.get("type"))]
+        latest_object = find_latest_object(connection, artwork_id, selector.get("type"))
+        return _expand_group_members(connection, artwork_id, [latest_object]) if _should_expand_group(selector) else [latest_object]
 
     object_type = selector.get("type")
     if object_type:
@@ -292,7 +293,12 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
         objects = _filter_objects_by_relation(connection, artwork_id, objects, relative_to)
     position = selector.get("position")
     if position and objects:
-        objects = _filter_objects_by_position(objects, str(position), selector)
+        if _should_expand_group(selector):
+            objects = _filter_groups_by_position(objects, str(position), selector)
+        else:
+            objects = _filter_objects_by_position(objects, str(position), selector)
+    if _should_expand_group(selector):
+        objects = _expand_group_members(connection, artwork_id, objects)
     return objects
 
 
@@ -362,6 +368,67 @@ def _object_center(obj: DrawingObject) -> tuple[float, float]:
         if xs and ys:
             return sum(xs) / len(xs), sum(ys) / len(ys)
     return 0, 0
+
+
+def _should_expand_group(selector: dict[str, Any]) -> bool:
+    value = selector.get("include_group_members", selector.get("expand_group", selector.get("whole_group", False)))
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "group", "groups"}
+    return bool(value)
+
+
+def _group_key(obj: DrawingObject) -> str:
+    return obj.group_id or obj.id
+
+
+def _objects_by_group(objects: list[DrawingObject]) -> dict[str, list[DrawingObject]]:
+    groups: dict[str, list[DrawingObject]] = {}
+    for obj in objects:
+        groups.setdefault(_group_key(obj), []).append(obj)
+    return groups
+
+
+def _group_center(objects: list[DrawingObject]) -> tuple[float, float]:
+    bounds = [_object_bounds(obj) for obj in objects]
+    left = min(bound[0] for bound in bounds)
+    top = min(bound[1] for bound in bounds)
+    right = max(bound[2] for bound in bounds)
+    bottom = max(bound[3] for bound in bounds)
+    return (left + right) / 2, (top + bottom) / 2
+
+
+def _filter_groups_by_position(objects: list[DrawingObject], position: str, selector: dict[str, Any]) -> list[DrawingObject]:
+    normalized_position = POSITION_ALIASES.get(position, position)
+    if normalized_position not in POSITION_SORT_CONFIG:
+        return objects
+    key_index, reverse = POSITION_SORT_CONFIG[normalized_position]
+    groups = _objects_by_group(objects)
+    sorted_groups = sorted(groups.values(), key=lambda group_objects: _group_center(group_objects)[key_index], reverse=reverse)
+    rank = _selector_rank(selector)
+    if rank is not None:
+        selected_groups = [sorted_groups[rank - 1]] if rank <= len(sorted_groups) else []
+    else:
+        selected_groups = sorted_groups[:1]
+    if not selected_groups:
+        return []
+    selected_ids = {obj.id for group in selected_groups for obj in group}
+    return [obj for obj in objects if obj.id in selected_ids]
+
+
+def _expand_group_members(connection: sqlite3.Connection, artwork_id: str, anchors: list[DrawingObject]) -> list[DrawingObject]:
+    group_ids = sorted({obj.group_id for obj in anchors if obj.group_id})
+    if not group_ids:
+        return anchors
+    placeholders = ",".join("?" for _ in group_ids)
+    rows = connection.execute(
+        f"""
+        SELECT * FROM drawing_objects
+        WHERE artwork_id = ? AND group_id IN ({placeholders})
+        ORDER BY z_index ASC, created_at ASC
+        """,
+        (artwork_id, *group_ids),
+    ).fetchall()
+    return [row_to_object(row) for row in rows]
 
 
 def _style_colors(obj: DrawingObject) -> list[str]:

@@ -173,6 +173,7 @@ def test_agent_edit_planner_builds_object_query_dsl_targets(monkeypatch) -> None
     assert ranked_target["semantic_tag"] == "tree"
     assert ranked_target["position"] == "leftmost"
     assert ranked_target["position_rank"] == 2
+    assert ranked_target["include_group_members"] is True
 
     relative_result = asyncio.run(main.build_command_plan_with_metrics("把屋顶下面的门改成绿色"))
     relative_target = relative_result.plan.operations[0].payload["target"]
@@ -189,6 +190,14 @@ def test_agent_edit_planner_builds_object_query_dsl_targets(monkeypatch) -> None
     assert color_group_target["color_group"] == "warm"
     assert color_group_target["size_class"] == "small"
     assert color_group_target["max_area"] == 25000
+
+    group_result = asyncio.run(main.build_command_plan_with_metrics("把整个沙发向右移动一点"))
+    group_target = group_result.plan.operations[0].payload["target"]
+
+    assert group_result.plan.planner_source == "agent"
+    assert group_result.plan.operations[0].operation_type == "move_many"
+    assert group_target["semantic_tag"] == "sofa"
+    assert group_target["include_group_members"] is True
 
 
 def test_agent_template_builds_voice_flowchart(monkeypatch) -> None:
