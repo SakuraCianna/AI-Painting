@@ -155,6 +155,18 @@
     "expected_operation_types": ["generate_image_asset"]
   },
   {
+    "id": "anime-character-image-generation",
+    "text": "画一个二次元动漫人物",
+    "tier": "rules",
+    "expected_operation_types": ["generate_image_asset"]
+  },
+  {
+    "id": "programmatic-swimlane-clarification",
+    "text": "画一个泳道图，包含销售、运营和交付",
+    "tier": "planner_expected",
+    "reason": "泳道图属于结构精确类图形, 需要先拆成泳道、节点和关系后再程序渲染"
+  },
+  {
     "id": "replace-window-shape",
     "text": "把窗户改成圆形",
     "tier": "rules",
