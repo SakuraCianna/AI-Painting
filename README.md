@@ -197,7 +197,9 @@ $env:AI_PAINTING_MIMO_TTS_VOICE="default_zh"
 $env:AI_PAINTING_MIMO_TTS_STYLE="自然 清晰"
 $env:AI_PAINTING_IMAGE_PROVIDER="placeholder"
 $env:AI_PAINTING_TEXT_IMAGE_URL="http://127.0.0.1:9010/generate"
+$env:AI_PAINTING_TEXT_IMAGE_BASE_URL="https://corenode.best/v1"
 $env:AI_PAINTING_TEXT_IMAGE_MODEL="local-text-to-image"
+$env:AI_PAINTING_TEXT_IMAGE_SIZE="1024x768"
 $env:AI_PAINTING_TEXT_IMAGE_WIDTH="512"
 $env:AI_PAINTING_TEXT_IMAGE_HEIGHT="512"
 $env:AI_PAINTING_IMAGE_EDIT_PROVIDER="openai_compatible"
@@ -205,6 +207,8 @@ $env:AI_PAINTING_IMAGE_EDIT_BASE_URL="https://corenode.best/v1"
 $env:AI_PAINTING_IMAGE_EDIT_MODEL="gpt-image-2"
 $env:AI_PAINTING_IMAGE_EDIT_SIZE="1024x768"
 $env:AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT="b64_json"
+$env:AI_PAINTING_OPENAI_IMAGE_MODEL="gpt-image-2"
+$env:AI_PAINTING_OPENAI_IMAGE_SIZE="auto"
 ```
 
 说明:
@@ -227,18 +231,26 @@ $env:AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT="b64_json"
 - `AI_PAINTING_MIMO_TTS_MODEL`: 小米语音合成模型, 默认是 `mimo-v2-tts`
 - `AI_PAINTING_MIMO_TTS_VOICE`: 小米语音合成音色, 默认是 `default_zh`
 - `AI_PAINTING_MIMO_TTS_STYLE`: 小米语音合成风格, 默认可不设置
-- `AI_PAINTING_IMAGE_PROVIDER`: 文字转图片 Provider, 默认 `placeholder`, 可设置为 `http` 或 `disabled`
+- `AI_PAINTING_IMAGE_PROVIDER`: 文字转图片 Provider, 默认 `placeholder`, 可设置为 `http`、`openai_compatible` 或 `disabled`
 - `AI_PAINTING_TEXT_IMAGE_URL`: HTTP 文字转图片服务地址, 仅 `AI_PAINTING_IMAGE_PROVIDER=http` 时需要
-- `AI_PAINTING_TEXT_IMAGE_API_KEY`: HTTP 文字转图片服务 Key, 可选, 不要写入 README 或 PR 描述
-- `AI_PAINTING_TEXT_IMAGE_MODEL`: HTTP 文字转图片模型名, 可选
+- `AI_PAINTING_TEXT_IMAGE_BASE_URL`: OpenAI 兼容文字转图片 Base URL, 设置为中转站地址时优先调用中转站
+- `AI_PAINTING_TEXT_IMAGE_API_KEY`: HTTP 或 OpenAI 兼容文字转图片服务 Key, 可选, 不要写入 README 或 PR 描述
+- `AI_PAINTING_TEXT_IMAGE_MODEL`: HTTP 或 OpenAI 兼容文字转图片模型名, 可选
+- `AI_PAINTING_TEXT_IMAGE_SIZE`: OpenAI 兼容文字转图片输出尺寸, 用于中转站
 - `AI_PAINTING_TEXT_IMAGE_WIDTH`: 默认生成图片宽度, 默认 512
 - `AI_PAINTING_TEXT_IMAGE_HEIGHT`: 默认生成图片高度, 默认 512
 - `AI_PAINTING_IMAGE_EDIT_PROVIDER`: 图生图精修 Provider, 默认 `placeholder`, 可设置为 `openai_compatible` 或 `disabled`
-- `AI_PAINTING_IMAGE_EDIT_BASE_URL`: OpenAI 兼容图像编辑接口 Base URL
+- `AI_PAINTING_IMAGE_EDIT_BASE_URL`: OpenAI 兼容图像编辑接口 Base URL, 设置为中转站地址时优先调用中转站
 - `AI_PAINTING_IMAGE_EDIT_API_KEY`: 图生图精修 API Key, 不要提交到 git
 - `AI_PAINTING_IMAGE_EDIT_MODEL`: 图生图精修模型名
-- `AI_PAINTING_IMAGE_EDIT_SIZE`: 图生图精修输出尺寸, 默认跟随画布尺寸
+- `AI_PAINTING_IMAGE_EDIT_SIZE`: 图生图精修输出尺寸, 用于中转站, 默认跟随画布尺寸
 - `AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT`: 图生图精修响应格式, 默认 `b64_json`
+- `AI_PAINTING_OPENAI_API_KEY`: OpenAI 官方 API Key, 仅作为中转站失败后的备用, 也可使用标准 `OPENAI_API_KEY`
+- `AI_PAINTING_OPENAI_BASE_URL`: OpenAI 官方 Base URL, 默认 `https://api.openai.com/v1`
+- `AI_PAINTING_OPENAI_IMAGE_MODEL`: OpenAI 官方图片模型, 默认继承 `gpt-image-2`
+- `AI_PAINTING_OPENAI_IMAGE_SIZE`: OpenAI 官方图片尺寸, 默认 `auto`, 官方接口支持 `1024x1024`、`1024x1536`、`1536x1024` 或 `auto`
+- `AI_PAINTING_OPENAI_IMAGE_QUALITY`: OpenAI 官方图片质量, 默认 `auto`
+- `AI_PAINTING_OPENAI_IMAGE_OUTPUT_FORMAT`: OpenAI 官方图片输出格式, 默认 `png`
 
 本地 ASR HTTP 服务约定:
 
@@ -307,17 +319,21 @@ Drawing Agent 架构详见 [docs/agent-architecture.md](docs/agent-architecture.
 2. 后端执行前会把该计划解析为 `image` 绘图对象
 3. 默认 `placeholder` Provider 只生成可渲染占位图, 用于验证画布链路
 4. 配置 `AI_PAINTING_IMAGE_PROVIDER=http` 和 `AI_PAINTING_TEXT_IMAGE_URL` 后, 后端会调用外部文字转图片服务
-5. HTTP 服务可以返回图片二进制, 也可以返回包含 `image_data_url`、`data_url`、`url`、`image_url` 或 `b64_json` 的 JSON
-6. 生成图片作为普通画布对象保存, 可以继续用语音移动、缩放、撤销和删除
+5. 配置 `AI_PAINTING_IMAGE_PROVIDER=openai_compatible` 后, 后端会优先调用中转站 `{AI_PAINTING_TEXT_IMAGE_BASE_URL}/images/generations`
+6. 如果中转站失败且配置了 `AI_PAINTING_OPENAI_API_KEY` 或 `OPENAI_API_KEY`, 后端会备用调用 OpenAI 官方 `/images/generations`
+7. HTTP 服务可以返回图片二进制, 也可以返回包含 `image_data_url`、`data_url`、`url`、`image_url` 或 `b64_json` 的 JSON
+8. 生成图片作为普通画布对象保存, 可以继续用语音移动、缩放、撤销和删除
 
 图生图精修:
 
 1. “精修我的图片”“丰富当前画面”“把当前作品风格化”会生成 `polish_image_asset` 计划
 2. 前端会把当前 SVG 画布转成 PNG data URL, 和用户提示词一起提交到后端
 3. 后端使用 `AI_PAINTING_IMAGE_EDIT_PROVIDER` 选择 Provider
-4. 配置 `openai_compatible` 后, 后端会调用 `{AI_PAINTING_IMAGE_EDIT_BASE_URL}/images/edits`
-5. 返回图片会作为覆盖整张画布的 `image` 对象加入作品, 原始矢量对象仍保留在下层
-6. 用户可以用“撤销”移除精修图, 回到可编辑源画布
+4. 配置 `openai_compatible` 后, 后端会优先调用中转站 `{AI_PAINTING_IMAGE_EDIT_BASE_URL}/images/edits`
+5. 如果中转站失败且配置了 `AI_PAINTING_OPENAI_API_KEY` 或 `OPENAI_API_KEY`, 后端会备用调用 OpenAI 官方 `/images/edits`
+6. 官方 OpenAI 图片接口默认使用 `AI_PAINTING_OPENAI_IMAGE_SIZE=auto`, 避免把中转站可用但官方不支持的 `1024x768` 直接传给官方接口
+7. 返回图片会作为覆盖整张画布的 `image` 对象加入作品, 原始矢量对象仍保留在下层
+8. 用户可以用“撤销”移除精修图, 回到可编辑源画布
 
 ## 项目结构
 

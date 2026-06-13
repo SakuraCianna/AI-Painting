@@ -14,6 +14,8 @@ class ImageGenerationError(RuntimeError):
 
 
 DATA_URL_PATTERN = re.compile(r"^data:(?P<mime>[-\w.+/]+);base64,(?P<data>.+)$", re.DOTALL)
+OPENAI_OFFICIAL_BASE_URL = "https://api.openai.com/v1"
+OFFICIAL_IMAGE_SIZES = {"1024x1024", "1024x1536", "1536x1024", "auto"}
 
 
 def _read_int_env(name: str, default: int) -> int:
@@ -29,6 +31,22 @@ def _bounded_dimension(value: Any, default: int) -> int:
     except (TypeError, ValueError):
         parsed = default
     return max(128, min(parsed, 2048))
+
+
+def _read_float_env(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+def _get_openai_api_key() -> str | None:
+    return os.getenv("AI_PAINTING_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+
+def _official_image_size(default: str = "auto") -> str:
+    configured = os.getenv("AI_PAINTING_OPENAI_IMAGE_SIZE", default).strip()
+    return configured if configured in OFFICIAL_IMAGE_SIZES else "auto"
 
 
 def _svg_placeholder_data_url(prompt: str, width: int, height: int) -> str:
@@ -121,6 +139,92 @@ async def _generate_with_http(prompt: str, width: int, height: int, style: str |
     return image_source, "http"
 
 
+async def _post_image_generation_json(
+    endpoint: str,
+    api_key: str,
+    body: dict[str, Any],
+    timeout: float,
+    provider_name: str,
+) -> tuple[str, str]:
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(endpoint, headers=headers, json={key: value for key, value in body.items() if value is not None})
+    if response.status_code >= 400:
+        raise ImageGenerationError(f"文字转图片请求失败: HTTP {response.status_code}")
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith("image/"):
+        encoded = base64.b64encode(response.content).decode("ascii")
+        return f"data:{content_type.split(';')[0]};base64,{encoded}", provider_name
+    try:
+        image_source = _extract_image_source(response.json())
+    except ValueError as exc:
+        raise ImageGenerationError("文字转图片响应不是图片或 JSON") from exc
+    if not image_source:
+        raise ImageGenerationError("文字转图片响应缺少图片地址")
+    return image_source, provider_name
+
+
+async def _generate_with_openai_compatible(prompt: str, width: int, height: int, style: str | None) -> tuple[str, str]:
+    base_url = os.getenv("AI_PAINTING_TEXT_IMAGE_BASE_URL", os.getenv("AI_PAINTING_IMAGE_EDIT_BASE_URL", "")).rstrip("/")
+    api_key = os.getenv("AI_PAINTING_TEXT_IMAGE_API_KEY") or os.getenv("AI_PAINTING_IMAGE_EDIT_API_KEY")
+    if not base_url:
+        raise ImageGenerationError("未配置 AI_PAINTING_TEXT_IMAGE_BASE_URL")
+    if not api_key:
+        raise ImageGenerationError("未配置 AI_PAINTING_TEXT_IMAGE_API_KEY")
+    endpoint = os.getenv("AI_PAINTING_TEXT_IMAGE_ENDPOINT") or f"{base_url}/images/generations"
+    timeout = _read_float_env("AI_PAINTING_TEXT_IMAGE_TIMEOUT", 120.0)
+    body = {
+        "model": os.getenv("AI_PAINTING_TEXT_IMAGE_MODEL", os.getenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")),
+        "prompt": prompt,
+        "size": os.getenv("AI_PAINTING_TEXT_IMAGE_SIZE") or f"{width}x{height}",
+        "style": style,
+        "response_format": os.getenv("AI_PAINTING_TEXT_IMAGE_RESPONSE_FORMAT", "b64_json"),
+    }
+    try:
+        return await _post_image_generation_json(endpoint, api_key, body, timeout, "openai_compatible")
+    except ImageGenerationError as primary_error:
+        openai_key = _get_openai_api_key()
+        if not openai_key:
+            raise primary_error
+        official_base_url = os.getenv("AI_PAINTING_OPENAI_BASE_URL", OPENAI_OFFICIAL_BASE_URL).rstrip("/")
+        official_endpoint = f"{official_base_url}/images/generations"
+        official_body = {
+            "model": os.getenv("AI_PAINTING_OPENAI_IMAGE_MODEL", body["model"]),
+            "prompt": prompt,
+            "size": _official_image_size(),
+            "quality": os.getenv("AI_PAINTING_OPENAI_IMAGE_QUALITY", "auto"),
+            "background": os.getenv("AI_PAINTING_OPENAI_IMAGE_BACKGROUND", "auto"),
+            "output_format": os.getenv("AI_PAINTING_OPENAI_IMAGE_OUTPUT_FORMAT", "png"),
+        }
+        try:
+            src, _ = await _post_image_generation_json(official_endpoint, openai_key, official_body, timeout, "openai_official")
+            return src, "openai_official"
+        except ImageGenerationError as fallback_error:
+            raise ImageGenerationError(f"{primary_error}; OpenAI 官方备用失败: {fallback_error}") from fallback_error
+
+
+async def _post_image_edit_multipart(
+    endpoint: str,
+    api_key: str,
+    fields: dict[str, Any],
+    files: dict[str, tuple[str, bytes, str]],
+    timeout: float,
+    provider_name: str,
+) -> tuple[str, str]:
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(endpoint, headers=headers, data={key: value for key, value in fields.items() if value is not None}, files=files)
+    if response.status_code >= 400:
+        raise ImageGenerationError(f"图生图精修请求失败: HTTP {response.status_code}")
+    try:
+        image_source = _extract_image_source(response.json())
+    except ValueError as exc:
+        raise ImageGenerationError("图生图精修响应不是 JSON") from exc
+    if not image_source:
+        raise ImageGenerationError("图生图精修响应缺少图片地址")
+    return image_source, provider_name
+
+
 async def _edit_with_openai_compatible(prompt: str, image_data_url: str, width: int, height: int) -> tuple[str, str]:
     base_url = os.getenv("AI_PAINTING_IMAGE_EDIT_BASE_URL", "").rstrip("/")
     api_key = os.getenv("AI_PAINTING_IMAGE_EDIT_API_KEY")
@@ -131,7 +235,7 @@ async def _edit_with_openai_compatible(prompt: str, image_data_url: str, width: 
     mime, image_bytes = _decode_image_data_url(image_data_url)
     endpoint = os.getenv("AI_PAINTING_IMAGE_EDIT_ENDPOINT") or f"{base_url}/images/edits"
     model = os.getenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")
-    timeout = float(os.getenv("AI_PAINTING_IMAGE_EDIT_TIMEOUT", "120"))
+    timeout = _read_float_env("AI_PAINTING_IMAGE_EDIT_TIMEOUT", 120.0)
     size = os.getenv("AI_PAINTING_IMAGE_EDIT_SIZE") or f"{width}x{height}"
     response_format = os.getenv("AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT", "b64_json")
     fields = {
@@ -143,20 +247,29 @@ async def _edit_with_openai_compatible(prompt: str, image_data_url: str, width: 
     files = {
         "image": ("canvas.png", image_bytes, mime),
     }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-    }
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(endpoint, headers=headers, data=fields, files=files)
-    if response.status_code >= 400:
-        raise ImageGenerationError(f"图生图精修请求失败: HTTP {response.status_code}")
     try:
-        image_source = _extract_image_source(response.json())
-    except ValueError as exc:
-        raise ImageGenerationError("图生图精修响应不是 JSON") from exc
-    if not image_source:
-        raise ImageGenerationError("图生图精修响应缺少图片地址")
-    return image_source, "openai_compatible"
+        return await _post_image_edit_multipart(endpoint, api_key, fields, files, timeout, "openai_compatible")
+    except ImageGenerationError as primary_error:
+        openai_key = _get_openai_api_key()
+        if not openai_key:
+            raise primary_error
+        official_base_url = os.getenv("AI_PAINTING_OPENAI_BASE_URL", OPENAI_OFFICIAL_BASE_URL).rstrip("/")
+        official_endpoint = f"{official_base_url}/images/edits"
+        official_fields = {
+            "model": os.getenv("AI_PAINTING_OPENAI_IMAGE_MODEL", model),
+            "prompt": prompt,
+            "size": _official_image_size(),
+            "quality": os.getenv("AI_PAINTING_OPENAI_IMAGE_QUALITY", "auto"),
+            "background": os.getenv("AI_PAINTING_OPENAI_IMAGE_BACKGROUND", "auto"),
+            "output_format": os.getenv("AI_PAINTING_OPENAI_IMAGE_OUTPUT_FORMAT", "png"),
+        }
+        official_files = {
+            "image[]": ("canvas.png", image_bytes, mime),
+        }
+        try:
+            return await _post_image_edit_multipart(official_endpoint, openai_key, official_fields, official_files, timeout, "openai_official")
+        except ImageGenerationError as fallback_error:
+            raise ImageGenerationError(f"{primary_error}; OpenAI 官方备用失败: {fallback_error}") from fallback_error
 
 
 async def generate_image_object(payload: dict[str, Any]) -> dict[str, Any]:
@@ -170,6 +283,8 @@ async def generate_image_object(payload: dict[str, Any]) -> dict[str, Any]:
         raise ImageGenerationError("文字转图片 Provider 未启用")
     if provider == "http":
         src, provider_name = await _generate_with_http(prompt, width, height, payload.get("style"))
+    elif provider in {"openai", "openai_compatible", "gpt_image"}:
+        src, provider_name = await _generate_with_openai_compatible(prompt, width, height, payload.get("style"))
     else:
         src = _svg_placeholder_data_url(prompt, width, height)
         provider_name = "placeholder"
