@@ -392,6 +392,8 @@ def record_operation(
     payload: dict[str, Any],
     inverse_payload: dict[str, Any],
     status: str = "applied",
+    command_group_id: str | None = None,
+    operation_index: int = 0,
     commit: bool = True,
 ) -> str:
     operation_id = new_id()
@@ -399,25 +401,48 @@ def record_operation(
     connection.execute(
         """
         INSERT INTO operations
-            (id, artwork_id, operation_type, payload_json, inverse_payload_json, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, artwork_id, command_group_id, operation_index, operation_type, payload_json, inverse_payload_json, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (operation_id, artwork_id, operation_type, _json(payload), _json(inverse_payload), status, timestamp, timestamp),
+        (
+            operation_id,
+            artwork_id,
+            command_group_id,
+            operation_index,
+            operation_type,
+            _json(payload),
+            _json(inverse_payload),
+            status,
+            timestamp,
+            timestamp,
+        ),
     )
     _commit(connection, commit)
     return operation_id
 
 
 def get_last_operation(connection: sqlite3.Connection, artwork_id: str, status: str) -> sqlite3.Row | None:
+    order_by = "updated_at DESC, rowid DESC" if status == "undone" else "created_at DESC, rowid DESC"
     return connection.execute(
-        """
+        f"""
         SELECT * FROM operations
         WHERE artwork_id = ? AND status = ?
-        ORDER BY created_at DESC, rowid DESC
+        ORDER BY {order_by}
         LIMIT 1
         """,
         (artwork_id, status),
     ).fetchone()
+
+
+def list_operation_group(connection: sqlite3.Connection, artwork_id: str, command_group_id: str, status: str) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT * FROM operations
+        WHERE artwork_id = ? AND command_group_id = ? AND status = ?
+        ORDER BY operation_index ASC, created_at ASC, rowid ASC
+        """,
+        (artwork_id, command_group_id, status),
+    ).fetchall()
 
 
 def mark_operation_status(connection: sqlite3.Connection, operation_id: str, status: str, *, commit: bool = True) -> None:
