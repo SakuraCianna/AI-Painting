@@ -105,11 +105,14 @@ export interface AsrTranscriptionMetrics {
 export interface CommandExecutionMetrics {
   rule_parse_ms?: number | null;
   llm_planner_ms?: number | null;
+  agent_planner_ms?: number | null;
   planner_total_ms?: number | null;
   execute_ms?: number | null;
   total_ms?: number | null;
   llm_attempted: boolean;
   llm_succeeded: boolean;
+  agent_attempted: boolean;
+  agent_succeeded: boolean;
   fallback_used: boolean;
   planner_source?: string | null;
 }

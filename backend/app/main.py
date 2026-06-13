@@ -16,7 +16,7 @@ from .config import load_env_file
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
 from .image_generation import ImageGenerationError, generate_image_object, polish_image_object
-from .llm_planner import LlmPlannerError, plan_with_mimo, should_use_llm_planner
+from .agent import DrawingAgentError, plan_with_drawing_agent, should_use_drawing_agent
 from .metrics import summarize_latency_rows
 from .repositories import (
     create_artwork,
@@ -171,25 +171,29 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
         rule_parse_ms=round((rule_finished_at - rule_started_at) * 1000, 2),
         planner_source=rule_plan.planner_source,
     )
-    if not should_use_llm_planner(text, rule_plan):
+    if not should_use_drawing_agent(text, rule_plan):
         metrics.planner_total_ms = round((rule_finished_at - started_at) * 1000, 2)
         return PlannedCommand(rule_plan, metrics)
 
     metrics.llm_attempted = True
-    llm_started_at = perf_counter()
+    metrics.agent_attempted = True
+    agent_started_at = perf_counter()
     try:
-        plan = _with_plan_metadata(await plan_with_mimo(text), "mimo")
-        llm_finished_at = perf_counter()
-        metrics.llm_planner_ms = round((llm_finished_at - llm_started_at) * 1000, 2)
-        metrics.planner_total_ms = round((llm_finished_at - started_at) * 1000, 2)
+        plan = _with_plan_metadata(await plan_with_drawing_agent(text, rule_plan=rule_plan), "agent")
+        agent_finished_at = perf_counter()
+        metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
+        metrics.llm_planner_ms = metrics.agent_planner_ms
+        metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
         metrics.llm_succeeded = True
+        metrics.agent_succeeded = True
         metrics.planner_source = plan.planner_source
         return PlannedCommand(plan, metrics)
-    except LlmPlannerError:
-        llm_finished_at = perf_counter()
+    except DrawingAgentError:
+        agent_finished_at = perf_counter()
         plan = _with_plan_metadata(rule_plan, "rules_fallback")
-        metrics.llm_planner_ms = round((llm_finished_at - llm_started_at) * 1000, 2)
-        metrics.planner_total_ms = round((llm_finished_at - started_at) * 1000, 2)
+        metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
+        metrics.llm_planner_ms = metrics.agent_planner_ms
+        metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
         metrics.fallback_used = True
         metrics.planner_source = plan.planner_source
         return PlannedCommand(plan, metrics)
