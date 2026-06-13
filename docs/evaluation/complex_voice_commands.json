@@ -268,6 +268,13 @@
     "expected_adjustment": "柔和"
   },
   {
+    "id": "follow-up-generated-image-adjustment-only-polish",
+    "text": "再亮一点",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_adjustment": "调亮"
+  },
+  {
     "id": "partial-generated-image-ranked-polish",
     "text": "把第二张生成图精修一下",
     "tier": "rules",

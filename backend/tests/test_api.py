@@ -1013,6 +1013,44 @@ def test_follow_up_polish_inherits_previous_subject_and_original_prompt(client: 
     assert "局部精修目标: 眼睛。目标对象: 右边的人" not in follow_up["geometry"]["prompt"]
 
 
+def test_adjustment_only_follow_up_polish_inherits_previous_region(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    source_prompt = "一张双人肖像, 左边短发人物, 右边长发人物, 柔和棚拍光"
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "image",
+            "name": "双人肖像",
+            "semantic_tags": ["generated.image", "image"],
+            "geometry": {
+                "x": 140,
+                "y": 80,
+                "width": 640,
+                "height": 480,
+                "src": SAMPLE_PNG_DATA_URL,
+                "prompt": source_prompt,
+            },
+            "style": {"opacity": 1},
+        },
+    )
+    first_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把右边那个人的眼睛调亮"})
+    assert first_response.status_code == 200
+
+    second_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再柔和一点"})
+
+    assert second_response.status_code == 200
+    follow_up = second_response.json()["artwork"]["objects"][-1]
+    assert follow_up["name"] == "精修版本: 双人肖像"
+    assert follow_up["geometry"]["source_prompt"] == source_prompt
+    assert follow_up["geometry"]["target_subject"] == "右边的人"
+    assert follow_up["geometry"]["target_region"] == "眼睛"
+    assert follow_up["geometry"]["adjustment"] == "柔和"
+    assert "目标对象: 右边的人" in follow_up["geometry"]["prompt"]
+    assert "局部精修目标: 眼睛" in follow_up["geometry"]["prompt"]
+    assert "调整方式: 柔和" in follow_up["geometry"]["prompt"]
+
+
 def test_left_window_spatial_selector_scales_only_one_window(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子 红色屋顶 蓝色门 两扇窗户"})
