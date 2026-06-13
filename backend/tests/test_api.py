@@ -174,6 +174,35 @@ def test_agent_infographic_command_executes_graphic_design_scene(client: TestCli
     assert "bar_chart" in semantic_tags
 
 
+def test_agent_poster_command_executes_graphic_design_scene(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个AI语音绘图新品发布海报，突出主标题、产品视觉、三个卖点和立即体验按钮"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "poster_scene"
+    objects = body["artwork"]["objects"]
+    assert len(objects) == 20
+    object_types = [obj["type"] for obj in objects]
+    assert object_types.count("rect") == 6
+    assert object_types.count("text") == 8
+    assert object_types.count("circle") == 4
+    assert object_types.count("ellipse") == 1
+    assert object_types.count("path") == 1
+    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
+    assert "poster.headline" in semantic_tags
+    assert "poster.hero" in semantic_tags
+    assert "poster.cta" in semantic_tags
+    assert "poster.feature_text" in semantic_tags
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})
