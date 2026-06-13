@@ -26,14 +26,16 @@
 
 `.github/workflows/ai-painting-ci.yml` 会在 Pull Request、任意分支 push 和手动触发时自动运行:
 
-- 后端测试: 安装 `backend/requirements.txt`, 编译 `backend/app` 与 `backend/tests`, 执行 `python -m pytest backend/tests -q`
-- 前端构建: 执行 `npm ci --prefix frontend`, 再执行 `npm run build --prefix frontend`
-- API smoke test: 启动 FastAPI 服务, 请求 `GET /health` 验证后端可启动
+- 后端覆盖率: 安装 `backend/requirements.txt`, 编译 `backend/app` 与 `backend/tests`, 执行 `python -m pytest backend/tests --cov=app --cov-report=term-missing --cov-fail-under=85`
+- 前端覆盖率: 执行 `npm ci --prefix frontend`, 再执行 `npm run test:coverage --prefix frontend`
+- 前端构建: 执行 `npm run build --prefix frontend`
+- API smoke test: 用固定后端端口 `8084` 启动 FastAPI 服务, 请求 `GET /health` 验证后端可启动
 - Docker 备用部署检查: 校验 `docker-compose.yml`, 并构建后端与前端备用部署镜像
 
 `.github/workflows/cd.yml` 会在 `main` 分支 push、`v*` tag 和手动触发时自动运行:
 
-- 后端测试
+- 后端 85% 覆盖率检查
+- 前端覆盖率检查
 - 前端构建
 - 组装发布 zip 产物
 - 上传 GitHub Actions artifact
