@@ -228,6 +228,27 @@ def test_parse_object_query_dsl_selectors() -> None:
     assert relative_target["semantic_tag"] == "house.door"
     assert relative_target["relative_to"] == {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
 
+    near_tree_plan = parse_command("把靠近门的那棵树改成黄色")
+    near_tree_target = near_tree_plan.operations[0].payload["target"]
+    assert near_tree_plan.operations[0].operation_type == "set_style_many"
+    assert near_tree_target["semantic_tag"] == "tree"
+    assert near_tree_target["include_group_members"] is True
+    assert near_tree_target["relative_to"] == {
+        "relation": "near",
+        "max_distance": 260,
+        "target": {"selector": "all", "semantic_tag": "house.door"},
+    }
+
+    covering_image_plan = parse_command("把挡住标题的图片向右移动一点")
+    covering_image_target = covering_image_plan.operations[0].payload["target"]
+    assert covering_image_plan.operations[0].operation_type == "move_many"
+    assert covering_image_target["type"] == "image"
+    assert "semantic_tag" not in covering_image_target
+    assert covering_image_target["relative_to"] == {
+        "relation": "covering",
+        "target": {"selector": "all", "semantic_tag": "poster.headline"},
+    }
+
     color_group_plan = parse_command("把所有暖色小物件向上移动一点")
     color_group_target = color_group_plan.operations[0].payload["target"]
     assert color_group_plan.operations[0].operation_type == "move_many"

@@ -85,6 +85,9 @@ LAYER_MAP: dict[str, str] = {
     "顶层": "foreground",
 }
 SEMANTIC_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("海报标题", "poster.headline"),
+    ("主标题", "poster.headline"),
+    ("标题", "poster.headline"),
     ("窗户", "house.window"),
     ("屋顶", "house.roof"),
     ("门", "house.door"),
@@ -325,6 +328,22 @@ def _is_group_scope_target(text: str, semantic_tag: str | None = None) -> bool:
     return semantic_tag == "tree" and "棵" in text
 
 
+def _relation_selector_for_text(text: str) -> dict[str, Any] | None:
+    if "屋顶下面" in text or "屋顶下方" in text:
+        return {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+    if any(keyword in text for keyword in ("靠近门", "门附近", "门旁边", "挨着门", "贴近门")):
+        return {
+            "relation": "near",
+            "max_distance": 260,
+            "target": {"selector": "all", "semantic_tag": "house.door"},
+        }
+    if any(keyword in text for keyword in ("挡住标题", "遮住标题", "盖住标题", "覆盖标题", "压住标题", "遮挡标题")):
+        return {"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in text for keyword in ("和标题重叠", "与标题重叠", "重叠标题")):
+        return {"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    return None
+
+
 def _semantic_tags_for_text(text: str, shape: str | None = None, object_name: str | None = None) -> list[str]:
     source = f"{text} {object_name or ''}"
     tags = {tag for keyword, tag in SEMANTIC_KEYWORDS if keyword in source}
@@ -398,7 +417,13 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     shape = _find_shape(text)
     if shape and many_hint:
         target["type"] = shape
+    is_image_target = any(keyword in text for keyword in ("图片", "图像", "照片"))
+    if is_image_target:
+        target["selector"] = "all"
+        target["type"] = "image"
     semantic_tag = _target_semantic_tag(text)
+    if is_image_target and semantic_tag == "poster.headline":
+        semantic_tag = None
     if semantic_tag and (semantic_tag not in {"house"} or _is_group_scope_target(text, semantic_tag)):
         target["selector"] = "all"
         target["semantic_tag"] = semantic_tag
@@ -439,9 +464,10 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     if rank is not None and "position" in target:
         target["selector"] = "all"
         target["position_rank"] = rank
-    if "屋顶下面" in text or "屋顶下方" in text:
+    relation_selector = _relation_selector_for_text(text)
+    if relation_selector:
         target["selector"] = "all"
-        target["relative_to"] = {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+        target["relative_to"] = relation_selector
     return target
 
 

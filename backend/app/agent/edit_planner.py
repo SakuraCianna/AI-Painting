@@ -32,8 +32,9 @@ TARGET_RULES: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
     (("组织结构图节点", "组织节点", "部门卡片", "角色卡片"), {"selector": "all", "semantic_tag": "org_chart.node"}),
     (("甘特图任务条", "任务条", "进度条"), {"selector": "all", "semantic_tag": "gantt_chart.task_bar"}),
     (("里程碑",), {"selector": "all", "semantic_tag": "gantt_chart.milestone"}),
-    (("海报标题", "主标题"), {"selector": "all", "semantic_tag": "poster.headline"}),
+    (("海报标题", "主标题", "标题"), {"selector": "all", "semantic_tag": "poster.headline"}),
     (("卖点文字", "卖点"), {"selector": "all", "semantic_tag": "poster.feature_text"}),
+    (("图片", "图像", "照片"), {"selector": "all", "type": "image"}),
     (("按钮", "行动按钮", "cta"), {"selector": "all", "semantic_tags": ["poster.cta", "ui.cta"]}),
     (("侧边导航", "侧边栏"), {"selector": "all", "semantic_tag": "ui.sidebar"}),
     (("搜索框",), {"selector": "all", "semantic_tag": "ui.search"}),
@@ -101,6 +102,22 @@ def _is_group_scope_target(text: str, target: dict[str, Any]) -> bool:
     return target.get("semantic_tag") == "tree" and "棵" in text
 
 
+def _relation_hint_for_clause(clause: str) -> dict[str, Any] | None:
+    if "屋顶下面" in clause or "屋顶下方" in clause:
+        return {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+    if any(keyword in clause for keyword in ("靠近门", "门附近", "门旁边", "挨着门", "贴近门")):
+        return {
+            "relation": "near",
+            "max_distance": 260,
+            "target": {"selector": "all", "semantic_tag": "house.door"},
+        }
+    if any(keyword in clause for keyword in ("挡住标题", "遮住标题", "盖住标题", "覆盖标题", "压住标题", "遮挡标题")):
+        return {"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in clause for keyword in ("和标题重叠", "与标题重叠", "重叠标题")):
+        return {"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    return None
+
+
 def _apply_query_hints(clause: str, target: dict[str, Any]) -> dict[str, Any]:
     enriched = _copy_target(target)
     if _is_group_scope_target(clause, enriched):
@@ -120,9 +137,10 @@ def _apply_query_hints(clause: str, target: dict[str, Any]) -> dict[str, Any]:
         enriched["selector"] = "all"
         enriched["position_rank"] = rank
 
-    if "屋顶下面" in clause or "屋顶下方" in clause:
+    relation_hint = _relation_hint_for_clause(clause)
+    if relation_hint:
         enriched["selector"] = "all"
-        enriched["relative_to"] = {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+        enriched["relative_to"] = relation_hint
 
     if "小物件" in clause or "小对象" in clause or "小图形" in clause:
         enriched["selector"] = "all"
@@ -147,9 +165,16 @@ def _target_for_clause(clause: str) -> tuple[dict[str, Any] | None, str | None]:
         return _apply_query_hints(clause, {"selector": "all", "color_group": "cool"}), "冷色对象"
     if "中性色" in clause:
         return _apply_query_hints(clause, {"selector": "all", "color_group": "neutral"}), "中性色对象"
+    target_matches: list[tuple[int, int, str, dict[str, Any]]] = []
     for keywords, target in TARGET_RULES:
-        if any(keyword in clause for keyword in keywords):
-            return _apply_query_hints(clause, target), keywords[0]
+        matched_keywords = [keyword for keyword in keywords if keyword in clause]
+        if not matched_keywords:
+            continue
+        best_keyword = sorted(matched_keywords, key=lambda keyword: (clause.rfind(keyword), len(keyword)))[-1]
+        target_matches.append((clause.rfind(best_keyword), len(best_keyword), best_keyword, target))
+    if target_matches:
+        _, _, matched_keyword, target = sorted(target_matches, key=lambda item: (item[0], item[1]))[-1]
+        return _apply_query_hints(clause, target), matched_keyword
     if "它" in clause or "这个" in clause or "刚才" in clause:
         return {"selector": "latest"}, None
     return None, None

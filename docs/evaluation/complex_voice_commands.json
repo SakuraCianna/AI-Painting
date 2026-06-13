@@ -133,6 +133,19 @@
     "expected_target_semantic_tag": "house.door"
   },
   {
+    "id": "agent-edit-tree-near-door",
+    "text": "把靠近门的那棵树改成黄色",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many"],
+    "expected_target_semantic_tag": "tree"
+  },
+  {
+    "id": "agent-move-image-covering-title",
+    "text": "把挡住标题的图片向右移动一点",
+    "tier": "agent",
+    "expected_operation_types": ["move_many"]
+  },
+  {
     "id": "agent-move-warm-small-objects",
     "text": "把所有暖色小物件向上移动一点",
     "tier": "agent",

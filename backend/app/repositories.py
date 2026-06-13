@@ -31,6 +31,26 @@ RELATION_ALIASES = {
     "left_of": "left_of",
     "right_of": "right_of",
     "near": "near",
+    "near_to": "near",
+    "beside": "near",
+    "overlap": "overlap",
+    "overlaps": "overlap",
+    "intersect": "overlap",
+    "intersects": "overlap",
+    "intersecting": "overlap",
+    "cover": "covering",
+    "covers": "covering",
+    "covering": "covering",
+    "occlude": "covering",
+    "occludes": "covering",
+    "occluding": "covering",
+    "block": "covering",
+    "blocks": "covering",
+    "blocking": "covering",
+    "遮挡": "covering",
+    "挡住": "covering",
+    "覆盖": "covering",
+    "重叠": "overlap",
 }
 WARM_COLOR_HEXES = {"#dc2626", "#ef4444", "#f97316", "#fb923c", "#facc15", "#fde047", "#92400e", "#a16207", "#7c2d12"}
 COOL_COLOR_HEXES = {"#2563eb", "#1d4ed8", "#7dd3fc", "#93c5fd", "#16a34a", "#22c55e", "#15803d", "#1e3a8a"}
@@ -333,6 +353,14 @@ def _object_bounds(obj: DrawingObject) -> tuple[float, float, float, float]:
         cx = float(geometry.get("cx", 0))
         cy = float(geometry.get("cy", 0))
         return cx - radius, cy - radius, cx + radius, cy + radius
+    if object_type == "text":
+        x = float(geometry.get("x", 0))
+        y = float(geometry.get("y", 0))
+        font_size = float(geometry.get("fontSize", 48))
+        content = str(geometry.get("content") or obj.name or "")
+        estimated_width = max(font_size, len(content) * font_size * 0.62)
+        estimated_height = font_size * 1.25
+        return x - estimated_width / 2, y - estimated_height, x + estimated_width / 2, y + estimated_height * 0.25
 
     coordinates: list[dict[str, Any]] = []
     if isinstance(geometry.get("points"), list):
@@ -489,6 +517,44 @@ def _object_area(obj: DrawingObject) -> float:
     return max(0.0, right - left) * max(0.0, bottom - top)
 
 
+def _bounds_overlap(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+    *,
+    margin: float = 0.0,
+) -> bool:
+    first_left, first_top, first_right, first_bottom = first
+    second_left, second_top, second_right, second_bottom = second
+    return not (
+        first_right + margin < second_left
+        or first_left - margin > second_right
+        or first_bottom + margin < second_top
+        or first_top - margin > second_bottom
+    )
+
+
+def _relation_distance_limit(relation_selector: dict[str, Any] | None) -> float:
+    if not relation_selector:
+        return 180.0
+    raw_value = relation_selector.get("max_distance", relation_selector.get("distance", 180))
+    try:
+        distance = float(raw_value)
+    except (TypeError, ValueError):
+        return 180.0
+    if distance <= 0:
+        return 180.0
+    return min(distance, 2000.0)
+
+
+def _relation_margin(relation_selector: dict[str, Any] | None) -> float:
+    if not relation_selector:
+        return 0.0
+    try:
+        return float(relation_selector.get("margin", 0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _filter_objects_by_size(objects: list[DrawingObject], size_class: str, max_area: Any = None) -> list[DrawingObject]:
     try:
         area_limit = float(max_area) if max_area is not None else 25000.0
@@ -502,7 +568,12 @@ def _filter_objects_by_size(objects: list[DrawingObject], size_class: str, max_a
     return objects
 
 
-def _relation_matches(candidate: DrawingObject, reference: DrawingObject, relation: str) -> bool:
+def _relation_matches(
+    candidate: DrawingObject,
+    reference: DrawingObject,
+    relation: str,
+    relation_selector: dict[str, Any] | None = None,
+) -> bool:
     candidate_x, candidate_y = _object_center(candidate)
     reference_x, reference_y = _object_center(reference)
     if relation == "below":
@@ -514,7 +585,18 @@ def _relation_matches(candidate: DrawingObject, reference: DrawingObject, relati
     if relation == "right_of":
         return candidate_x > reference_x
     if relation == "near":
-        return abs(candidate_x - reference_x) <= 180 and abs(candidate_y - reference_y) <= 180
+        distance = _relation_distance_limit(relation_selector)
+        return abs(candidate_x - reference_x) <= distance and abs(candidate_y - reference_y) <= distance
+    if relation == "overlap":
+        margin = _relation_margin(relation_selector)
+        return _bounds_overlap(_object_bounds(candidate), _object_bounds(reference), margin=margin)
+    if relation == "covering":
+        margin = _relation_margin(relation_selector)
+        return candidate.z_index >= reference.z_index and _bounds_overlap(
+            _object_bounds(candidate),
+            _object_bounds(reference),
+            margin=margin,
+        )
     return True
 
 
@@ -536,7 +618,10 @@ def _filter_objects_by_relation(
     return [
         obj
         for obj in objects
-        if any(obj.id != reference.id and _relation_matches(obj, reference, relation) for reference in references)
+        if any(
+            obj.id != reference.id and _relation_matches(obj, reference, relation, relation_selector)
+            for reference in references
+        )
     ]
 
 
