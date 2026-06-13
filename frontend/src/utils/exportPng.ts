@@ -1,3 +1,14 @@
+import type { Artwork } from "../types";
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function svgToPngDataUrl(svgId: string): Promise<string> {
   const svg = document.getElementById(svgId);
   if (!(svg instanceof SVGSVGElement)) {
@@ -39,4 +50,19 @@ export async function exportSvgAsPng(svgId: string, filename: string): Promise<v
   link.href = dataUrl;
   link.download = filename;
   link.click();
+}
+
+export function exportSvgFile(svgId: string, filename: string): void {
+  const svg = document.getElementById(svgId);
+  if (!(svg instanceof SVGSVGElement)) {
+    throw new Error("没有找到可导出的画布");
+  }
+
+  const serialized = new XMLSerializer().serializeToString(svg);
+  downloadBlob(new Blob([serialized], { type: "image/svg+xml;charset=utf-8" }), filename);
+}
+
+export function exportArtworkJson(artwork: Artwork, filename: string): void {
+  const serialized = JSON.stringify(artwork, null, 2);
+  downloadBlob(new Blob([serialized], { type: "application/json;charset=utf-8" }), filename);
 }

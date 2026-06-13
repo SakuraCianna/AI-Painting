@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { exportSvgAsPng, svgToPngDataUrl } from "./exportPng";
+import { exportArtworkJson, exportSvgAsPng, exportSvgFile, svgToPngDataUrl } from "./exportPng";
 
 class LoadingImage {
   onload: (() => void) | null = null;
@@ -23,6 +23,11 @@ function appendSvg() {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("id", "voice-canvas-svg");
   svg.setAttribute("viewBox", "0 0 320 180");
+  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  circle.setAttribute("cx", "160");
+  circle.setAttribute("cy", "90");
+  circle.setAttribute("r", "40");
+  svg.appendChild(circle);
   Object.defineProperty(svg, "viewBox", {
     configurable: true,
     value: { baseVal: { width: 320, height: 180 } },
@@ -91,5 +96,50 @@ describe("exportPng", () => {
     expect(clickedLink).toHaveAttribute("href", "data:image/png;base64,exported");
     expect(clickedLink).toHaveAttribute("download", "作品.png");
     expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it("downloads serialized SVG with the requested filename", () => {
+    appendSvg();
+    const clickedLinks: HTMLAnchorElement[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function handleClick(this: HTMLAnchorElement) {
+      clickedLinks.push(this);
+    });
+
+    exportSvgFile("voice-canvas-svg", "作品.svg");
+
+    const downloadedLink = clickedLinks[0];
+    expect(downloadedLink.download).toBe("作品.svg");
+    expect(downloadedLink.href).toContain("blob:voice-canvas");
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:voice-canvas");
+  });
+
+  it("downloads project JSON with artwork data", () => {
+    const clickedLinks: HTMLAnchorElement[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function handleClick(this: HTMLAnchorElement) {
+      clickedLinks.push(this);
+    });
+
+    exportArtworkJson(
+      {
+        id: "artwork-1",
+        title: "作品",
+        width: 320,
+        height: 180,
+        background: "#ffffff",
+        objects: [],
+        created_at: "2026-06-13T00:00:00Z",
+        updated_at: "2026-06-13T00:00:00Z",
+      },
+      "作品.json"
+    );
+
+    const downloadedLink = clickedLinks[0];
+    expect(downloadedLink.download).toBe("作品.json");
+    expect(downloadedLink.href).toContain("blob:voice-canvas");
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:voice-canvas");
   });
 });

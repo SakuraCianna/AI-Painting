@@ -184,6 +184,16 @@ def test_parse_artistic_image_requests_use_generation_strategy() -> None:
     assert "render_strategy.generative_image" in plan.operations[0].payload["semantic_tags"]
 
 
+def test_parse_export_svg_and_project_json() -> None:
+    svg_plan = parse_command("导出 SVG")
+    json_plan = parse_command("导出项目 JSON")
+
+    assert svg_plan.operations[0].operation_type == "export_artwork"
+    assert svg_plan.operations[0].payload == {"format": "svg"}
+    assert json_plan.operations[0].operation_type == "export_artwork"
+    assert json_plan.operations[0].payload == {"format": "json"}
+
+
 def test_parse_programmatic_diagram_requests_do_not_use_image_generation() -> None:
     plan = parse_command("画一个泳道图, 包含销售、运营和交付")
 

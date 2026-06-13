@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 from app.metrics import percentile, summarize_latency_rows
 
@@ -38,3 +39,19 @@ def test_summarize_latency_rows_counts_statuses_and_planner_sources() -> None:
     assert summary.metrics["agent_planner_ms"].max_ms == 260
     assert summary.metrics["planner_total_ms"].p75_ms == 300
     assert summary.metrics["total_ms"].max_ms == 340
+
+
+def test_summarize_latency_rows_tolerates_sqlite_rows_with_missing_optional_columns() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    row = connection.execute(
+        "SELECT ? AS status, ? AS latency_json",
+        ("success", json.dumps({"total_ms": 42, "planner_source": "rules"})),
+    ).fetchone()
+    connection.close()
+
+    summary = summarize_latency_rows([row])
+
+    assert summary.success_count == 1
+    assert summary.latest_created_at is None
+    assert summary.metrics["total_ms"].max_ms == 42

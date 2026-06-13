@@ -11,7 +11,9 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 const exportMocks = vi.hoisted(() => ({
+  exportArtworkJson: vi.fn(),
   exportSvgAsPng: vi.fn(),
+  exportSvgFile: vi.fn(),
   svgToPngDataUrl: vi.fn(),
 }));
 
@@ -130,7 +132,11 @@ describe("App", () => {
     apiMocks.fetchLatencyMetrics.mockResolvedValue(makeLatencySummary());
     apiMocks.submitVoiceCommand.mockReset();
     apiMocks.synthesizeSpeech.mockResolvedValue({ audio_data_url: "data:audio/wav;base64,AAAA" });
+    exportMocks.exportArtworkJson.mockReset();
+    exportMocks.exportSvgFile.mockReset();
+    exportMocks.exportSvgAsPng.mockReset();
     exportMocks.exportSvgAsPng.mockResolvedValue(undefined);
+    exportMocks.svgToPngDataUrl.mockReset();
     exportMocks.svgToPngDataUrl.mockResolvedValue("data:image/png;base64,canvas");
     audioPlay = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal(
@@ -162,6 +168,18 @@ describe("App", () => {
     expect(voiceRuntime.start).toHaveBeenCalledTimes(1);
     expect(apiMocks.createArtwork).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(apiMocks.fetchLatencyMetrics).toHaveBeenCalledWith("artwork-1"));
+  });
+
+  it("shows only the four current latency metrics in the console", async () => {
+    render(<App />);
+
+    expect(await screen.findByText("语音画布已准备")).toBeInTheDocument();
+    expect(screen.getByText("ASR")).toBeInTheDocument();
+    expect(screen.getByText("规划")).toBeInTheDocument();
+    expect(screen.getByText("执行")).toBeInTheDocument();
+    expect(screen.getByText("端到端")).toBeInTheDocument();
+    expect(screen.queryByText("历史 P75")).not.toBeInTheDocument();
+    expect(screen.queryByText("历史 P95")).not.toBeInTheDocument();
   });
 
   it("submits a final voice transcript, updates the canvas and records timeline feedback", async () => {
@@ -315,6 +333,35 @@ describe("App", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "导出 PNG" })[0]);
     await waitFor(() => expect(exportMocks.exportSvgAsPng).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("已导出 PNG")).toBeInTheDocument();
+  });
+
+  it("runs SVG and project JSON export from voice command results", async () => {
+    apiMocks.submitVoiceCommand.mockResolvedValueOnce({
+      message: "已准备导出 SVG",
+      plan: makePlan({ operations: [{ operation_type: "export_artwork", payload: { format: "svg" } }] }),
+      artwork: makeArtwork(),
+      metrics: makeMetrics(),
+    });
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("导出 SVG", null);
+    });
+    await waitFor(() => expect(exportMocks.exportSvgFile).toHaveBeenCalledWith("voice-canvas-svg", "语音绘图作品.svg"));
+
+    apiMocks.submitVoiceCommand.mockResolvedValueOnce({
+      message: "已准备导出项目 JSON",
+      plan: makePlan({ operations: [{ operation_type: "export_artwork", payload: { format: "json" } }] }),
+      artwork: makeArtwork(),
+      metrics: makeMetrics(),
+    });
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("导出项目 JSON", null);
+    });
+    await waitFor(() => expect(exportMocks.exportArtworkJson).toHaveBeenCalledWith(makeArtwork(), "语音绘图作品.json"));
+    expect(exportMocks.exportSvgAsPng).not.toHaveBeenCalled();
   });
 
   it("records failed command execution and speaks the failure message", async () => {

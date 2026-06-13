@@ -9,10 +9,11 @@ import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArtwork, fetchLatencyMetrics, submitVoiceCommand, synthesizeSpeech } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
+import { AppErrorBoundary } from "./ErrorBoundary";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
-import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan, LatencyMetricsSummary } from "./types";
-import { exportSvgAsPng, svgToPngDataUrl } from "./utils/exportPng";
+import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan } from "./types";
+import { exportArtworkJson, exportSvgAsPng, exportSvgFile, svgToPngDataUrl } from "./utils/exportPng";
 
 interface TimelineItem {
   id: string;
@@ -52,6 +53,8 @@ const PLANNER_SOURCE_LABELS: Record<string, string> = {
   mimo: "MiMo 规划",
   rules_fallback: "规则兜底"
 };
+
+type ExportFormat = "png" | "svg" | "json";
 
 function getOperationLabel(operationType: string): string {
   return OPERATION_LABELS[operationType] ?? operationType;
@@ -99,10 +102,6 @@ function getEndToEndLatency(commandMetrics: CommandExecutionMetrics | null, asrM
   return commandMs + (asrMs ?? 0);
 }
 
-function getHistoricalLatency(summary: LatencyMetricsSummary | null, percentileName: "p75_ms" | "p95_ms"): number | null {
-  return summary?.metrics.total_ms?.[percentileName] ?? null;
-}
-
 function shouldAttachCanvasImage(text: string): boolean {
   return /精修|丰富|润色|美化|增强|提升质感|重新渲染|风格化/.test(text)
     && /图片|图像|画面|作品|画布|生成图|生成的|生成出来|照片|肖像|头像|人物|局部|部分|区域|背景|天空|眼睛|脸|头发|衣服|海报/.test(text);
@@ -114,7 +113,31 @@ function shouldShowImageGenerationState(text: string): boolean {
     || /画.+(水墨|插画|肖像|头像|海报|视觉图|概念图|科幻|二次元)/.test(text);
 }
 
-export default function App() {
+function getExportFormat(plan: CommandPlan): ExportFormat | null {
+  const exportOperation = plan.operations.find((operation) => operation.operation_type === "export_artwork");
+  if (!exportOperation) {
+    return null;
+  }
+  const rawFormat = exportOperation.payload.format;
+  if (rawFormat === "svg" || rawFormat === "json" || rawFormat === "png") {
+    return rawFormat;
+  }
+  return "png";
+}
+
+async function runArtworkExport(format: ExportFormat, exportArtwork: Artwork): Promise<void> {
+  if (format === "svg") {
+    exportSvgFile("voice-canvas-svg", `${exportArtwork.title}.svg`);
+    return;
+  }
+  if (format === "json") {
+    exportArtworkJson(exportArtwork, `${exportArtwork.title}.json`);
+    return;
+  }
+  await exportSvgAsPng("voice-canvas-svg", `${exportArtwork.title}.png`);
+}
+
+function WorkspaceApp() {
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
   const [isBusy, setIsBusy] = useState(false);
@@ -122,7 +145,6 @@ export default function App() {
   const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
   const [latestCommandMetrics, setLatestCommandMetrics] = useState<CommandExecutionMetrics | null>(null);
   const [latestAsrMetrics, setLatestAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
-  const [latencySummary, setLatencySummary] = useState<LatencyMetricsSummary | null>(null);
   const hasCreatedArtworkRef = useRef(false);
   const feedbackAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -146,8 +168,7 @@ export default function App() {
       return;
     }
     fetchLatencyMetrics(artwork.id)
-      .then(setLatencySummary)
-      .catch(() => setLatencySummary(null));
+      .catch(() => undefined);
   }, [artwork?.id]);
 
   const playFeedback = useCallback(async (message: string) => {
@@ -184,10 +205,10 @@ export default function App() {
         if (response.artwork) {
           setArtwork(response.artwork);
         }
-        void fetchLatencyMetrics(artwork.id).then(setLatencySummary).catch(() => setLatencySummary(null));
-        const containsExport = response.plan.operations.some((operation) => operation.operation_type === "export_artwork");
-        if (containsExport) {
-          await exportSvgAsPng("voice-canvas-svg", `${response.artwork?.title ?? artwork.title}.png`);
+        void fetchLatencyMetrics(artwork.id).catch(() => undefined);
+        const exportFormat = getExportFormat(response.plan);
+        if (exportFormat) {
+          await runArtworkExport(exportFormat, response.artwork ?? artwork);
         }
         setTimeline((items) => [
           {
@@ -239,8 +260,6 @@ export default function App() {
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
   const listeningLabel = voice.isListening ? voice.providerLabel : `待机: ${voice.providerLabel}`;
   const endToEndLatency = getEndToEndLatency(latestCommandMetrics, latestAsrMetrics);
-  const historicalP75 = getHistoricalLatency(latencySummary, "p75_ms");
-  const historicalP95 = getHistoricalLatency(latencySummary, "p95_ms");
 
   return (
     <main className="workspace">
@@ -384,14 +403,6 @@ export default function App() {
               <small>端到端</small>
               <strong>{formatLatency(endToEndLatency)}</strong>
             </span>
-            <span>
-              <small>历史 P75</small>
-              <strong>{formatLatency(historicalP75)}</strong>
-            </span>
-            <span>
-              <small>历史 P95</small>
-              <strong>{formatLatency(historicalP95)}</strong>
-            </span>
           </div>
           <p className="metrics-note">
             {latestCommandMetrics?.fallback_used
@@ -423,5 +434,13 @@ export default function App() {
         </div>
       </aside>
     </main>
+  );
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <WorkspaceApp />
+    </AppErrorBoundary>
   );
 }
