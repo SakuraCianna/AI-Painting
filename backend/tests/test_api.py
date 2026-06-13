@@ -230,6 +230,33 @@ def test_agent_ui_wireframe_command_executes_product_design_scene(client: TestCl
     assert "ui.cta" in semantic_tags
 
 
+def test_agent_org_chart_command_executes_hierarchy_scene(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个产品团队组织结构图，包括负责人、产品组、设计组、研发组和执行角色"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "org_chart_scene"
+    objects = body["artwork"]["objects"]
+    assert len(objects) == 20
+    object_types = [obj["type"] for obj in objects]
+    assert object_types.count("rect") == 8
+    assert object_types.count("text") == 9
+    assert object_types.count("line") == 3
+    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
+    assert "org_chart.node" in semantic_tags
+    assert "org_chart.connector" in semantic_tags
+    assert "org_chart.department" in semantic_tags
+    assert "org_chart.role" in semantic_tags
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})
