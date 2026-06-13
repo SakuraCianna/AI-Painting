@@ -257,6 +257,34 @@ def test_agent_org_chart_command_executes_hierarchy_scene(client: TestClient, mo
     assert "org_chart.role" in semantic_tags
 
 
+def test_agent_gantt_chart_command_executes_timeline_scene(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "gantt_chart_scene"
+    objects = body["artwork"]["objects"]
+    assert len(objects) == 20
+    object_types = [obj["type"] for obj in objects]
+    assert object_types.count("rect") == 6
+    assert object_types.count("text") == 11
+    assert object_types.count("line") == 2
+    assert object_types.count("circle") == 1
+    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
+    assert "gantt_chart.timeline" in semantic_tags
+    assert "gantt_chart.task_bar" in semantic_tags
+    assert "gantt_chart.milestone" in semantic_tags
+    assert "gantt_chart.legend" in semantic_tags
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})

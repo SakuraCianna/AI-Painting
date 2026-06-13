@@ -27,6 +27,10 @@ AGENT_SCENE_HINTS = (
     "信息图",
     "流程图",
     "结构图",
+    "甘特图",
+    "排期图",
+    "项目排期",
+    "进度计划",
     "组织结构",
     "团队架构",
     "组织架构",
@@ -1222,7 +1226,221 @@ def _org_chart_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _gantt_chart_scene_graph(text: str) -> AgentSceneGraph:
+    title = "产品迭代甘特图" if "产品" in text else "项目排期甘特图"
+    summary = "绘制项目排期甘特图, 包含时间轴、任务条、今日线和上线里程碑"
+    month_labels = ["第 1 月", "第 2 月", "第 3 月"]
+    task_rows = [
+        ("需求梳理", 300, 270, 150, "#1a73e8"),
+        ("原型设计", 440, 340, 170, "#34a853"),
+        ("开发联调", 580, 410, 210, "#fbbc04"),
+        ("测试上线", 740, 480, 120, "#ea4335"),
+    ]
+
+    objects = [
+        _object(
+            "gantt-title",
+            "text",
+            "甘特图标题",
+            {"x": 512, "y": 82, "content": title, "fontSize": 36},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="gantt-chart",
+            semantic_tags=["gantt_chart.title", "gantt_chart"],
+            z_index=30,
+        ),
+        _object(
+            "gantt-subtitle",
+            "text",
+            "甘特图说明",
+            {"x": 512, "y": 124, "content": "需求 -> 设计 -> 开发 -> 测试上线", "fontSize": 18},
+            "#5f6368",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="gantt-chart",
+            semantic_tags=["gantt_chart.subtitle", "gantt_chart"],
+            z_index=31,
+        ),
+        _object(
+            "gantt-surface",
+            "rect",
+            "排期图表底板",
+            {"x": 130, "y": 160, "width": 760, "height": 430, "radius": 28},
+            "#ffffff",
+            stroke="#dadce0",
+            stroke_width=2,
+            layer_id="background",
+            group_id="gantt-chart",
+            semantic_tags=["gantt_chart.surface", "gantt_chart"],
+            z_index=-1,
+            role="chart_surface",
+        ),
+        _object(
+            "gantt-axis",
+            "line",
+            "时间轴",
+            {"x1": 275, "y1": 230, "x2": 835, "y2": 230},
+            "transparent",
+            stroke="#5f6368",
+            stroke_width=3,
+            layer_id="middle",
+            group_id="gantt-chart",
+            semantic_tags=["gantt_chart.timeline", "gantt_chart"],
+            z_index=1,
+            role="timeline_axis",
+        ),
+    ]
+
+    for index, label in enumerate(month_labels):
+        objects.append(
+            _object(
+                f"gantt-month-label-{index + 1}",
+                "text",
+                f"{label}标签",
+                {"x": 350 + index * 180, "y": 205, "content": label, "fontSize": 18},
+                "#3c4043",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.time_label", f"gantt_chart.month.{index + 1}", "gantt_chart"],
+                z_index=2 + index,
+                role="time_label",
+            )
+        )
+
+    for index, (task_name, x, y, width, color) in enumerate(task_rows):
+        objects.append(
+            _object(
+                f"gantt-row-label-{index + 1}",
+                "text",
+                f"{task_name}行标签",
+                {"x": 210, "y": y + 27, "content": task_name, "fontSize": 20},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.row_label", f"gantt_chart.task.{index + 1}", "gantt_chart"],
+                z_index=6 + index * 2,
+                role="task_label",
+            )
+        )
+        objects.append(
+            _object(
+                f"gantt-task-bar-{index + 1}",
+                "rect",
+                f"{task_name}任务条",
+                {"x": x, "y": y, "width": width, "height": 44, "radius": 22},
+                color,
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="middle",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.task_bar", f"gantt_chart.task.{index + 1}", "gantt_chart"],
+                z_index=7 + index * 2,
+                role="task_bar",
+            )
+        )
+
+    objects.extend(
+        [
+            _object(
+                "gantt-today-line",
+                "line",
+                "今日进度线",
+                {"x1": 645, "y1": 250, "x2": 645, "y2": 540},
+                "transparent",
+                stroke="#d93025",
+                stroke_width=3,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.today", "gantt_chart.timeline", "gantt_chart"],
+                z_index=20,
+                role="today_marker",
+            ),
+            _object(
+                "gantt-milestone",
+                "circle",
+                "上线里程碑",
+                {"cx": 800, "cy": 502, "radius": 18},
+                "#ffffff",
+                stroke="#ea4335",
+                stroke_width=5,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.milestone", "gantt_chart"],
+                z_index=21,
+                role="milestone",
+            ),
+            _object(
+                "gantt-milestone-label",
+                "text",
+                "里程碑标签",
+                {"x": 800, "y": 560, "content": "上线里程碑", "fontSize": 18},
+                "#3c4043",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.milestone_label", "gantt_chart"],
+                z_index=22,
+                role="milestone_label",
+            ),
+            _object(
+                "gantt-legend-chip",
+                "rect",
+                "图例色块",
+                {"x": 325, "y": 622, "width": 42, "height": 18, "radius": 9},
+                "#1a73e8",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.legend", "gantt_chart"],
+                z_index=23,
+                role="legend_marker",
+            ),
+            _object(
+                "gantt-legend-text",
+                "text",
+                "图例文字",
+                {"x": 475, "y": 635, "content": "彩色条表示任务周期, 红线表示当前时间", "fontSize": 18},
+                "#5f6368",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="gantt-chart",
+                semantic_tags=["gantt_chart.legend_text", "gantt_chart"],
+                z_index=24,
+                role="legend_label",
+            ),
+        ]
+    )
+
+    relations = [
+        AgentSceneRelation(subject="gantt-task-bar-1", relation="precedes", target="gantt-task-bar-2", note="需求梳理先于原型设计"),
+        AgentSceneRelation(subject="gantt-task-bar-2", relation="precedes", target="gantt-task-bar-3", note="原型设计先于开发联调"),
+        AgentSceneRelation(subject="gantt-task-bar-3", relation="precedes", target="gantt-task-bar-4", note="开发联调先于测试上线"),
+        AgentSceneRelation(subject="gantt-milestone", relation="marks", target="gantt-task-bar-4", note="上线里程碑标记测试上线结束"),
+    ]
+    return AgentSceneGraph(
+        intent="compose_gantt_chart",
+        domain="gantt_chart_scene",
+        summary=summary,
+        background="#f8fafc",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
+    if any(keyword in normalized_text for keyword in ("甘特图", "排期图", "项目排期", "进度计划")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+        return _gantt_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _org_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("ui", "界面", "线框图", "原型", "草图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):

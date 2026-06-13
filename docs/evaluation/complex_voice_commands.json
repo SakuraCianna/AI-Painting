@@ -142,6 +142,13 @@
     "expected_object_types": ["text", "rect", "text", "line", "line", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line"]
   },
   {
+    "id": "agent-gantt-chart",
+    "text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["text", "text", "rect", "line", "text", "text", "text", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "line", "circle", "text", "rect", "text"]
+  },
+  {
     "id": "portrait-image-generation",
     "text": "生成一张人物肖像画",
     "tier": "rules",
