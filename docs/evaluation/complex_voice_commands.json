@@ -196,6 +196,13 @@
     "expected_object_types": ["rect", "text", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line", "line"]
   },
   {
+    "id": "agent-er-diagram",
+    "text": "画一个用户订单ER图，包含用户、订单、商品和支付",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "line", "text", "line", "text", "line", "text"]
+  },
+  {
     "id": "agent-sales-infographic",
     "text": "画一个销售增长信息图，包含营收、转化率、复购率和三个月柱状图",
     "tier": "agent",

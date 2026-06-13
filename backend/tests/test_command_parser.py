@@ -201,6 +201,14 @@ def test_parse_programmatic_diagram_requests_do_not_use_image_generation() -> No
     assert architecture_plan.scene_plan.intent == "clarify_programmatic_render"
     assert architecture_plan.scene_plan.steps[0].target["render_mode"] == "programmatic"
 
+    er_plan = parse_command("画一个用户订单ER图，包含用户、订单、商品和支付")
+
+    assert all(operation.operation_type != "generate_image_asset" for operation in er_plan.operations)
+    assert er_plan.requires_confirmation is True
+    assert er_plan.scene_plan is not None
+    assert er_plan.scene_plan.intent == "clarify_programmatic_render"
+    assert er_plan.scene_plan.steps[0].target["render_mode"] == "programmatic"
+
 
 def test_parse_polish_current_image() -> None:
     plan = parse_command("精修我的图片")

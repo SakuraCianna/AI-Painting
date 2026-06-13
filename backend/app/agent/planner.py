@@ -438,6 +438,155 @@ def _system_architecture_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _er_diagram_scene_graph(text: str) -> AgentSceneGraph:
+    title = "用户订单 ER 图" if "订单" in text else "实体关系图"
+    summary = "绘制 ER 图, 包含用户、订单、商品、支付实体及核心关系"
+    objects = [
+        _object(
+            "er-surface",
+            "rect",
+            "ER图底板",
+            {"x": 80, "y": 135, "width": 864, "height": 475, "radius": 28},
+            "#f8fafc",
+            stroke="#dadce0",
+            stroke_width=2,
+            layer_id="background",
+            group_id="er-diagram",
+            semantic_tags=["er_diagram.surface", "er_diagram"],
+            z_index=0,
+            role="diagram_surface",
+        ),
+        _object(
+            "er-title",
+            "text",
+            "ER图标题",
+            {"x": 512, "y": 88, "content": title, "fontSize": 34},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="er-diagram",
+            semantic_tags=["er_diagram.title", "er_diagram"],
+            z_index=30,
+            role="title",
+        ),
+    ]
+
+    entities = [
+        ("er-user", "用户", "id, 昵称, 手机号", 145, 245, "#e8f0fe", "#1a73e8", "er_diagram.entity.user"),
+        ("er-order", "订单", "id, 金额, 状态", 420, 245, "#e6f4ea", "#34a853", "er_diagram.entity.order"),
+        ("er-product", "商品", "id, 名称, 价格", 700, 245, "#fef7e0", "#fbbc04", "er_diagram.entity.product"),
+        ("er-payment", "支付", "id, 渠道, 时间", 420, 475, "#fce8e6", "#ea4335", "er_diagram.entity.payment"),
+    ]
+    for index, (entity_id, label, attributes, x, y, fill, stroke, entity_tag) in enumerate(entities):
+        objects.append(
+            _object(
+                entity_id,
+                "rect",
+                f"{label}实体",
+                {"x": x, "y": y, "width": 180, "height": 120, "radius": 16},
+                fill,
+                stroke=stroke,
+                stroke_width=3,
+                layer_id="middle",
+                group_id="er-diagram",
+                semantic_tags=["er_diagram.entity", entity_tag, "er_diagram"],
+                z_index=2 + index * 3,
+                role="entity",
+            )
+        )
+        objects.append(
+            _object(
+                f"{entity_id}-label",
+                "text",
+                f"{label}实体名",
+                {"x": x + 90, "y": y + 38, "content": label, "fontSize": 24},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="er-diagram",
+                semantic_tags=["er_diagram.entity_label", entity_tag, "er_diagram"],
+                z_index=3 + index * 3,
+                role="entity_label",
+            )
+        )
+        objects.append(
+            _object(
+                f"{entity_id}-attributes",
+                "text",
+                f"{label}属性",
+                {"x": x + 90, "y": y + 82, "content": attributes, "fontSize": 16},
+                "#5f6368",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="er-diagram",
+                semantic_tags=["er_diagram.attribute", entity_tag, "er_diagram"],
+                z_index=4 + index * 3,
+                role="attribute_list",
+            )
+        )
+
+    relationships = [
+        ("er-user-order-line", "用户下单", "er-user", "er-order", 325, 305, 420, 305, "1:N", 372, 282),
+        ("er-order-product-line", "订单包含商品", "er-order", "er-product", 600, 305, 700, 305, "N:M", 650, 282),
+        ("er-order-payment-line", "订单产生支付", "er-order", "er-payment", 510, 365, 510, 475, "1:1", 548, 420),
+    ]
+    relations = []
+    for index, (line_id, name, source_id, target_id, x1, y1, x2, y2, cardinality, label_x, label_y) in enumerate(relationships):
+        objects.append(
+            _object(
+                line_id,
+                "line",
+                name,
+                {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                "transparent",
+                stroke="#5f6368",
+                stroke_width=3,
+                layer_id="middle",
+                group_id="er-diagram",
+                semantic_tags=["er_diagram.relationship", "er_diagram"],
+                z_index=20 + index * 2,
+                role="relationship",
+            )
+        )
+        objects.append(
+            _object(
+                f"{line_id}-cardinality",
+                "text",
+                f"{name}基数",
+                {"x": label_x, "y": label_y, "content": cardinality, "fontSize": 18},
+                "#3c4043",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="er-diagram",
+                semantic_tags=["er_diagram.cardinality", "er_diagram.relationship", "er_diagram"],
+                z_index=21 + index * 2,
+                role="cardinality_label",
+            )
+        )
+        relations.append(
+            AgentSceneRelation(
+                subject=source_id,
+                relation="related_to",
+                target=target_id,
+                note=f"{name} {cardinality}",
+            )
+        )
+
+    return AgentSceneGraph(
+        intent="compose_er_diagram",
+        domain="er_diagram_scene",
+        summary=summary,
+        background="#ffffff",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _infographic_scene_graph(text: str) -> AgentSceneGraph:
     if "销售" in text or "营收" in text:
         title = "销售增长信息图"
@@ -1851,6 +2000,10 @@ def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
         return _gantt_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _org_chart_scene_graph(normalized_text)
+    if any(keyword in normalized_text for keyword in ("er图", "er 图", "实体关系图", "实体关系")) and any(
+        keyword in normalized_text for keyword in ("画", "创建", "生成")
+    ):
+        return _er_diagram_scene_graph(normalized_text)
     if (
         any(keyword in normalized_text for keyword in ("系统架构", "技术架构", "应用架构", "架构图"))
         and not any(keyword in normalized_text for keyword in ("组织架构", "团队架构"))
