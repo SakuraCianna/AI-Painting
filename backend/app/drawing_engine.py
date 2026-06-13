@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from typing import Any
 
@@ -22,6 +23,118 @@ from .repositories import (
     update_object,
 )
 from .schemas import ArtworkResponse, OperationRequest
+
+
+SUPPORTED_OPERATION_TYPES = {
+    "create_canvas",
+    "add_object",
+    "set_style",
+    "set_style_many",
+    "set_metadata",
+    "set_metadata_many",
+    "move_object",
+    "move_many",
+    "scale_object",
+    "scale_many",
+    "replace_shape",
+    "replace_shape_many",
+    "delete_object",
+    "clear_canvas",
+    "save_artwork",
+    "export_artwork",
+}
+SUPPORTED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier", "image"}
+REPLACEABLE_SHAPE_TYPES = {"rect", "circle", "ellipse", "triangle", "star"}
+SUPPORTED_LAYER_IDS = {"background", "base", "middle", "foreground"}
+MIN_SCALE_FACTOR = 0.05
+MAX_SCALE_FACTOR = 20.0
+MAX_MOVE_DELTA = 10000
+
+
+def _require_dict(value: Any, field_name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    return value
+
+
+def _validate_layer_id(layer_id: Any) -> str:
+    if not isinstance(layer_id, str) or layer_id not in SUPPORTED_LAYER_IDS:
+        raise ValueError(f"Unsupported layer_id: {layer_id}")
+    return layer_id
+
+
+def _normalize_string_list(value: Any, field_name: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list")
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _validated_drawing_object(obj: Any) -> dict[str, Any]:
+    drawing_object = dict(_require_dict(obj, "object"))
+    object_type = drawing_object.get("type")
+    if not isinstance(object_type, str) or object_type not in SUPPORTED_OBJECT_TYPES:
+        raise ValueError(f"Unsupported object type: {object_type}")
+    drawing_object["geometry"] = dict(_require_dict(drawing_object.get("geometry", {}), "object.geometry"))
+    drawing_object["style"] = dict(_require_dict(drawing_object.get("style", {}), "object.style"))
+    if "layer_id" in drawing_object:
+        drawing_object["layer_id"] = _validate_layer_id(drawing_object["layer_id"])
+    if "semantic_tags" in drawing_object:
+        drawing_object["semantic_tags"] = _normalize_string_list(drawing_object["semantic_tags"], "object.semantic_tags")
+    if "transform" in drawing_object:
+        drawing_object["transform"] = dict(_require_dict(drawing_object["transform"], "object.transform"))
+    if "name" in drawing_object and drawing_object["name"] is not None:
+        drawing_object["name"] = str(drawing_object["name"])[:80]
+    return drawing_object
+
+
+def _validated_style(value: Any) -> dict[str, Any]:
+    return dict(_require_dict(value or {}, "style"))
+
+
+def _validated_scale_factor(value: Any) -> float:
+    try:
+        factor = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid scale factor: {value}") from exc
+    if not math.isfinite(factor) or factor < MIN_SCALE_FACTOR or factor > MAX_SCALE_FACTOR:
+        raise ValueError(f"Scale factor must be between {MIN_SCALE_FACTOR} and {MAX_SCALE_FACTOR}")
+    return factor
+
+
+def _validated_delta(value: Any, field_name: str) -> int:
+    try:
+        delta = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid {field_name}: {value}") from exc
+    if abs(delta) > MAX_MOVE_DELTA:
+        raise ValueError(f"{field_name} is too large")
+    return delta
+
+
+def _validated_replacement_shape(value: Any) -> str:
+    shape = str(value or "").strip()
+    if shape not in REPLACEABLE_SHAPE_TYPES:
+        raise ValueError(f"Unsupported replacement shape: {shape}")
+    return shape
+
+
+def _validated_canvas_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    for key in ("width", "height"):
+        if key not in payload or payload[key] is None:
+            continue
+        value = int(payload[key])
+        if value < 64 or value > 4096:
+            raise ValueError(f"{key} must be between 64 and 4096")
+        updates[key] = value
+    if payload.get("background") is not None:
+        background = str(payload["background"])
+        if not background or len(background) > 64:
+            raise ValueError("background must be 1 to 64 characters")
+        updates["background"] = background
+    return updates
 
 
 def _target_object_id(connection: sqlite3.Connection, artwork_id: str, target: dict[str, Any] | None) -> str:
@@ -198,7 +311,18 @@ def _metadata_snapshot(obj) -> dict[str, Any]:
 
 
 def _metadata_updates(payload: dict[str, Any]) -> dict[str, Any]:
-    return {key: payload[key] for key in ("name", "layer_id", "group_id", "semantic_tags", "transform") if key in payload}
+    updates: dict[str, Any] = {}
+    if "name" in payload:
+        updates["name"] = None if payload["name"] is None else str(payload["name"])[:80]
+    if "layer_id" in payload:
+        updates["layer_id"] = _validate_layer_id(payload["layer_id"])
+    if "group_id" in payload:
+        updates["group_id"] = None if payload["group_id"] is None else str(payload["group_id"])[:80]
+    if "semantic_tags" in payload:
+        updates["semantic_tags"] = _normalize_string_list(payload["semantic_tags"], "semantic_tags")
+    if "transform" in payload:
+        updates["transform"] = dict(_require_dict(payload["transform"], "transform"))
+    return updates
 
 
 def _apply_metadata_updates(connection: sqlite3.Connection, artwork_id: str, object_id: str, updates: dict[str, Any], *, commit: bool) -> None:
@@ -221,22 +345,26 @@ def apply_operation(
     payload = dict(operation.payload)
     inverse_payload: dict[str, Any] = {}
 
-    if clear_redo and record and operation_type not in {"undo", "redo"}:
-        clear_redo_stack(connection, artwork_id, commit=commit)
+    if operation_type not in SUPPORTED_OPERATION_TYPES:
+        raise ValueError(f"Unsupported operation type: {operation_type}")
+
+    should_clear_redo = clear_redo and record and operation_type not in {"undo", "redo"}
 
     if operation_type == "create_canvas":
         current = get_artwork(connection, artwork_id)
         inverse_payload = {"width": current.width, "height": current.height, "background": current.background}
+        canvas_updates = _validated_canvas_payload(payload)
         update_artwork(
             connection,
             artwork_id,
-            width=payload.get("width"),
-            height=payload.get("height"),
-            background=payload.get("background"),
+            width=canvas_updates.get("width"),
+            height=canvas_updates.get("height"),
+            background=canvas_updates.get("background"),
             commit=commit,
         )
         message = "已更新画布"
     elif operation_type == "add_object":
+        payload["object"] = _validated_drawing_object(payload.get("object"))
         created = add_object(connection, artwork_id, payload["object"], commit=commit)
         payload["object"] = created.model_dump()
         inverse_payload = {"object_id": created.id}
@@ -246,7 +374,7 @@ def apply_operation(
         current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
         if current is None:
             current = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
-        style_updates = payload.get("style", {})
+        style_updates = _validated_style(payload.get("style", {}))
         inverse_payload = {"target": {"object_id": object_id}, "style": {key: current.style.get(key) for key in style_updates}}
         update_object(connection, artwork_id, object_id, style=style_updates, commit=commit)
         message = "已更新样式"
@@ -260,7 +388,7 @@ def apply_operation(
         targets = find_objects(connection, artwork_id, payload.get("target"))
         if not targets:
             raise KeyError("No matching drawing objects exist")
-        style_updates = payload.get("style", {})
+        style_updates = _validated_style(payload.get("style", {}))
         inverse_payload = {
             "items": [
                 {"object_id": obj.id, "style": {key: obj.style.get(key) for key in style_updates}}
@@ -291,8 +419,8 @@ def apply_operation(
         current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
         if current is None:
             current = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
-        dx = int(payload.get("dx", 0))
-        dy = int(payload.get("dy", 0))
+        dx = _validated_delta(payload.get("dx", 0), "dx")
+        dy = _validated_delta(payload.get("dy", 0), "dy")
         update_object(connection, artwork_id, object_id, geometry=_move_geometry(current.geometry, dx, dy), commit=commit)
         inverse_payload = {"target": {"object_id": object_id}, "dx": -dx, "dy": -dy}
         message = "已移动对象"
@@ -300,8 +428,8 @@ def apply_operation(
         targets = find_objects(connection, artwork_id, payload.get("target"))
         if not targets:
             raise KeyError("No matching drawing objects exist")
-        dx = int(payload.get("dx", 0))
-        dy = int(payload.get("dy", 0))
+        dx = _validated_delta(payload.get("dx", 0), "dx")
+        dy = _validated_delta(payload.get("dy", 0), "dy")
         payload["target"] = {"object_ids": [obj.id for obj in targets]}
         inverse_payload = {"target": {"object_ids": [obj.id for obj in targets]}, "dx": -dx, "dy": -dy}
         for obj in targets:
@@ -312,34 +440,36 @@ def apply_operation(
         current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
         if current is None:
             current = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
-        factor = float(payload.get("factor", 1))
+        factor = _validated_scale_factor(payload.get("factor", 1))
         update_object(connection, artwork_id, object_id, geometry=_scale_geometry(current.geometry, factor), commit=commit)
-        inverse_payload = {"target": {"object_id": object_id}, "factor": 1 / factor if factor else 1}
+        inverse_payload = {"target": {"object_id": object_id}, "factor": 1 / factor}
         message = "已缩放对象"
     elif operation_type == "scale_many":
         targets = find_objects(connection, artwork_id, payload.get("target"))
         if not targets:
             raise KeyError("No matching drawing objects exist")
-        factor = float(payload.get("factor", 1))
+        factor = _validated_scale_factor(payload.get("factor", 1))
         payload["target"] = {"object_ids": [obj.id for obj in targets]}
-        inverse_payload = {"target": {"object_ids": [obj.id for obj in targets]}, "factor": 1 / factor if factor else 1}
+        inverse_payload = {"target": {"object_ids": [obj.id for obj in targets]}, "factor": 1 / factor}
         for obj in targets:
             update_object(connection, artwork_id, obj.id, geometry=_scale_geometry(obj.geometry, factor), commit=commit)
         message = f"已缩放 {len(targets)} 个对象"
     elif operation_type == "replace_shape":
         object_id = _target_object_id(connection, artwork_id, payload.get("target"))
         current = _target_object(connection, artwork_id, {"object_id": object_id})
-        new_type = str(payload.get("shape") or payload.get("type"))
+        new_type = _validated_replacement_shape(payload.get("shape") or payload.get("type"))
         inverse_payload = {"target": {"object_id": object_id}, "shape": current.type, "geometry": current.geometry}
         payload["target"] = {"object_id": object_id}
+        payload["shape"] = new_type
         _replace_object_shape(connection, artwork_id, object_id, new_type, commit=commit)
         message = "已替换对象形状"
     elif operation_type == "replace_shape_many":
         targets = find_objects(connection, artwork_id, payload.get("target"))
         if not targets:
             raise KeyError("No matching drawing objects exist")
-        new_type = str(payload.get("shape") or payload.get("type"))
+        new_type = _validated_replacement_shape(payload.get("shape") or payload.get("type"))
         payload["target"] = {"object_ids": [obj.id for obj in targets]}
+        payload["shape"] = new_type
         inverse_payload = {
             "items": [{"object_id": obj.id, "shape": obj.type, "geometry": obj.geometry} for obj in targets]
         }
@@ -366,10 +496,10 @@ def apply_operation(
     elif operation_type == "export_artwork":
         inverse_payload = {}
         message = "已准备导出"
-    else:
-        raise ValueError(f"Unsupported operation type: {operation_type}")
 
     if record and operation_type not in {"export_artwork"}:
+        if should_clear_redo:
+            clear_redo_stack(connection, artwork_id, commit=commit)
         record_operation(
             connection,
             artwork_id,
