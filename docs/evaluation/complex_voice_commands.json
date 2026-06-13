@@ -119,6 +119,26 @@
     "expected_operation_types": ["set_style_many", "set_style_many"]
   },
   {
+    "id": "agent-edit-ranked-tree",
+    "text": "把左边第二棵树改成黄色",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many"],
+    "expected_target_semantic_tag": "tree"
+  },
+  {
+    "id": "agent-edit-door-below-roof",
+    "text": "把屋顶下面的门改成绿色",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many"],
+    "expected_target_semantic_tag": "house.door"
+  },
+  {
+    "id": "agent-move-warm-small-objects",
+    "text": "把所有暖色小物件向上移动一点",
+    "tier": "agent",
+    "expected_operation_types": ["move_many"]
+  },
+  {
     "id": "agent-voice-flowchart",
     "text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行",
     "tier": "agent",

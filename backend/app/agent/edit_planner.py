@@ -11,6 +11,7 @@ EDIT_KEYWORDS = ("改成", "换成", "变成", "设为", "设置为", "移动", 
 CREATE_KEYWORDS = ("画", "创建", "生成", "新建", "添加")
 CLAUSE_SPLIT_PATTERN = re.compile(r"(?:，|,|。|；|;|并且|同时|然后|接着|并)")
 NUMBER_PATTERN = re.compile(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:像素|px)?")
+POSITION_RANK_PATTERN = re.compile(r"第?\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|棵|扇|座|条|张|块|只|件)")
 
 
 TARGET_RULES: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
@@ -18,6 +19,8 @@ TARGET_RULES: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
     (("房子的门", "小屋的门", "房子门", "门"), {"selector": "all", "semantic_tag": "house.door"}),
     (("屋顶",), {"selector": "all", "semantic_tag": "house.roof"}),
     (("房子主体", "墙体", "墙面"), {"selector": "all", "semantic_tag": "house.body"}),
+    (("树冠",), {"selector": "all", "semantic_tag": "tree.crown"}),
+    (("树", "小树", "大树"), {"selector": "all", "semantic_tag": "tree"}),
     (("沙发",), {"selector": "all", "semantic_tag": "sofa"}),
     (("茶几",), {"selector": "all", "semantic_tag": "coffee_table"}),
     (("落地灯", "台灯", "灯"), {"selector": "all", "semantic_tag": "floor_lamp"}),
@@ -40,6 +43,11 @@ def _copy_target(target: dict[str, Any]) -> dict[str, Any]:
     copied = dict(target)
     if "semantic_tags" in copied:
         copied["semantic_tags"] = list(copied["semantic_tags"])
+    if isinstance(copied.get("relative_to"), dict):
+        relative_to = dict(copied["relative_to"])
+        if isinstance(relative_to.get("target"), dict):
+            relative_to["target"] = dict(relative_to["target"])
+        copied["relative_to"] = relative_to
     return copied
 
 
@@ -77,6 +85,42 @@ def _movement_delta(text: str) -> tuple[int, int] | None:
     return dx, dy
 
 
+def _extract_position_rank(text: str) -> int | None:
+    match = POSITION_RANK_PATTERN.search(text)
+    if not match:
+        return None
+    rank = chinese_number_to_int(match.group(1))
+    return rank if rank and rank > 0 else None
+
+
+def _apply_query_hints(clause: str, target: dict[str, Any]) -> dict[str, Any]:
+    enriched = _copy_target(target)
+    if "左边" in clause or "左侧" in clause:
+        enriched["position"] = "leftmost"
+    elif "右边" in clause or "右侧" in clause:
+        enriched["position"] = "rightmost"
+    elif "上方" in clause or "顶部" in clause:
+        enriched["position"] = "topmost"
+    elif "下方" in clause or "底部" in clause:
+        enriched["position"] = "bottommost"
+
+    rank = _extract_position_rank(clause)
+    if rank is not None and "position" in enriched:
+        enriched["selector"] = "all"
+        enriched["position_rank"] = rank
+
+    if "屋顶下面" in clause or "屋顶下方" in clause:
+        enriched["selector"] = "all"
+        enriched["relative_to"] = {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+
+    if "小物件" in clause or "小对象" in clause or "小图形" in clause:
+        enriched["selector"] = "all"
+        enriched["size_class"] = "small"
+        enriched["max_area"] = 25000
+
+    return enriched
+
+
 def _scale_factor(text: str) -> float | None:
     if not any(keyword in text for keyword in ("放大", "缩小", "变大", "变小", "改大", "改小")):
         return None
@@ -86,16 +130,31 @@ def _scale_factor(text: str) -> float | None:
 
 
 def _target_for_clause(clause: str) -> tuple[dict[str, Any] | None, str | None]:
+    if "暖色" in clause:
+        return _apply_query_hints(clause, {"selector": "all", "color_group": "warm"}), "暖色对象"
+    if "冷色" in clause:
+        return _apply_query_hints(clause, {"selector": "all", "color_group": "cool"}), "冷色对象"
+    if "中性色" in clause:
+        return _apply_query_hints(clause, {"selector": "all", "color_group": "neutral"}), "中性色对象"
     for keywords, target in TARGET_RULES:
         if any(keyword in clause for keyword in keywords):
-            return _copy_target(target), keywords[0]
+            return _apply_query_hints(clause, target), keywords[0]
     if "它" in clause or "这个" in clause or "刚才" in clause:
         return {"selector": "latest"}, None
     return None, None
 
 
 def _target_is_specific(target: dict[str, Any] | None) -> bool:
-    return bool(target and any(key in target for key in ("semantic_tag", "semantic_tags", "type", "layer_id", "group_id")))
+    return bool(
+        target
+        and (
+            target.get("selector") == "all"
+            or any(
+                key in target
+                for key in ("semantic_tag", "semantic_tags", "type", "layer_id", "group_id", "color_group", "relative_to", "position_rank", "size_class")
+            )
+        )
+    )
 
 
 def _build_style_operation(clause: str, target: dict[str, Any]) -> OperationRequest | None:

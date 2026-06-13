@@ -155,6 +155,56 @@ def test_agent_edit_command_updates_existing_semantic_objects_and_undoes_as_grou
             assert obj["geometry"]["x"] == before_x[obj["name"]]
 
 
+def test_agent_query_dsl_edits_relative_target_and_undoes(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    create_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个房子 红色屋顶 蓝色门 两扇窗户"})
+    assert create_response.status_code == 200
+    before_objects = create_response.json()["artwork"]["objects"]
+    before_door = next(obj for obj in before_objects if "house.door" in obj["semantic_tags"])
+    roof = next(obj for obj in before_objects if "house.roof" in obj["semantic_tags"])
+
+    edit_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把屋顶下面的门改成绿色"})
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    edited_door = next(obj for obj in body["artwork"]["objects"] if "house.door" in obj["semantic_tags"])
+    edited_roof = next(obj for obj in body["artwork"]["objects"] if "house.roof" in obj["semantic_tags"])
+    assert edited_door["style"]["fill"] == "#16a34a"
+    assert edited_roof["style"]["fill"] == roof["style"]["fill"]
+
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    restored_door = next(obj for obj in undo_response.json()["artwork"]["objects"] if "house.door" in obj["semantic_tags"])
+    assert restored_door["style"]["fill"] == before_door["style"]["fill"]
+
+
+def test_agent_query_dsl_moves_warm_small_objects_only(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个红色圆形在左边 半径二十"})
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色圆形在中间 半径二十"})
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个蓝色圆形在右边 半径二十"})
+    before_objects = client.get(f"/api/artworks/{artwork_id}").json()["objects"]
+    before_y = {obj["style"]["fill"]: obj["geometry"]["cy"] for obj in before_objects}
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把所有暖色小物件向上移动一点"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    moved_objects = body["artwork"]["objects"]
+    after_y = {obj["style"]["fill"]: obj["geometry"]["cy"] for obj in moved_objects}
+    assert after_y["#dc2626"] == before_y["#dc2626"] - 20
+    assert after_y["#facc15"] == before_y["#facc15"] - 20
+    assert after_y["#2563eb"] == before_y["#2563eb"]
+
+
 def test_agent_flowchart_command_executes_diagram_scene(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)

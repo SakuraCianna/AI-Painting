@@ -214,6 +214,26 @@ def test_parse_window_shape_replacement_and_spatial_scale() -> None:
     assert scale_plan.operations[0].payload["target"]["position"] == "leftmost"
 
 
+def test_parse_object_query_dsl_selectors() -> None:
+    ranked_plan = parse_command("把左边第二棵树改成黄色")
+    ranked_target = ranked_plan.operations[0].payload["target"]
+    assert ranked_plan.operations[0].operation_type == "set_style_many"
+    assert ranked_target["semantic_tag"] == "tree"
+    assert ranked_target["position"] == "leftmost"
+    assert ranked_target["position_rank"] == 2
+
+    relative_plan = parse_command("把屋顶下面的门改成绿色")
+    relative_target = relative_plan.operations[0].payload["target"]
+    assert relative_target["semantic_tag"] == "house.door"
+    assert relative_target["relative_to"] == {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+
+    color_group_plan = parse_command("把所有暖色小物件向上移动一点")
+    color_group_target = color_group_plan.operations[0].payload["target"]
+    assert color_group_plan.operations[0].operation_type == "move_many"
+    assert color_group_target["color_group"] == "warm"
+    assert color_group_target["size_class"] == "small"
+
+
 def test_parse_cozy_cabin_scene_as_executable_plan() -> None:
     plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
     assert plan.requires_confirmation is False

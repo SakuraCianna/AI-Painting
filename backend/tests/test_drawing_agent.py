@@ -159,6 +159,38 @@ def test_agent_edit_planner_supports_different_targets_per_clause(monkeypatch) -
     assert result.plan.operations[1].payload["style"] == {"strokeWidth": 5}
 
 
+def test_agent_edit_planner_builds_object_query_dsl_targets(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    ranked_result = asyncio.run(main.build_command_plan_with_metrics("把左边第二棵树改成黄色"))
+    ranked_target = ranked_result.plan.operations[0].payload["target"]
+
+    assert ranked_result.plan.planner_source == "agent"
+    assert ranked_result.plan.operations[0].operation_type == "set_style_many"
+    assert ranked_target["semantic_tag"] == "tree"
+    assert ranked_target["position"] == "leftmost"
+    assert ranked_target["position_rank"] == 2
+
+    relative_result = asyncio.run(main.build_command_plan_with_metrics("把屋顶下面的门改成绿色"))
+    relative_target = relative_result.plan.operations[0].payload["target"]
+
+    assert relative_result.plan.planner_source == "agent"
+    assert relative_target["semantic_tag"] == "house.door"
+    assert relative_target["relative_to"] == {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
+
+    color_group_result = asyncio.run(main.build_command_plan_with_metrics("把所有暖色小物件向上移动一点"))
+    color_group_target = color_group_result.plan.operations[0].payload["target"]
+
+    assert color_group_result.plan.planner_source == "agent"
+    assert color_group_result.plan.operations[0].operation_type == "move_many"
+    assert color_group_target["color_group"] == "warm"
+    assert color_group_target["size_class"] == "small"
+    assert color_group_target["max_area"] == 25000
+
+
 def test_agent_template_builds_voice_flowchart(monkeypatch) -> None:
     from app import main
 
