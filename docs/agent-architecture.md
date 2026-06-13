@@ -60,7 +60,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 classify、build、repair、validate、repair_with_model、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
 - `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
-- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、流程图模板和 Graph 调度
+- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、流程图模板、信息图模板和 Graph 调度
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
 
@@ -91,7 +91,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 6. 输出速度策略
 
 - 简单命令继续走规则解析, 不调用模型
-- 已知复杂模板先用本地 Agent 模板, 例如客厅场景和语音绘图流程图
+- 已知复杂模板先用本地 Agent 模板, 例如客厅场景、语音绘图流程图和销售增长信息图
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo
 - 模型输出校验失败时, Graph 会先尝试一次模型修复, 再进入编译
 - Agent 输出限制对象数量和操作数量
@@ -111,7 +111,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 8. 下一阶段
 
 - 增加 50 到 100 条复杂语音评测集
-- 扩展领域工具: 室内、人物、信息图、海报、UI 草图
+- 扩展领域工具: 室内、人物、海报、UI 草图
 - 将当前本地流程图模板升级为 Mermaid / PlantUML 结构图执行器
 - 增加模型驱动的 SceneGraph repair 节点
 - 增加组级移动、缩放、撤销和局部重绘

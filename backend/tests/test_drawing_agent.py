@@ -147,6 +147,31 @@ def test_agent_template_builds_voice_flowchart(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_builds_infographic(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个销售增长信息图，包含营收、转化率、复购率和三个月柱状图"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "infographic_scene"
+    assert result.plan.scene_plan.expected_object_count == 20
+    assert len(result.plan.operations) == 20
+    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
+    assert object_types.count("rect") == 7
+    assert object_types.count("text") == 11
+    assert object_types.count("line") == 2
+    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
+    assert "infographic.metric_card" in semantic_tags
+    assert "infographic.bar" in semantic_tags
+    assert "bar_chart" in semantic_tags
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     from app import main
     from app.agent import planner
