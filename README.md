@@ -33,7 +33,7 @@ AI Painting 是一个 **纯语音绘图工作台**。用户不通过鼠标拖拽
 ### 为什么值得关注
 
 - **纯语音创作**: 前端没有鼠标拖拽绘图工具栏, 语音是唯一创作输入。
-- **矢量优先**: 房子、流程图、甘特图、组织结构图、UI 草图等结构化内容走程序生成, 保持文字清晰、关系稳定、对象可编辑。
+- **矢量优先**: 房子、流程图、泳道图、甘特图、组织结构图、UI 草图等结构化内容走程序生成, 保持文字清晰、关系稳定、对象可编辑。
 - **生图增强**: 水墨、二次元、写实插画、复杂视觉海报等艺术型内容可走 GPT-image-2 / OpenAI 兼容 Provider。
 - **图生图精修**: 支持“精修我的图片”“把右边那个人的眼睛调亮”“继续把他的头发柔和一点”“再亮一点”“同一个人衣服亮一点”“左边那个也这样处理”等指令, 会把源图、原始提示词、目标主体、目标区域和调整动作一起传给图像编辑 Provider。
 - **Agent 架构**: LangGraph + SceneGraph v2 负责复杂规划, 后端编译成受控 `CommandPlan` 后再执行。
@@ -51,7 +51,7 @@ AI Painting 是一个 **纯语音绘图工作台**。用户不通过鼠标拖拽
 | 高级对象选择 | 已支持 | “把屋顶下面的门改成绿色” |
 | 复合撤销 | 已支持 | 一次撤销整条语音计划 |
 | 清空确认链 | 已支持 | “清空画布” -> “确认清空” |
-| Agent 模板 | 已支持 | 客厅、流程图、信息图、海报、UI 草图、组织结构图、甘特图 |
+| Agent 模板 | 已支持 | 客厅、流程图、泳道图、信息图、海报、UI 草图、组织结构图、甘特图 |
 | 文生图 | 已支持 Provider 链路 | “生成一张人物肖像画” |
 | 图生图精修 | 已支持 Provider 链路 | “把右边那个人的眼睛调亮”“继续把他的头发柔和一点”“再亮一点”“左边那个也这样处理” |
 | ASR 降级 | 已支持 | 小米 MiMo ASR -> 本地 ASR -> Web Speech API |
@@ -294,7 +294,7 @@ Voice -> ASR -> Render Strategy Router -> Rule Parser / Drawing Agent -> Structu
 ### Highlights
 
 - **Voice-first creation**: no mouse-based drawing toolbar is exposed in the workspace.
-- **Vector-first rendering**: diagrams, houses, Gantt charts, org charts, UI wireframes, and other structured graphics are rendered as editable SVG objects.
+- **Vector-first rendering**: diagrams, houses, swimlane diagrams, Gantt charts, org charts, UI wireframes, and other structured graphics are rendered as editable SVG objects.
 - **Generative image extension**: artistic requests can go through GPT-image-2 or any OpenAI-compatible image provider.
 - **Image-to-image refinement**: Chinese voice commands such as "精修我的图片", "把右边那个人的眼睛调亮", "继续把他的头发柔和一点", "再亮一点", or "左边那个也这样处理" carry source image, source prompt, target subject, target region, and adjustment into the image edit provider.
 - **Agent architecture**: LangGraph and SceneGraph v2 plan complex scenes, then the backend compiles them into safe `CommandPlan` operations.
@@ -312,7 +312,7 @@ Voice -> ASR -> Render Strategy Router -> Rule Parser / Drawing Agent -> Structu
 | Advanced selection | Supported | "Change the door below the roof to green" |
 | Grouped undo | Supported | Undo one full voice plan at a time |
 | Clear confirmation | Supported | "Clear canvas" -> "Confirm clear" |
-| Agent templates | Supported | Living room, flowchart, infographic, poster, UI wireframe, org chart, Gantt chart |
+| Agent templates | Supported | Living room, flowchart, swimlane diagram, infographic, poster, UI wireframe, org chart, Gantt chart |
 | Text-to-image | Provider pipeline ready | "Generate an anime character" |
 | Image-to-image | Provider pipeline ready | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点", "再亮一点", or "左边那个也这样处理" |
 | ASR fallback | Supported | Xiaomi MiMo ASR -> local ASR -> Web Speech API |
@@ -326,6 +326,7 @@ Create a horizontal white canvas
 Draw a house with a red roof, blue door, and two windows
 Draw a cozy cabin with two trees on the left, a curved road on the right, and three clouds in the sky
 Draw a voice drawing flowchart from user voice to ASR, planner, and canvas execution
+画一个泳道图，包含销售、运营和交付
 Draw a product iteration Gantt chart with requirements, design, development, testing, and launch milestones
 Change the second tree on the left to yellow
 Change the button inside the card and on the same row as the title to green
@@ -367,7 +368,7 @@ flowchart TD
 
 | Request Type | Default Path | Why |
 | --- | --- | --- |
-| Flowcharts, UML, ER diagrams, Gantt charts, org charts | Programmatic rendering | Text must stay readable, relations must stay stable, and objects must remain editable |
+| Flowcharts, swimlane diagrams, UML, ER diagrams, Gantt charts, org charts | Programmatic rendering | Text must stay readable, relations must stay stable, and objects must remain editable |
 | Houses, trees, sun, simple scene compositions | Programmatic rendering | Object structure is explicit and works well with SVG and semantic tags |
 | Ink painting, anime, realistic illustration, sci-fi scenes | Image generation | Style consistency and visual richness matter more than object-level editing |
 | Refinement, enrichment, style transfer, local repainting | Image-to-image | Existing composition should be preserved while visual quality improves |

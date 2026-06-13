@@ -452,6 +452,32 @@ def test_agent_template_builds_gantt_chart(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_builds_swimlane_diagram(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个泳道图，包含销售、运营和交付"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "swimlane_diagram_scene"
+    assert result.plan.scene_plan.expected_object_count == 18
+    assert len(result.plan.operations) == 18
+    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
+    assert object_types.count("rect") == 7
+    assert object_types.count("text") == 7
+    assert object_types.count("line") == 4
+    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
+    assert "swimlane_diagram.lane" in semantic_tags
+    assert "swimlane_diagram.lane_label" in semantic_tags
+    assert "swimlane_diagram.step" in semantic_tags
+    assert "swimlane_diagram.connector" in semantic_tags
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     from app import main
     from app.agent import planner

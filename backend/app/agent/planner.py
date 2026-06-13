@@ -1447,7 +1447,134 @@ def _gantt_chart_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _swimlane_diagram_scene_graph(text: str) -> AgentSceneGraph:
+    lanes = [
+        ("销售", 160, "#e8f0fe", "#1a73e8"),
+        ("运营", 310, "#e6f4ea", "#34a853"),
+        ("交付", 460, "#fef7e0", "#fbbc04"),
+    ]
+    steps = [
+        ("线索录入", 250, 205, "#d2e3fc", "销售收集客户线索"),
+        ("方案确认", 520, 205, "#d2e3fc", "销售确认解决方案"),
+        ("资源排期", 520, 355, "#ceead6", "运营排期并协调资源"),
+        ("交付验收", 760, 505, "#feefc3", "交付完成验收"),
+    ]
+    objects: list[AgentSceneObject] = []
+
+    for index, (lane_name, y, fill, stroke) in enumerate(lanes):
+        lane_id = f"swimlane-lane-{index + 1}"
+        objects.append(
+            _object(
+                lane_id,
+                "rect",
+                f"{lane_name}泳道",
+                {"x": 150, "y": y, "width": 760, "height": 132, "radius": 18},
+                fill,
+                stroke=stroke,
+                stroke_width=2,
+                layer_id="background",
+                group_id="swimlane-diagram",
+                semantic_tags=["swimlane_diagram.lane", f"swimlane_diagram.lane.{index + 1}", "swimlane_diagram"],
+                z_index=index,
+                role="swimlane",
+            )
+        )
+        objects.append(
+            _object(
+                f"{lane_id}-label",
+                "text",
+                f"{lane_name}泳道标签",
+                {"x": 90, "y": y + 70, "content": lane_name, "fontSize": 24},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="swimlane-diagram",
+                semantic_tags=["swimlane_diagram.lane_label", f"swimlane_diagram.lane.{index + 1}", "swimlane_diagram"],
+                z_index=20 + index,
+                role="lane_label",
+            )
+        )
+
+    for index, (step_name, x, y, fill, note) in enumerate(steps):
+        step_id = f"swimlane-step-{index + 1}"
+        objects.append(
+            _object(
+                step_id,
+                "rect",
+                f"{step_name}节点",
+                {"x": x, "y": y, "width": 150, "height": 58, "radius": 16},
+                fill,
+                stroke="#3c4043",
+                stroke_width=2,
+                layer_id="middle",
+                group_id="swimlane-diagram",
+                semantic_tags=["swimlane_diagram.step", f"swimlane_diagram.step.{index + 1}", "swimlane_diagram"],
+                z_index=10 + index,
+                role="process_step",
+            )
+        )
+        objects.append(
+            _object(
+                f"{step_id}-label",
+                "text",
+                f"{step_name}标签",
+                {"x": x + 75, "y": y + 34, "content": step_name, "fontSize": 20},
+                "#202124",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="swimlane-diagram",
+                semantic_tags=["swimlane_diagram.step_label", f"swimlane_diagram.step.{index + 1}", "swimlane_diagram"],
+                z_index=30 + index,
+                role="step_label",
+            )
+        )
+
+    connectors = [
+        ("swimlane-connector-1", 400, 234, 520, 234, "线索流转到方案确认"),
+        ("swimlane-connector-2", 595, 263, 595, 355, "方案确认后进入运营排期"),
+        ("swimlane-connector-3", 670, 384, 760, 505, "运营排期后交付验收"),
+        ("swimlane-connector-4", 835, 505, 835, 595, "验收结果回写流程"),
+    ]
+    for index, (object_id, x1, y1, x2, y2, note) in enumerate(connectors):
+        objects.append(
+            _object(
+                object_id,
+                "line",
+                f"泳道连接线{index + 1}",
+                {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                "transparent",
+                stroke="#5f6368",
+                stroke_width=3,
+                layer_id="middle",
+                group_id="swimlane-diagram",
+                semantic_tags=["swimlane_diagram.connector", "swimlane_diagram"],
+                z_index=5 + index,
+                role="connector",
+            )
+        )
+
+    relations = [
+        AgentSceneRelation(subject="swimlane-step-1", relation="precedes", target="swimlane-step-2", note=steps[0][4]),
+        AgentSceneRelation(subject="swimlane-step-2", relation="handoff", target="swimlane-step-3", note=steps[1][4]),
+        AgentSceneRelation(subject="swimlane-step-3", relation="handoff", target="swimlane-step-4", note=steps[2][4]),
+        AgentSceneRelation(subject="swimlane-step-4", relation="reports", target="swimlane-step-1", note=steps[3][4]),
+    ]
+    return AgentSceneGraph(
+        intent="compose_swimlane_diagram",
+        domain="swimlane_diagram_scene",
+        summary="绘制销售、运营和交付三条泳道的跨职能流程图",
+        background="#ffffff",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
+    if "泳道图" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+        return _swimlane_diagram_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("甘特图", "排期图", "项目排期", "进度计划")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _gantt_chart_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("组织结构", "组织架构", "团队架构", "团队结构")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
