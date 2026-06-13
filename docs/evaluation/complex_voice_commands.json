@@ -239,7 +239,23 @@
     "id": "partial-generated-image-polish",
     "text": "把人物肖像的眼睛精修一下",
     "tier": "rules",
-    "expected_operation_types": ["polish_image_asset"]
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_region": "眼睛"
+  },
+  {
+    "id": "partial-generated-image-spatial-polish",
+    "text": "把右边那张生成图的天空精修一下",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_position": "rightmost",
+    "expected_target_region": "天空"
+  },
+  {
+    "id": "partial-generated-image-ranked-polish",
+    "text": "把第二张生成图精修一下",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_rank": 2
   },
   {
     "id": "programmatic-swimlane-clarification",

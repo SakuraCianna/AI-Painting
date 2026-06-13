@@ -23,6 +23,20 @@ POSITION_SORT_CONFIG = {
     "topmost": (1, False),
     "bottommost": (1, True),
 }
+CORNER_ALIASES = {
+    "top_left": "top_left",
+    "left_top": "top_left",
+    "左上角": "top_left",
+    "top_right": "top_right",
+    "right_top": "top_right",
+    "右上角": "top_right",
+    "bottom_left": "bottom_left",
+    "left_bottom": "bottom_left",
+    "左下角": "bottom_left",
+    "bottom_right": "bottom_right",
+    "right_bottom": "bottom_right",
+    "右下角": "bottom_right",
+}
 RELATION_ALIASES = {
     "below": "below",
     "under": "below",
@@ -336,12 +350,17 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
     for relation_selector in _relation_selectors(selector):
         if objects:
             objects = _filter_objects_by_relation(connection, artwork_id, objects, relation_selector)
+    corner = selector.get("corner")
+    if corner and objects:
+        objects = _filter_objects_by_corner(objects, str(corner), selector)
     position = selector.get("position")
     if position and objects:
         if _should_expand_group(selector):
             objects = _filter_groups_by_position(objects, str(position), selector)
         else:
             objects = _filter_objects_by_position(objects, str(position), selector)
+    elif not corner and objects and _selector_rank(selector) is not None:
+        objects = _filter_objects_by_rank(objects, selector)
     if _should_expand_group(selector):
         objects = _expand_group_members(connection, artwork_id, objects)
     return objects
@@ -744,6 +763,35 @@ def _filter_objects_by_position(objects: list[DrawingObject], position: str, sel
             return [sorted_objects[rank - 1]] if rank <= len(sorted_objects) else []
         return [sorted_objects[0]]
     return objects
+
+
+def _filter_objects_by_rank(objects: list[DrawingObject], selector: dict[str, Any]) -> list[DrawingObject]:
+    rank = _selector_rank(selector)
+    if rank is None:
+        return objects
+    return [objects[rank - 1]] if rank <= len(objects) else []
+
+
+def _filter_objects_by_corner(objects: list[DrawingObject], corner: str, selector: dict[str, Any]) -> list[DrawingObject]:
+    normalized_corner = CORNER_ALIASES.get(corner, corner)
+    if normalized_corner not in CORNER_ALIASES.values():
+        return objects
+    centers = {obj.id: _object_center(obj) for obj in objects}
+    xs = [center[0] for center in centers.values()]
+    ys = [center[1] for center in centers.values()]
+    anchor_x = min(xs) if normalized_corner.endswith("left") else max(xs)
+    anchor_y = min(ys) if normalized_corner.startswith("top") else max(ys)
+    sorted_objects = sorted(
+        objects,
+        key=lambda obj: (
+            (centers[obj.id][0] - anchor_x) ** 2 + (centers[obj.id][1] - anchor_y) ** 2,
+            obj.z_index,
+        ),
+    )
+    rank = _selector_rank(selector)
+    if rank is not None:
+        return [sorted_objects[rank - 1]] if rank <= len(sorted_objects) else []
+    return [sorted_objects[0]]
 
 
 def update_object(

@@ -215,6 +215,27 @@ def test_parse_partial_polish_generated_image_target() -> None:
     assert plan.scene_plan.steps[0].target["target_region"] == "眼睛"
 
 
+def test_parse_partial_polish_generated_image_with_spatial_target() -> None:
+    plan = parse_command("把右边那张生成图的天空精修一下")
+
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert payload["target"] == {"selector": "all", "type": "image", "position": "rightmost"}
+    assert payload["target_region"] == "天空"
+    assert "天空" in payload["prompt"]
+
+
+def test_parse_partial_polish_generated_image_with_rank_and_corner_target() -> None:
+    ranked_plan = parse_command("把第二张生成图精修一下")
+    ranked_target = ranked_plan.operations[0].payload["target"]
+    assert ranked_target == {"selector": "all", "type": "image", "rank": 2}
+
+    corner_plan = parse_command("把右上角那张生成图的背景精修一下")
+    corner_target = corner_plan.operations[0].payload["target"]
+    assert corner_target == {"selector": "all", "type": "image", "corner": "top_right"}
+    assert corner_plan.operations[0].payload["target_region"] == "背景"
+
+
 def test_parse_window_shape_replacement_and_spatial_scale() -> None:
     replace_plan = parse_command("把窗户改成圆形")
     assert replace_plan.operations[0].operation_type == "replace_shape_many"

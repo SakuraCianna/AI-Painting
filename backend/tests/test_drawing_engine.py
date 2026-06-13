@@ -613,6 +613,34 @@ def test_find_objects_supports_generated_image_prompt_selector(tmp_path: Path) -
         assert [obj.name for obj in matches] == ["人物肖像"]
 
 
+def test_find_objects_supports_image_rank_and_corner_selectors(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        image_specs = [
+            ("左上图片", 80, 80),
+            ("右下图片", 640, 420),
+            ("右上图片", 660, 70),
+        ]
+        for name, x, y in image_specs:
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": "image",
+                    "name": name,
+                    "semantic_tags": ["generated.image", "image"],
+                    "geometry": {"x": x, "y": y, "width": 220, "height": 160, "src": "data:image/png;base64,AA=="},
+                    "style": {"opacity": 1},
+                },
+            )
+
+        ranked_matches = find_objects(connection, artwork_id, {"selector": "all", "type": "image", "rank": 2})
+        corner_matches = find_objects(connection, artwork_id, {"selector": "all", "type": "image", "corner": "top_right"})
+
+        assert [obj.name for obj in ranked_matches] == ["右下图片"]
+        assert [obj.name for obj in corner_matches] == ["右上图片"]
+
+
 def test_find_objects_supports_color_group_and_size_selector(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)
