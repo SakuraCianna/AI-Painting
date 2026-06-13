@@ -302,6 +302,14 @@ def _find_shape(text: str) -> str | None:
     return None
 
 
+def _find_replacement_shape(text: str) -> str | None:
+    link_positions = [(text.rfind(link_word), link_word) for link_word in ("改成", "换成", "变成") if link_word in text]
+    if not link_positions:
+        return None
+    position, link_word = sorted(link_positions)[-1]
+    return _find_shape(text[position + len(link_word) :])
+
+
 def _extract_object_name(text: str) -> str | None:
     match = OBJECT_NAME_PATTERN.search(text)
     return match.group(1).strip() if match else None
@@ -328,6 +336,20 @@ def _is_group_scope_target(text: str, semantic_tag: str | None = None) -> bool:
     return semantic_tag == "tree" and "棵" in text
 
 
+def _card_reference_selector() -> dict[str, Any]:
+    return {
+        "selector": "all",
+        "semantic_tags": [
+            "poster.hero",
+            "ui.hero",
+            "ui.metric",
+            "ui.chart",
+            "infographic.metric_card",
+            "org_chart.node",
+        ],
+    }
+
+
 def _relation_selector_for_text(text: str) -> dict[str, Any] | None:
     if "屋顶下面" in text or "屋顶下方" in text:
         return {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
@@ -341,6 +363,16 @@ def _relation_selector_for_text(text: str) -> dict[str, Any] | None:
         return {"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
     if any(keyword in text for keyword in ("和标题重叠", "与标题重叠", "重叠标题")):
         return {"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in text for keyword in ("卡片里的", "卡片里面", "卡片内", "卡片中的", "卡片里")):
+        return {"relation": "inside", "margin": 8, "target": _card_reference_selector()}
+    if any(keyword in text for keyword in ("和标题同一行", "与标题同一行", "标题同一行")):
+        return {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in text for keyword in ("和标题同一列", "与标题同一列", "标题同一列")):
+        return {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in text for keyword in ("标题前面的", "标题上层的", "图层在标题前面", "盖在标题前面")):
+        return {"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in text for keyword in ("标题后面的", "标题下层的", "图层在标题后面", "放在标题后面")):
+        return {"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
     return None
 
 
@@ -421,8 +453,16 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     if is_image_target:
         target["selector"] = "all"
         target["type"] = "image"
+    is_text_target = any(keyword in text for keyword in ("文字", "文本"))
+    if is_text_target:
+        target["selector"] = "all"
+        target["type"] = "text"
+    is_button_target = any(keyword in text for keyword in ("按钮", "行动按钮", "cta"))
+    if is_button_target:
+        target["selector"] = "all"
+        target["semantic_tags"] = ["poster.cta", "ui.cta"]
     semantic_tag = _target_semantic_tag(text)
-    if is_image_target and semantic_tag == "poster.headline":
+    if (is_image_target or is_button_target) and semantic_tag == "poster.headline":
         semantic_tag = None
     if semantic_tag and (semantic_tag not in {"house"} or _is_group_scope_target(text, semantic_tag)):
         target["selector"] = "all"
@@ -1130,7 +1170,7 @@ def parse_command(text: str) -> CommandPlan:
             dx = amount if "右" in normalized else -amount if "左" in normalized else 0
             dy = amount if "下" in normalized else -amount if "上" in normalized else 0
             operations.append(OperationRequest(operation_type="move_many", payload={"target": {"selector": "all"}, "dx": dx, "dy": dy}))
-    elif any(keyword in normalized for keyword in ("改成", "换成")) and (replacement_shape := _find_shape(normalized)) and "画" not in normalized:
+    elif any(keyword in normalized for keyword in ("改成", "换成", "变成")) and (replacement_shape := _find_replacement_shape(normalized)) and "画" not in normalized:
         target = _target_selector(normalized, include_color=False)
         operation_type = "replace_shape_many" if _is_many_target(target) else "replace_shape"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "shape": replacement_shape}))

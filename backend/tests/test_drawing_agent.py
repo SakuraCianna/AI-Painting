@@ -206,6 +206,44 @@ def test_agent_edit_planner_builds_object_query_dsl_targets(monkeypatch) -> None
         "target": {"selector": "all", "semantic_tag": "poster.headline"},
     }
 
+    inside_text_result = asyncio.run(main.build_command_plan_with_metrics("把卡片里的文字改成蓝色"))
+    inside_text_target = inside_text_result.plan.operations[0].payload["target"]
+
+    assert inside_text_result.plan.planner_source == "agent"
+    assert inside_text_result.plan.operations[0].operation_type == "set_style_many"
+    assert inside_text_target["type"] == "text"
+    assert inside_text_target["relative_to"] == {
+        "relation": "inside",
+        "margin": 8,
+        "target": {
+            "selector": "all",
+            "semantic_tags": ["poster.hero", "ui.hero", "ui.metric", "ui.chart", "infographic.metric_card", "org_chart.node"],
+        },
+    }
+
+    same_row_button_result = asyncio.run(main.build_command_plan_with_metrics("把和标题同一行的按钮改成绿色"))
+    same_row_button_target = same_row_button_result.plan.operations[0].payload["target"]
+
+    assert same_row_button_result.plan.planner_source == "agent"
+    assert same_row_button_result.plan.operations[0].operation_type == "set_style_many"
+    assert same_row_button_target["semantic_tags"] == ["poster.cta", "ui.cta"]
+    assert same_row_button_target["relative_to"] == {
+        "relation": "same_row",
+        "tolerance": 48,
+        "target": {"selector": "all", "semantic_tag": "poster.headline"},
+    }
+
+    front_image_result = asyncio.run(main.build_command_plan_with_metrics("把标题上层的图片向右移动一点"))
+    front_image_target = front_image_result.plan.operations[0].payload["target"]
+
+    assert front_image_result.plan.planner_source == "agent"
+    assert front_image_result.plan.operations[0].operation_type == "move_many"
+    assert front_image_target["type"] == "image"
+    assert front_image_target["relative_to"] == {
+        "relation": "front_of",
+        "target": {"selector": "all", "semantic_tag": "poster.headline"},
+    }
+
     color_group_result = asyncio.run(main.build_command_plan_with_metrics("把所有暖色小物件向上移动一点"))
     color_group_target = color_group_result.plan.operations[0].payload["target"]
 

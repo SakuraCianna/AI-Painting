@@ -371,6 +371,159 @@ def test_find_objects_supports_covering_relation_for_images_and_text(tmp_path: P
         assert [obj.name for obj in matches] == ["遮挡标题的图片"]
 
 
+def test_find_objects_supports_inside_same_axis_and_layer_relations(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "主卡片",
+                "semantic_tags": ["ui.hero"],
+                "geometry": {"x": 180, "y": 140, "width": 360, "height": 220, "radius": 20},
+                "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 2},
+                "z_index": 1,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "text",
+                "name": "卡片内文字",
+                "semantic_tags": ["ui.hero.title"],
+                "geometry": {"x": 360, "y": 230, "fontSize": 36, "content": "卡片内文字"},
+                "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+                "z_index": 2,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "text",
+                "name": "卡片外文字",
+                "semantic_tags": ["ui.footer"],
+                "geometry": {"x": 740, "y": 230, "fontSize": 36, "content": "卡片外文字"},
+                "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+                "z_index": 2,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "text",
+                "name": "主标题",
+                "semantic_tags": ["poster.headline"],
+                "geometry": {"x": 240, "y": 500, "fontSize": 44, "content": "主标题"},
+                "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+                "z_index": 5,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "同一行按钮",
+                "semantic_tags": ["poster.cta"],
+                "geometry": {"x": 500, "y": 470, "width": 150, "height": 60, "radius": 18},
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+                "z_index": 6,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "同一列按钮",
+                "semantic_tags": ["poster.cta"],
+                "geometry": {"x": 165, "y": 620, "width": 150, "height": 60, "radius": 18},
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+                "z_index": 6,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "image",
+                "name": "标题上层图片",
+                "semantic_tags": ["generated.image"],
+                "geometry": {"x": 180, "y": 450, "width": 160, "height": 100, "src": "data:image/png;base64,AA=="},
+                "style": {"opacity": 1},
+                "z_index": 7,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "image",
+                "name": "标题下层图片",
+                "semantic_tags": ["generated.image"],
+                "geometry": {"x": 180, "y": 450, "width": 160, "height": 100, "src": "data:image/png;base64,AA=="},
+                "style": {"opacity": 1},
+                "z_index": 3,
+            },
+        )
+
+        inside_matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "type": "text",
+                "relative_to": {"relation": "inside", "margin": 8, "target": {"selector": "all", "semantic_tag": "ui.hero"}},
+            },
+        )
+        same_row_matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "semantic_tag": "poster.cta",
+                "relative_to": {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}},
+            },
+        )
+        same_column_matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "semantic_tag": "poster.cta",
+                "relative_to": {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}},
+            },
+        )
+        front_matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "type": "image",
+                "relative_to": {"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}},
+            },
+        )
+        behind_matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "type": "image",
+                "relative_to": {"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}},
+            },
+        )
+
+        assert [obj.name for obj in inside_matches] == ["卡片内文字"]
+        assert [obj.name for obj in same_row_matches] == ["同一行按钮"]
+        assert [obj.name for obj in same_column_matches] == ["同一列按钮"]
+        assert [obj.name for obj in front_matches] == ["标题上层图片"]
+        assert [obj.name for obj in behind_matches] == ["标题下层图片"]
+
+
 def test_find_objects_supports_color_group_and_size_selector(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)

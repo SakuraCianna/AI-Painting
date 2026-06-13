@@ -47,10 +47,30 @@ RELATION_ALIASES = {
     "block": "covering",
     "blocks": "covering",
     "blocking": "covering",
+    "inside": "inside",
+    "within": "inside",
+    "contained_by": "inside",
+    "contains": "contains",
+    "containing": "contains",
+    "same_row": "same_row",
+    "same_line": "same_row",
+    "same_column": "same_column",
+    "front_of": "front_of",
+    "in_front_of": "front_of",
+    "above_layer": "front_of",
+    "behind": "behind",
+    "behind_layer": "behind",
     "遮挡": "covering",
     "挡住": "covering",
     "覆盖": "covering",
     "重叠": "overlap",
+    "包含": "contains",
+    "里面": "inside",
+    "内部": "inside",
+    "同一行": "same_row",
+    "同一列": "same_column",
+    "前面": "front_of",
+    "后面": "behind",
 }
 WARM_COLOR_HEXES = {"#dc2626", "#ef4444", "#f97316", "#fb923c", "#facc15", "#fde047", "#92400e", "#a16207", "#7c2d12"}
 COOL_COLOR_HEXES = {"#2563eb", "#1d4ed8", "#7dd3fc", "#93c5fd", "#16a34a", "#22c55e", "#15803d", "#1e3a8a"}
@@ -533,6 +553,22 @@ def _bounds_overlap(
     )
 
 
+def _bounds_contains(
+    outer: tuple[float, float, float, float],
+    inner: tuple[float, float, float, float],
+    *,
+    margin: float = 0.0,
+) -> bool:
+    outer_left, outer_top, outer_right, outer_bottom = outer
+    inner_left, inner_top, inner_right, inner_bottom = inner
+    return (
+        inner_left >= outer_left - margin
+        and inner_top >= outer_top - margin
+        and inner_right <= outer_right + margin
+        and inner_bottom <= outer_bottom + margin
+    )
+
+
 def _relation_distance_limit(relation_selector: dict[str, Any] | None) -> float:
     if not relation_selector:
         return 180.0
@@ -553,6 +589,19 @@ def _relation_margin(relation_selector: dict[str, Any] | None) -> float:
         return float(relation_selector.get("margin", 0))
     except (TypeError, ValueError):
         return 0.0
+
+
+def _relation_tolerance(relation_selector: dict[str, Any] | None) -> float:
+    if not relation_selector:
+        return 40.0
+    raw_value = relation_selector.get("tolerance", relation_selector.get("axis_tolerance", 40))
+    try:
+        tolerance = float(raw_value)
+    except (TypeError, ValueError):
+        return 40.0
+    if tolerance < 0:
+        return 40.0
+    return min(tolerance, 1000.0)
 
 
 def _filter_objects_by_size(objects: list[DrawingObject], size_class: str, max_area: Any = None) -> list[DrawingObject]:
@@ -597,6 +646,30 @@ def _relation_matches(
             _object_bounds(reference),
             margin=margin,
         )
+    if relation == "inside":
+        margin = _relation_margin(relation_selector)
+        return _bounds_contains(_object_bounds(reference), _object_bounds(candidate), margin=margin)
+    if relation == "contains":
+        margin = _relation_margin(relation_selector)
+        return _bounds_contains(_object_bounds(candidate), _object_bounds(reference), margin=margin)
+    if relation == "same_row":
+        tolerance = _relation_tolerance(relation_selector)
+        return abs(candidate_y - reference_y) <= tolerance or _bounds_overlap(
+            _object_bounds(candidate),
+            _object_bounds(reference),
+            margin=0,
+        )
+    if relation == "same_column":
+        tolerance = _relation_tolerance(relation_selector)
+        return abs(candidate_x - reference_x) <= tolerance or _bounds_overlap(
+            _object_bounds(candidate),
+            _object_bounds(reference),
+            margin=0,
+        )
+    if relation == "front_of":
+        return candidate.z_index > reference.z_index
+    if relation == "behind":
+        return candidate.z_index < reference.z_index
     return True
 
 

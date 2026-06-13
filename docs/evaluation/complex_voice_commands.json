@@ -146,6 +146,24 @@
     "expected_operation_types": ["move_many"]
   },
   {
+    "id": "agent-edit-text-inside-card",
+    "text": "把卡片里的文字改成蓝色",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many"]
+  },
+  {
+    "id": "agent-edit-button-same-row-as-title",
+    "text": "把和标题同一行的按钮改成绿色",
+    "tier": "agent",
+    "expected_operation_types": ["set_style_many"]
+  },
+  {
+    "id": "agent-move-image-front-of-title",
+    "text": "把标题上层的图片向右移动一点",
+    "tier": "agent",
+    "expected_operation_types": ["move_many"]
+  },
+  {
     "id": "agent-move-warm-small-objects",
     "text": "把所有暖色小物件向上移动一点",
     "tier": "agent",
