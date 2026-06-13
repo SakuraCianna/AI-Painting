@@ -63,6 +63,10 @@ SWIMLANE_STEP_NAMES = {
     "开发": "开发实现",
     "测试": "测试验收",
 }
+ORG_CHART_DEFAULT_TOP_ROLE = "负责人"
+ORG_CHART_DEFAULT_MIDDLE_ROLES = ("产品组", "设计组", "研发组")
+ORG_CHART_DEFAULT_BOTTOM_ROLES = ("用户研究", "交互设计", "前端开发", "后端开发")
+ORG_CHART_IGNORED_ROLE_NAMES = {"执行角色", "角色", "岗位", "成员", "团队", "部门", "职能小组"}
 
 
 class DrawingAgentError(RuntimeError):
@@ -1065,12 +1069,48 @@ def _ui_wireframe_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _split_org_chart_role_list(raw_items: str, *, max_items: int) -> list[str]:
+    items: list[str] = []
+    for raw_item in re.split(r"[、,，/和与及]+", raw_items):
+        item = raw_item.strip(" 。；;:：")
+        item = re.sub(r"^(分别是|分别为|包括|包含|有|为|是)", "", item).strip(" 。；;:：")
+        item = re.sub(r"(这些|等等|等)$", "", item).strip(" 。；;:：")
+        if item in ORG_CHART_IGNORED_ROLE_NAMES:
+            continue
+        if 1 <= len(item) <= 10 and item not in items:
+            items.append(item)
+    return items[:max_items]
+
+
+def _fill_org_chart_roles(custom_names: list[str], defaults: tuple[str, ...], *, target_count: int) -> list[str]:
+    roles = list(custom_names[:target_count])
+    for default_name in defaults:
+        if len(roles) >= target_count:
+            break
+        if default_name not in roles:
+            roles.append(default_name)
+    return roles[:target_count]
+
+
+def _extract_org_chart_roles(text: str) -> tuple[str, list[str], list[str]]:
+    match = re.search(
+        r"(?:组织结构图|组织架构图|团队架构图|团队结构图|组织结构|组织架构|团队架构|团队结构)(?:，|,)?(?:包括|包含|有|为|是)([^。；;]+)",
+        text,
+    )
+    role_names = _split_org_chart_role_list(match.group(1), max_items=8) if match else []
+    if not role_names:
+        return ORG_CHART_DEFAULT_TOP_ROLE, list(ORG_CHART_DEFAULT_MIDDLE_ROLES), list(ORG_CHART_DEFAULT_BOTTOM_ROLES)
+
+    top_role = role_names[0]
+    middle_roles = _fill_org_chart_roles(role_names[1:4], ORG_CHART_DEFAULT_MIDDLE_ROLES, target_count=3)
+    bottom_roles = _fill_org_chart_roles(role_names[4:8], ORG_CHART_DEFAULT_BOTTOM_ROLES, target_count=4)
+    return top_role, middle_roles, bottom_roles
+
+
 def _org_chart_scene_graph(text: str) -> AgentSceneGraph:
     title = "产品团队组织结构图" if "产品" in text else "团队组织结构图"
-    top_role = "负责人"
-    middle_roles = ["产品组", "设计组", "研发组"]
-    bottom_roles = ["用户研究", "交互设计", "前端开发", "后端开发"]
-    summary = "绘制团队组织结构图, 包含负责人、职能小组和执行角色"
+    top_role, middle_roles, bottom_roles = _extract_org_chart_roles(text)
+    summary = f"绘制团队组织结构图, 包含{top_role}、{'、'.join(middle_roles)}和{'、'.join(bottom_roles)}"
 
     objects = [
         _object(
@@ -1234,13 +1274,13 @@ def _org_chart_scene_graph(text: str) -> AgentSceneGraph:
     )
 
     relations = [
-        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-1", note="负责人管理产品组"),
-        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-2", note="负责人管理设计组"),
-        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-3", note="负责人管理研发组"),
-        AgentSceneRelation(subject="org-dept-card-1", relation="owns", target="org-role-card-1", note="产品组负责用户研究"),
-        AgentSceneRelation(subject="org-dept-card-2", relation="owns", target="org-role-card-2", note="设计组负责交互设计"),
-        AgentSceneRelation(subject="org-dept-card-3", relation="owns", target="org-role-card-3", note="研发组负责前端开发"),
-        AgentSceneRelation(subject="org-dept-card-3", relation="owns", target="org-role-card-4", note="研发组负责后端开发"),
+        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-1", note=f"{top_role}管理{middle_roles[0]}"),
+        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-2", note=f"{top_role}管理{middle_roles[1]}"),
+        AgentSceneRelation(subject="org-lead-card", relation="manages", target="org-dept-card-3", note=f"{top_role}管理{middle_roles[2]}"),
+        AgentSceneRelation(subject="org-dept-card-1", relation="owns", target="org-role-card-1", note=f"{middle_roles[0]}负责{bottom_roles[0]}"),
+        AgentSceneRelation(subject="org-dept-card-2", relation="owns", target="org-role-card-2", note=f"{middle_roles[1]}负责{bottom_roles[1]}"),
+        AgentSceneRelation(subject="org-dept-card-3", relation="owns", target="org-role-card-3", note=f"{middle_roles[2]}负责{bottom_roles[2]}"),
+        AgentSceneRelation(subject="org-dept-card-3", relation="owns", target="org-role-card-4", note=f"{middle_roles[2]}负责{bottom_roles[3]}"),
     ]
     return AgentSceneGraph(
         intent="compose_org_chart",
