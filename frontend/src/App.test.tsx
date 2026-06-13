@@ -161,7 +161,7 @@ describe("App", () => {
 
     expect(voiceRuntime.start).toHaveBeenCalledTimes(1);
     expect(apiMocks.createArtwork).toHaveBeenCalledTimes(1);
-    expect(apiMocks.fetchLatencyMetrics).toHaveBeenCalledWith("artwork-1");
+    await waitFor(() => expect(apiMocks.fetchLatencyMetrics).toHaveBeenCalledWith("artwork-1"));
   });
 
   it("submits a final voice transcript, updates the canvas and records timeline feedback", async () => {
