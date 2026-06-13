@@ -128,6 +128,13 @@
     "expected_object_types": ["rect", "circle", "ellipse", "rect", "text", "rect", "text", "text", "text", "rect", "rect", "path", "rect", "text", "circle", "text", "circle", "text", "circle", "text"]
   },
   {
+    "id": "agent-ui-wireframe",
+    "text": "画一个语音绘图产品的UI草图，包含侧边导航、顶部栏、搜索框、主卡片、趋势图和新建作品按钮",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "rect", "rect", "rect", "text", "rect", "circle", "text", "rect", "rect", "text", "text", "rect", "text", "rect", "rect", "rect", "rect", "rect", "text"]
+  },
+  {
     "id": "portrait-image-generation",
     "text": "生成一张人物肖像画",
     "tier": "rules",

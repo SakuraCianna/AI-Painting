@@ -200,6 +200,33 @@ def test_agent_template_builds_launch_poster(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_builds_ui_wireframe(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个语音绘图产品的UI草图，包含侧边导航、顶部栏、搜索框、主卡片、趋势图和新建作品按钮"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "ui_wireframe_scene"
+    assert result.plan.scene_plan.expected_object_count == 20
+    assert len(result.plan.operations) == 20
+    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
+    assert object_types.count("rect") == 13
+    assert object_types.count("text") == 6
+    assert object_types.count("circle") == 1
+    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
+    assert "ui.sidebar" in semantic_tags
+    assert "ui.search" in semantic_tags
+    assert "ui.hero" in semantic_tags
+    assert "ui.cta" in semantic_tags
+    assert "ui_wireframe" in semantic_tags
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     from app import main
     from app.agent import planner
