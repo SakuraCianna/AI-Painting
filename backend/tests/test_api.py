@@ -12,6 +12,15 @@ SAMPLE_PNG_DATA_URL = (
 )
 
 
+def _seed_drawing_object(artwork_id: str, obj: dict) -> None:
+    from app.database import connect_db
+    from app.drawing_engine import apply_operation
+    from app.schemas import OperationRequest
+
+    with connect_db(os.environ["AI_PAINTING_DB"]) as connection:
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="add_object", payload={"object": obj}))
+
+
 def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     create_response = client.post("/api/artworks", json={"title": "语音练习", "width": 1024, "height": 768, "background": "#ffffff"})
     assert create_response.status_code == 200
@@ -545,6 +554,90 @@ def test_house_command_respects_component_color_words(client: TestClient) -> Non
     windows = [obj for obj in objects if "house.window" in obj["semantic_tags"]]
     assert door["style"]["fill"] == "#dc2626"
     assert len(windows) == 2
+
+
+def test_voice_command_edits_tree_near_door(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "蓝色门",
+            "semantic_tags": ["house.door"],
+            "geometry": {"x": 480, "y": 430, "width": 80, "height": 120},
+            "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+        },
+    )
+    for name, group_id, object_type, geometry in [
+        ("近树树干", "tree-near", "rect", {"x": 620, "y": 430, "width": 35, "height": 110}),
+        ("近树树冠", "tree-near", "circle", {"cx": 638, "cy": 385, "radius": 70}),
+        ("远树树干", "tree-far", "rect", {"x": 100, "y": 450, "width": 30, "height": 90}),
+        ("远树树冠", "tree-far", "circle", {"cx": 115, "cy": 405, "radius": 55}),
+    ]:
+        _seed_drawing_object(
+            artwork_id,
+            {
+                "type": object_type,
+                "name": name,
+                "group_id": group_id,
+                "semantic_tags": ["tree"],
+                "geometry": geometry,
+                "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 2},
+            },
+        )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把靠近门的那棵树改成黄色"})
+
+    assert response.status_code == 200
+    objects_by_name = {obj["name"]: obj for obj in response.json()["artwork"]["objects"]}
+    assert objects_by_name["近树树干"]["style"]["fill"] == "#facc15"
+    assert objects_by_name["近树树冠"]["style"]["fill"] == "#facc15"
+    assert objects_by_name["远树树干"]["style"]["fill"] == "#16a34a"
+    assert objects_by_name["远树树冠"]["style"]["fill"] == "#16a34a"
+
+
+def test_voice_command_moves_image_covering_title(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "text",
+            "name": "主标题",
+            "semantic_tags": ["poster.headline"],
+            "geometry": {"x": 300, "y": 180, "fontSize": 50, "content": "主标题"},
+            "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+            "z_index": 1,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "image",
+            "name": "遮挡标题的图片",
+            "semantic_tags": ["generated.image"],
+            "geometry": {"x": 220, "y": 110, "width": 180, "height": 110, "src": SAMPLE_PNG_DATA_URL},
+            "style": {"opacity": 1},
+            "z_index": 2,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "image",
+            "name": "右侧图片",
+            "semantic_tags": ["generated.image"],
+            "geometry": {"x": 620, "y": 110, "width": 180, "height": 110, "src": SAMPLE_PNG_DATA_URL},
+            "style": {"opacity": 1},
+            "z_index": 3,
+        },
+    )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把挡住标题的图片向右移动一点"})
+
+    assert response.status_code == 200
+    objects_by_name = {obj["name"]: obj for obj in response.json()["artwork"]["objects"]}
+    assert objects_by_name["遮挡标题的图片"]["geometry"]["x"] == 240
+    assert objects_by_name["右侧图片"]["geometry"]["x"] == 620
 
 
 def test_rename_latest_and_move_layer(client: TestClient) -> None:

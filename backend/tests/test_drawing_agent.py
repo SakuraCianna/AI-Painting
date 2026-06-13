@@ -182,6 +182,30 @@ def test_agent_edit_planner_builds_object_query_dsl_targets(monkeypatch) -> None
     assert relative_target["semantic_tag"] == "house.door"
     assert relative_target["relative_to"] == {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
 
+    near_tree_result = asyncio.run(main.build_command_plan_with_metrics("把靠近门的那棵树改成黄色"))
+    near_tree_target = near_tree_result.plan.operations[0].payload["target"]
+
+    assert near_tree_result.plan.planner_source == "agent"
+    assert near_tree_result.plan.operations[0].operation_type == "set_style_many"
+    assert near_tree_target["semantic_tag"] == "tree"
+    assert near_tree_target["include_group_members"] is True
+    assert near_tree_target["relative_to"] == {
+        "relation": "near",
+        "max_distance": 260,
+        "target": {"selector": "all", "semantic_tag": "house.door"},
+    }
+
+    covering_image_result = asyncio.run(main.build_command_plan_with_metrics("把挡住标题的图片向右移动一点"))
+    covering_image_target = covering_image_result.plan.operations[0].payload["target"]
+
+    assert covering_image_result.plan.planner_source == "agent"
+    assert covering_image_result.plan.operations[0].operation_type == "move_many"
+    assert covering_image_target["type"] == "image"
+    assert covering_image_target["relative_to"] == {
+        "relation": "covering",
+        "target": {"selector": "all", "semantic_tag": "poster.headline"},
+    }
+
     color_group_result = asyncio.run(main.build_command_plan_with_metrics("把所有暖色小物件向上移动一点"))
     color_group_target = color_group_result.plan.operations[0].payload["target"]
 

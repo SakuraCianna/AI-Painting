@@ -263,6 +263,114 @@ def test_find_objects_supports_relative_selector(tmp_path: Path) -> None:
         assert [obj.name for obj in matches] == ["屋顶下方门"]
 
 
+def test_find_objects_supports_near_relation_with_group_expansion(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "蓝色门",
+                "semantic_tags": ["house.door"],
+                "geometry": {"x": 480, "y": 430, "width": 80, "height": 120},
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+            },
+        )
+        tree_parts = [
+            ("近树树干", "tree-near", "rect", {"x": 620, "y": 430, "width": 35, "height": 110}),
+            ("近树树冠", "tree-near", "circle", {"cx": 638, "cy": 385, "radius": 70}),
+            ("远树树干", "tree-far", "rect", {"x": 100, "y": 450, "width": 30, "height": 90}),
+            ("远树树冠", "tree-far", "circle", {"cx": 115, "cy": 405, "radius": 55}),
+        ]
+        for name, group_id, object_type, geometry in tree_parts:
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": object_type,
+                    "name": name,
+                    "group_id": group_id,
+                    "semantic_tags": ["tree"],
+                    "geometry": geometry,
+                    "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 2},
+                },
+            )
+
+        matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "semantic_tag": "tree",
+                "include_group_members": True,
+                "relative_to": {
+                    "relation": "near",
+                    "max_distance": 260,
+                    "target": {"selector": "all", "semantic_tag": "house.door"},
+                },
+            },
+        )
+
+        assert {obj.name for obj in matches} == {"近树树干", "近树树冠"}
+
+
+def test_find_objects_supports_covering_relation_for_images_and_text(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "text",
+                "name": "主标题",
+                "semantic_tags": ["poster.headline"],
+                "geometry": {"x": 300, "y": 180, "fontSize": 50, "content": "主标题"},
+                "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+                "z_index": 1,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "image",
+                "name": "遮挡标题的图片",
+                "semantic_tags": ["generated.image"],
+                "geometry": {"x": 220, "y": 110, "width": 180, "height": 110, "src": "data:image/png;base64,AA=="},
+                "style": {"opacity": 1},
+                "z_index": 2,
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "image",
+                "name": "右侧图片",
+                "semantic_tags": ["generated.image"],
+                "geometry": {"x": 620, "y": 110, "width": 180, "height": 110, "src": "data:image/png;base64,AA=="},
+                "style": {"opacity": 1},
+                "z_index": 3,
+            },
+        )
+
+        matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "type": "image",
+                "relative_to": {
+                    "relation": "covering",
+                    "target": {"selector": "all", "semantic_tag": "poster.headline"},
+                },
+            },
+        )
+
+        assert [obj.name for obj in matches] == ["遮挡标题的图片"]
+
+
 def test_find_objects_supports_color_group_and_size_selector(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)
