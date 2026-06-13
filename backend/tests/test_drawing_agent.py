@@ -233,6 +233,24 @@ def test_agent_edit_planner_builds_object_query_dsl_targets(monkeypatch) -> None
         "target": {"selector": "all", "semantic_tag": "poster.headline"},
     }
 
+    chained_relation_result = asyncio.run(main.build_command_plan_with_metrics("把卡片里和标题同一行的按钮改成绿色"))
+    chained_relation_target = chained_relation_result.plan.operations[0].payload["target"]
+
+    assert chained_relation_result.plan.planner_source == "agent"
+    assert chained_relation_result.plan.operations[0].operation_type == "set_style_many"
+    assert chained_relation_target["semantic_tags"] == ["poster.cta", "ui.cta"]
+    assert chained_relation_target["relative_to_all"] == [
+        {
+            "relation": "inside",
+            "margin": 8,
+            "target": {
+                "selector": "all",
+                "semantic_tags": ["poster.hero", "ui.hero", "ui.metric", "ui.chart", "infographic.metric_card", "org_chart.node"],
+            },
+        },
+        {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}},
+    ]
+
     front_image_result = asyncio.run(main.build_command_plan_with_metrics("把标题上层的图片向右移动一点"))
     front_image_target = front_image_result.plan.operations[0].payload["target"]
 

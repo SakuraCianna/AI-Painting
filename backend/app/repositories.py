@@ -328,9 +328,9 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
         objects = _filter_objects_by_size(objects, str(size_class), selector.get("max_area"))
     elif selector.get("max_area") is not None:
         objects = _filter_objects_by_size(objects, "max_area", selector.get("max_area"))
-    relative_to = selector.get("relative_to")
-    if relative_to and objects:
-        objects = _filter_objects_by_relation(connection, artwork_id, objects, relative_to)
+    for relation_selector in _relation_selectors(selector):
+        if objects:
+            objects = _filter_objects_by_relation(connection, artwork_id, objects, relation_selector)
     position = selector.get("position")
     if position and objects:
         if _should_expand_group(selector):
@@ -602,6 +602,16 @@ def _relation_tolerance(relation_selector: dict[str, Any] | None) -> float:
     if tolerance < 0:
         return 40.0
     return min(tolerance, 1000.0)
+
+
+def _relation_selectors(selector: dict[str, Any]) -> list[Any]:
+    relation_selectors: list[Any] = []
+    relative_to_all = selector.get("relative_to_all")
+    if isinstance(relative_to_all, list):
+        relation_selectors.extend(relative_to_all)
+    if selector.get("relative_to"):
+        relation_selectors.append(selector["relative_to"])
+    return relation_selectors
 
 
 def _filter_objects_by_size(objects: list[DrawingObject], size_class: str, max_area: Any = None) -> list[DrawingObject]:
