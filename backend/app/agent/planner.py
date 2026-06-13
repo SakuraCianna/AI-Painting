@@ -67,6 +67,34 @@ ORG_CHART_DEFAULT_TOP_ROLE = "负责人"
 ORG_CHART_DEFAULT_MIDDLE_ROLES = ("产品组", "设计组", "研发组")
 ORG_CHART_DEFAULT_BOTTOM_ROLES = ("用户研究", "交互设计", "前端开发", "后端开发")
 ORG_CHART_IGNORED_ROLE_NAMES = {"执行角色", "角色", "岗位", "成员", "团队", "部门", "职能小组"}
+ER_DEFAULT_ENTITIES = ("用户", "订单", "商品", "支付")
+ER_ENTITY_LAYOUTS = ((145, 245), (420, 245), (700, 245), (420, 475))
+ER_ENTITY_PALETTE = (
+    ("#e8f0fe", "#1a73e8"),
+    ("#e6f4ea", "#34a853"),
+    ("#fef7e0", "#fbbc04"),
+    ("#fce8e6", "#ea4335"),
+)
+ER_ENTITY_SLUGS = {
+    "用户": "user",
+    "订单": "order",
+    "商品": "product",
+    "支付": "payment",
+    "读者": "reader",
+    "图书": "book",
+    "借阅记录": "loan",
+    "馆员": "librarian",
+}
+ER_ENTITY_ATTRIBUTES = {
+    "用户": "id, 昵称, 手机号",
+    "订单": "id, 金额, 状态",
+    "商品": "id, 名称, 价格",
+    "支付": "id, 渠道, 时间",
+    "读者": "id, 姓名, 证件号",
+    "图书": "id, 书名, ISBN",
+    "借阅记录": "id, 借出时间, 归还状态",
+    "馆员": "id, 姓名, 工号",
+}
 
 
 class DrawingAgentError(RuntimeError):
@@ -438,9 +466,140 @@ def _system_architecture_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _clean_er_token(value: str) -> str:
+    return value.strip(" ，,。；;:：、 \t\n\r")
+
+
+def _extract_er_title(text: str) -> str:
+    for marker in ("实体关系图", "er 图", "er图"):
+        marker_index = text.find(marker)
+        if marker_index >= 0:
+            title = text[:marker_index]
+            for prefix in ("画一个", "创建一个", "生成一个", "画", "创建", "生成"):
+                if title.startswith(prefix):
+                    title = title[len(prefix) :]
+                    break
+            title = _clean_er_token(title)
+            if title:
+                return f"{title} ER 图"
+    return "实体关系图"
+
+
+def _extract_er_entity_names(text: str) -> list[str]:
+    match = re.search(r"(?:实体|数据表|表)\s*(?:包括|包含|有)(.+?)(?:关系\s*(?:包括|包含|有)|。|$)", text)
+    if not match:
+        return list(ER_DEFAULT_ENTITIES)
+
+    names: list[str] = []
+    for raw_name in re.split(r"[、,，;；和]+", match.group(1)):
+        name = _clean_er_token(raw_name)
+        if not name or name in names:
+            continue
+        names.append(name)
+        if len(names) == 4:
+            break
+    return names or list(ER_DEFAULT_ENTITIES)
+
+
+def _er_entity_slug(name: str, index: int) -> str:
+    return ER_ENTITY_SLUGS.get(name, f"entity_{index + 1}")
+
+
+def _er_entity_attributes(name: str) -> str:
+    return ER_ENTITY_ATTRIBUTES.get(name, "id, 名称, 状态")
+
+
+def _relationship_cardinality(name: str) -> str:
+    if "支付" in name:
+        return "1:1"
+    if any(keyword in name for keyword in ("包含", "借阅")):
+        return "N:M"
+    return "1:N"
+
+
+def _infer_relationship_endpoints(relationship_name: str, entity_names: list[str], fallback_index: int) -> tuple[int, int]:
+    matched = sorted(
+        (
+            (index, relationship_name.find(entity_name))
+            for index, entity_name in enumerate(entity_names)
+            if entity_name in relationship_name
+        ),
+        key=lambda item: item[1],
+    )
+    if len(matched) >= 2:
+        return matched[0][0], matched[1][0]
+    if matched:
+        source = matched[0][0]
+        return source, min(source + 1, len(entity_names) - 1)
+    source = min(fallback_index, max(len(entity_names) - 2, 0))
+    return source, min(source + 1, len(entity_names) - 1)
+
+
+def _extract_er_relationships(text: str, entity_names: list[str]) -> list[dict[str, Any]]:
+    match = re.search(r"(?:关系|关联)\s*(?:包括|包含|有)(.+?)(?:[。]|$)", text)
+    relationship_names = (
+        [_clean_er_token(name) for name in re.split(r"[、,，;；]+", match.group(1))]
+        if match
+        else []
+    )
+    relationships: list[dict[str, Any]] = []
+    used_pairs: set[tuple[int, int]] = set()
+
+    for raw_name in relationship_names:
+        if not raw_name:
+            continue
+        source_index, target_index = _infer_relationship_endpoints(raw_name, entity_names, len(relationships))
+        if source_index == target_index:
+            continue
+        pair = (source_index, target_index)
+        used_pairs.add(pair)
+        relationships.append(
+            {
+                "name": raw_name,
+                "source_index": source_index,
+                "target_index": target_index,
+                "cardinality": _relationship_cardinality(raw_name),
+            }
+        )
+        if len(relationships) == 3:
+            return relationships
+
+    default_pairs = [(0, 1), (1, 2), (1, 3), (0, 2), (2, 3)]
+    for source_index, target_index in default_pairs:
+        if len(relationships) == 3 or target_index >= len(entity_names):
+            break
+        if (source_index, target_index) in used_pairs:
+            continue
+        source_name = entity_names[source_index]
+        target_name = entity_names[target_index]
+        relation_name = f"{source_name}关联{target_name}"
+        if entity_names == list(ER_DEFAULT_ENTITIES):
+            default_names = {
+                (0, 1): "用户下单",
+                (1, 2): "订单包含商品",
+                (1, 3): "订单产生支付",
+            }
+            relation_name = default_names.get((source_index, target_index), relation_name)
+        relationships.append(
+            {
+                "name": relation_name,
+                "source_index": source_index,
+                "target_index": target_index,
+                "cardinality": _relationship_cardinality(relation_name),
+            }
+        )
+        used_pairs.add((source_index, target_index))
+
+    return relationships
+
+
 def _er_diagram_scene_graph(text: str) -> AgentSceneGraph:
-    title = "用户订单 ER 图" if "订单" in text else "实体关系图"
-    summary = "绘制 ER 图, 包含用户、订单、商品、支付实体及核心关系"
+    title = _extract_er_title(text)
+    entity_names = _extract_er_entity_names(text)
+    relationships = _extract_er_relationships(text, entity_names)
+    entity_summary = "、".join(entity_names)
+    relationship_summary = "、".join(relationship["name"] for relationship in relationships)
+    summary = f"绘制{title}, 包含{entity_summary}实体及{relationship_summary}关系"
     objects = [
         _object(
             "er-surface",
@@ -472,13 +631,15 @@ def _er_diagram_scene_graph(text: str) -> AgentSceneGraph:
         ),
     ]
 
-    entities = [
-        ("er-user", "用户", "id, 昵称, 手机号", 145, 245, "#e8f0fe", "#1a73e8", "er_diagram.entity.user"),
-        ("er-order", "订单", "id, 金额, 状态", 420, 245, "#e6f4ea", "#34a853", "er_diagram.entity.order"),
-        ("er-product", "商品", "id, 名称, 价格", 700, 245, "#fef7e0", "#fbbc04", "er_diagram.entity.product"),
-        ("er-payment", "支付", "id, 渠道, 时间", 420, 475, "#fce8e6", "#ea4335", "er_diagram.entity.payment"),
-    ]
-    for index, (entity_id, label, attributes, x, y, fill, stroke, entity_tag) in enumerate(entities):
+    entity_positions: list[tuple[str, float, float, float, float]] = []
+    for index, label in enumerate(entity_names):
+        x, y = ER_ENTITY_LAYOUTS[index]
+        fill, stroke = ER_ENTITY_PALETTE[index]
+        slug = _er_entity_slug(label, index)
+        entity_id = f"er-{slug}"
+        attributes = _er_entity_attributes(label)
+        entity_tag = f"er_diagram.entity.{slug}"
+        entity_positions.append((entity_id, x, y, x + 90, y + 60))
         objects.append(
             _object(
                 entity_id,
@@ -528,13 +689,19 @@ def _er_diagram_scene_graph(text: str) -> AgentSceneGraph:
             )
         )
 
-    relationships = [
-        ("er-user-order-line", "用户下单", "er-user", "er-order", 325, 305, 420, 305, "1:N", 372, 282),
-        ("er-order-product-line", "订单包含商品", "er-order", "er-product", 600, 305, 700, 305, "N:M", 650, 282),
-        ("er-order-payment-line", "订单产生支付", "er-order", "er-payment", 510, 365, 510, 475, "1:1", 548, 420),
-    ]
     relations = []
-    for index, (line_id, name, source_id, target_id, x1, y1, x2, y2, cardinality, label_x, label_y) in enumerate(relationships):
+    for index, relationship in enumerate(relationships):
+        source_index = relationship["source_index"]
+        target_index = relationship["target_index"]
+        source_id, _, _, x1, y1 = entity_positions[source_index]
+        target_id, _, _, x2, y2 = entity_positions[target_index]
+        source_slug = _er_entity_slug(entity_names[source_index], source_index)
+        target_slug = _er_entity_slug(entity_names[target_index], target_index)
+        line_id = f"er-{source_slug}-{target_slug}-line"
+        name = relationship["name"]
+        cardinality = relationship["cardinality"]
+        label_x = round((x1 + x2) / 2, 2)
+        label_y = round((y1 + y2) / 2 - 22, 2)
         objects.append(
             _object(
                 line_id,
@@ -556,7 +723,7 @@ def _er_diagram_scene_graph(text: str) -> AgentSceneGraph:
                 f"{line_id}-cardinality",
                 "text",
                 f"{name}基数",
-                {"x": label_x, "y": label_y, "content": cardinality, "fontSize": 18},
+                {"x": label_x, "y": label_y, "content": f"{cardinality} {name}", "fontSize": 16},
                 "#3c4043",
                 stroke="transparent",
                 stroke_width=0,

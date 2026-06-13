@@ -203,6 +203,13 @@
     "expected_object_types": ["rect", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "line", "text", "line", "text", "line", "text"]
   },
   {
+    "id": "agent-custom-er-diagram",
+    "text": "画一个图书馆借阅ER图，实体包括读者、图书、借阅记录、馆员，关系包括读者借阅图书、馆员管理图书",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "line", "text", "line", "text", "line", "text"]
+  },
+  {
     "id": "agent-sales-infographic",
     "text": "画一个销售增长信息图，包含营收、转化率、复购率和三个月柱状图",
     "tier": "agent",
