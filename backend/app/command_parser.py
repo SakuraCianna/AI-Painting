@@ -75,6 +75,7 @@ TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9
 OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
 COLOR_CONTEXT_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_的]+")
 COLOR_LINK_WORDS = ("是", "为", "设为", "设置为", "设置成", "改为", "改成", "变为", "变成", "用", "使用", "涂成", "刷成", "画成")
+POSITION_RANK_PATTERN = re.compile(r"第?\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|棵|扇|座|条|张|块|只|件)")
 LAYER_MAP: dict[str, str] = {
     "背景层": "background",
     "底层": "background",
@@ -309,6 +310,14 @@ def _extract_layer_id(text: str) -> str | None:
     return None
 
 
+def _extract_position_rank(text: str) -> int | None:
+    match = POSITION_RANK_PATTERN.search(text)
+    if not match:
+        return None
+    rank = chinese_number_to_int(match.group(1))
+    return rank if rank and rank > 0 else None
+
+
 def _semantic_tags_for_text(text: str, shape: str | None = None, object_name: str | None = None) -> list[str]:
     source = f"{text} {object_name or ''}"
     tags = {tag for keyword, tag in SEMANTIC_KEYWORDS if keyword in source}
@@ -318,10 +327,10 @@ def _semantic_tags_for_text(text: str, shape: str | None = None, object_name: st
 
 
 def _target_semantic_tag(text: str) -> str | None:
-    for keyword, tag in SEMANTIC_KEYWORDS:
-        if keyword in text:
-            return tag
-    return None
+    matches = [(text.rfind(keyword), len(keyword), tag) for keyword, tag in SEMANTIC_KEYWORDS if keyword in text]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
 
 
 def _scene_semantic_tags(text: str) -> list[str]:
@@ -395,6 +404,19 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
         colors = _find_all_colors(text)
         if colors and many_hint:
             target["color"] = colors[0][1]
+        if "暖色" in text:
+            target["selector"] = "all"
+            target["color_group"] = "warm"
+        elif "冷色" in text:
+            target["selector"] = "all"
+            target["color_group"] = "cool"
+        elif "中性色" in text:
+            target["selector"] = "all"
+            target["color_group"] = "neutral"
+    if "小物件" in text or "小对象" in text or "小图形" in text:
+        target["selector"] = "all"
+        target["size_class"] = "small"
+        target["max_area"] = 25000
     if "左边" in text or "左侧" in text:
         target["position"] = "leftmost"
     elif "右边" in text or "右侧" in text:
@@ -403,11 +425,21 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
         target["position"] = "topmost"
     elif "下方" in text or "底部" in text:
         target["position"] = "bottommost"
+    rank = _extract_position_rank(text)
+    if rank is not None and "position" in target:
+        target["selector"] = "all"
+        target["position_rank"] = rank
+    if "屋顶下面" in text or "屋顶下方" in text:
+        target["selector"] = "all"
+        target["relative_to"] = {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}}
     return target
 
 
 def _is_many_target(target: dict[str, Any]) -> bool:
-    return target.get("selector") == "all" or any(key in target for key in ("semantic_tag", "layer_id", "group_id", "color"))
+    return target.get("selector") == "all" or any(
+        key in target
+        for key in ("semantic_tag", "semantic_tags", "layer_id", "group_id", "color", "color_group", "relative_to", "position_rank", "size_class")
+    )
 
 
 def _decorate_object(text: str, obj: dict[str, Any]) -> dict[str, Any]:

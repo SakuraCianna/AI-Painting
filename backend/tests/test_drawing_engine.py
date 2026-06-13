@@ -6,7 +6,7 @@ import pytest
 
 from app.database import connect_db, init_db
 from app.drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
-from app.repositories import create_artwork, get_artwork
+from app.repositories import create_artwork, find_objects, get_artwork
 from app.schemas import ArtworkCreateRequest, OperationRequest
 
 
@@ -148,6 +148,107 @@ def test_operation_plan_undo_and_redo_use_one_history_group(tmp_path: Path) -> N
 
         redone = redo_last_operation(connection, artwork_id)
         assert [obj.type for obj in redone.objects] == ["circle", "star"]
+
+
+def test_find_objects_supports_position_rank_selector(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        for name, cx in (("左树", 120), ("中树", 320), ("右树", 520)):
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": "circle",
+                    "name": name,
+                    "semantic_tags": ["tree"],
+                    "geometry": {"cx": cx, "cy": 360, "radius": 32},
+                    "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 2},
+                },
+            )
+
+        matches = find_objects(
+            connection,
+            artwork_id,
+            {"selector": "all", "semantic_tag": "tree", "position": "leftmost", "position_rank": 2},
+        )
+
+        assert [obj.name for obj in matches] == ["中树"]
+
+
+def test_find_objects_supports_relative_selector(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "triangle",
+                "name": "屋顶",
+                "semantic_tags": ["house.roof"],
+                "geometry": {"x": 512, "y": 220, "size": 220},
+                "style": {"fill": "#dc2626", "stroke": "#7f1d1d", "strokeWidth": 3},
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "上方门",
+                "semantic_tags": ["house.door"],
+                "geometry": {"x": 450, "y": 80, "width": 80, "height": 120},
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "屋顶下方门",
+                "semantic_tags": ["house.door"],
+                "geometry": {"x": 470, "y": 330, "width": 84, "height": 150},
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+            },
+        )
+
+        matches = find_objects(
+            connection,
+            artwork_id,
+            {
+                "selector": "all",
+                "semantic_tag": "house.door",
+                "relative_to": {"relation": "below", "target": {"selector": "all", "semantic_tag": "house.roof"}},
+            },
+        )
+
+        assert [obj.name for obj in matches] == ["屋顶下方门"]
+
+
+def test_find_objects_supports_color_group_and_size_selector(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        objects = [
+            ("红色小圆", "#dc2626", 120, 24),
+            ("黄色小圆", "#facc15", 260, 24),
+            ("蓝色小圆", "#2563eb", 400, 24),
+            ("红色大块", "#dc2626", 560, 140),
+        ]
+        for name, color, cx, radius in objects:
+            _add_object(
+                connection,
+                artwork_id,
+                {
+                    "type": "circle",
+                    "name": name,
+                    "geometry": {"cx": cx, "cy": 360, "radius": radius},
+                    "style": {"fill": color, "stroke": color, "strokeWidth": 2},
+                },
+            )
+
+        matches = find_objects(connection, artwork_id, {"selector": "all", "color_group": "warm", "size_class": "small", "max_area": 10000})
+
+        assert [obj.name for obj in matches] == ["红色小圆", "黄色小圆"]
 
 
 def test_unsupported_operation_is_rejected(tmp_path: Path) -> None:
