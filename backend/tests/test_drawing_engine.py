@@ -156,3 +156,61 @@ def test_unsupported_operation_is_rejected(tmp_path: Path) -> None:
 
         with pytest.raises(ValueError, match="Unsupported operation type"):
             apply_operation(connection, artwork_id, OperationRequest(operation_type="unknown", payload={}))
+
+
+def test_invalid_operation_does_not_clear_redo_stack(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {"type": "circle", "name": "圆形", "geometry": {"cx": 512, "cy": 384, "radius": 64}, "style": {"fill": "#2563eb"}},
+        )
+        assert undo_last_operation(connection, artwork_id).objects == []
+
+        with pytest.raises(ValueError, match="Unsupported operation type"):
+            apply_operation(connection, artwork_id, OperationRequest(operation_type="unknown", payload={}))
+
+        redone = redo_last_operation(connection, artwork_id)
+        assert [obj.type for obj in redone.objects] == ["circle"]
+
+
+def test_add_object_rejects_unknown_type_without_persisting(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+
+        with pytest.raises(ValueError, match="Unsupported object type"):
+            apply_operation(
+                connection,
+                artwork_id,
+                OperationRequest(
+                    operation_type="add_object",
+                    payload={"object": {"type": "hexagon", "geometry": {"x": 10, "y": 10, "width": 60, "height": 60}, "style": {"fill": "#2563eb"}}},
+                ),
+            )
+
+        assert get_artwork(connection, artwork_id).objects == []
+        operation_count = connection.execute("SELECT COUNT(*) AS count FROM operations WHERE artwork_id = ?", (artwork_id,)).fetchone()["count"]
+        assert operation_count == 0
+
+
+def test_scale_and_replace_shape_reject_invalid_payload_without_mutating_object(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        object_id = _add_object(
+            connection,
+            artwork_id,
+            {"type": "circle", "name": "圆形", "geometry": {"cx": 512, "cy": 384, "radius": 64}, "style": {"fill": "#2563eb"}},
+        )
+
+        with pytest.raises(ValueError, match="Scale factor"):
+            apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload={"target": {"object_id": object_id}, "factor": 0}))
+
+        with pytest.raises(ValueError, match="Unsupported replacement shape"):
+            apply_operation(connection, artwork_id, OperationRequest(operation_type="replace_shape", payload={"target": {"object_id": object_id}, "shape": "image"}))
+
+        obj = get_artwork(connection, artwork_id).objects[0]
+        assert obj.type == "circle"
+        assert obj.geometry["radius"] == 64
+        operations = connection.execute("SELECT operation_type FROM operations WHERE artwork_id = ? ORDER BY rowid", (artwork_id,)).fetchall()
+        assert [row["operation_type"] for row in operations] == ["add_object"]

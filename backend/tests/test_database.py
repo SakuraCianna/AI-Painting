@@ -32,6 +32,17 @@ def test_init_db_migrates_old_drawing_object_metadata_columns(tmp_path: Path) ->
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE operations (
+            id TEXT PRIMARY KEY,
+            artwork_id TEXT NOT NULL REFERENCES artworks(id) ON DELETE CASCADE,
+            operation_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            inverse_payload_json TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """
     )
     connection.close()
@@ -39,6 +50,8 @@ def test_init_db_migrates_old_drawing_object_metadata_columns(tmp_path: Path) ->
     init_db(str(db_path))
 
     migrated = sqlite3.connect(db_path)
-    columns = {row[1] for row in migrated.execute("PRAGMA table_info(drawing_objects)").fetchall()}
+    object_columns = {row[1] for row in migrated.execute("PRAGMA table_info(drawing_objects)").fetchall()}
+    operation_columns = {row[1] for row in migrated.execute("PRAGMA table_info(operations)").fetchall()}
     migrated.close()
-    assert {"layer_id", "group_id", "semantic_tags_json", "transform_json"}.issubset(columns)
+    assert {"layer_id", "group_id", "semantic_tags_json", "transform_json"}.issubset(object_columns)
+    assert {"command_group_id", "operation_index"}.issubset(operation_columns)

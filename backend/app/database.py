@@ -73,6 +73,8 @@ def init_db(path: str | None = None) -> None:
             CREATE TABLE IF NOT EXISTS operations (
                 id TEXT PRIMARY KEY,
                 artwork_id TEXT NOT NULL REFERENCES artworks(id) ON DELETE CASCADE,
+                command_group_id TEXT,
+                operation_index INTEGER NOT NULL DEFAULT 0,
                 operation_type TEXT NOT NULL,
                 payload_json TEXT NOT NULL,
                 inverse_payload_json TEXT NOT NULL,
