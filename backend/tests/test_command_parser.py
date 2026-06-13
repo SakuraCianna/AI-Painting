@@ -266,6 +266,18 @@ def test_parse_follow_up_image_region_adjustment_polish() -> None:
     assert "调整方式: 柔和" in payload["prompt"]
 
 
+def test_parse_follow_up_image_adjustment_only_polish() -> None:
+    plan = parse_command("再亮一点")
+
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert payload["target"] == {"selector": "latest", "type": "image"}
+    assert payload["target_region"] is None
+    assert payload["target_subject"] is None
+    assert payload["adjustment"] == "调亮"
+    assert "调整方式: 调亮" in payload["prompt"]
+
+
 def test_parse_window_shape_replacement_and_spatial_scale() -> None:
     replace_plan = parse_command("把窗户改成圆形")
     assert replace_plan.operations[0].operation_type == "replace_shape_many"

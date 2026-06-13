@@ -127,6 +127,7 @@ SCENE_OBJECT_KEYWORDS: tuple[tuple[str, str], ...] = (
 SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方", "天空", "前景", "背景", "中间", "后面", "前面")
 SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
 IMAGE_POLISH_HINTS = ("精修", "丰富", "润色", "美化", "增强", "提升质感", "重新渲染", "风格化")
+IMAGE_FOLLOW_UP_POLISH_HINTS = ("继续", "再", "刚才", "上一张", "上一版", "他的", "她的", "它的", "这个", "那个", "同一个")
 GROUP_SCOPE_HINTS = ("整个", "整座", "整棵", "整扇", "整组", "整张", "全部这", "这一整")
 IMAGE_ADJUSTMENT_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("更明亮一点", "调亮"),
@@ -589,7 +590,8 @@ def _is_image_polish_request(normalized_text: str, render_mode: str) -> bool:
         return False
     has_subject_target = _find_image_subject_target(normalized_text) is not None
     has_image_target = any(keyword in normalized_text for keyword in IMAGE_ADJUSTMENT_TARGET_HINTS)
-    return has_subject_target or has_image_target
+    has_follow_up_hint = any(keyword in normalized_text for keyword in IMAGE_FOLLOW_UP_POLISH_HINTS)
+    return has_subject_target or has_image_target or has_follow_up_hint
 
 
 def _target_selector(text: str, *, include_layer: bool = True, include_color: bool = True) -> dict[str, Any]:
