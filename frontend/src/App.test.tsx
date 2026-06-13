@@ -207,6 +207,52 @@ describe("App", () => {
     expect(audioPlay).toHaveBeenCalledTimes(1);
   });
 
+  it("shows an image generation state while an artistic image command is pending", async () => {
+    let resolveCommand: (response: CommandExecutionResponse) => void = () => undefined;
+    const pendingCommand = new Promise<CommandExecutionResponse>((resolve) => {
+      resolveCommand = resolve;
+    });
+    apiMocks.submitVoiceCommand.mockReturnValue(pendingCommand);
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    let finalTranscriptPromise: void | Promise<void>;
+    await act(async () => {
+      finalTranscriptPromise = voiceRuntime.onFinalTranscript?.("画一幅中国山水水墨画", null);
+    });
+
+    expect(await screen.findByText("正在生成图片")).toBeInTheDocument();
+    resolveCommand({
+      message: "已生成图片",
+      plan: makePlan({
+        raw_text: "画一幅中国山水水墨画",
+        normalized_text: "画一幅中国山水水墨画",
+        operations: [{ operation_type: "generate_image_asset", payload: {} }],
+        explanation: "准备生成图片素材并作为可编辑图片对象加入画布",
+      }),
+      artwork: makeArtwork([
+        {
+          id: "image-1",
+          type: "image",
+          name: "中国山水水墨画",
+          layer_id: "middle",
+          group_id: null,
+          semantic_tags: ["generated.image", "image"],
+          transform: {},
+          geometry: { x: 0, y: 0, width: 1024, height: 768, src: "data:image/png;base64,AAAA" },
+          style: { opacity: 1 },
+          z_index: 0,
+        },
+      ]),
+      metrics: makeMetrics(),
+    });
+    await act(async () => {
+      await finalTranscriptPromise;
+    });
+
+    await waitFor(() => expect(screen.getAllByText("已生成图片").length).toBeGreaterThan(0));
+  });
+
   it("attaches the current canvas image when the user asks to polish the picture", async () => {
     apiMocks.submitVoiceCommand.mockResolvedValue({
       message: "已精修图片",

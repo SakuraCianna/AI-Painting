@@ -157,6 +157,8 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 | `AI_PAINTING_OPENAI_API_KEY` | OpenAI 官方备用 API Key | 空 |
 | `AI_PAINTING_OPENAI_BASE_URL` | OpenAI 官方备用 Base URL | `https://api.openai.com/v1` |
 
+文字转图片和图生图精修的中转站请求尺寸由后端运行时决定: 空白画布生成图片时使用当前画布尺寸, 基于已有图片精修时沿用源图片尺寸。旧的固定尺寸变量不再建议配置。
+
 完整变量说明见 [.env.example](.env.example)。
 
 ## 测试与质量

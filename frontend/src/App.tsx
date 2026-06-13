@@ -108,6 +108,12 @@ function shouldAttachCanvasImage(text: string): boolean {
     && /图片|图像|画面|作品|画布|生成图|生成的|生成出来|照片|肖像|头像|人物|局部|部分|区域|背景|天空|眼睛|脸|头发|衣服|海报/.test(text);
 }
 
+function shouldShowImageGenerationState(text: string): boolean {
+  return /水墨画|水墨|二次元|动漫人物|写实插画|概念场景|艺术海报|商业视觉|儿童插画|国风插画|科幻场景|生图/.test(text)
+    || /生成.+(图片|图像|照片|肖像|头像|海报|背景|素材)/.test(text)
+    || /画.+(水墨|插画|肖像|头像|海报|视觉图|概念图|科幻|二次元)/.test(text);
+}
+
 export default function App() {
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [statusMessage, setStatusMessage] = useState("正在准备语音画布");
@@ -169,6 +175,8 @@ export default function App() {
         const canvasImageDataUrl = shouldAttachCanvasImage(text) ? await svgToPngDataUrl("voice-canvas-svg") : undefined;
         if (canvasImageDataUrl) {
           setStatusMessage("正在精修当前画布");
+        } else if (shouldShowImageGenerationState(text)) {
+          setStatusMessage("正在生成图片");
         }
         const response = await submitVoiceCommand(artwork.id, text, canvasImageDataUrl);
         setLatestPlan(response.plan);

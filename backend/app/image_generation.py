@@ -180,7 +180,7 @@ async def _generate_with_openai_compatible(prompt: str, width: int, height: int,
     body = {
         "model": os.getenv("AI_PAINTING_TEXT_IMAGE_MODEL", os.getenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")),
         "prompt": prompt,
-        "size": os.getenv("AI_PAINTING_TEXT_IMAGE_SIZE") or f"{width}x{height}",
+        "size": f"{width}x{height}",
         "style": style,
         "response_format": os.getenv("AI_PAINTING_TEXT_IMAGE_RESPONSE_FORMAT", "b64_json"),
     }
@@ -240,7 +240,7 @@ async def _edit_with_openai_compatible(prompt: str, image_data_url: str, width: 
     endpoint = os.getenv("AI_PAINTING_IMAGE_EDIT_ENDPOINT") or f"{base_url}/images/edits"
     model = os.getenv("AI_PAINTING_IMAGE_EDIT_MODEL", "gpt-image-2")
     timeout = _read_float_env("AI_PAINTING_IMAGE_EDIT_TIMEOUT", 120.0)
-    size = os.getenv("AI_PAINTING_IMAGE_EDIT_SIZE") or f"{width}x{height}"
+    size = f"{width}x{height}"
     response_format = os.getenv("AI_PAINTING_IMAGE_EDIT_RESPONSE_FORMAT", "b64_json")
     fields = {
         "model": model,
