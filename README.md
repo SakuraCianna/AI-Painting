@@ -35,7 +35,7 @@ AI Painting 是一个 **纯语音绘图工作台**。用户不通过鼠标拖拽
 - **纯语音创作**: 前端没有鼠标拖拽绘图工具栏, 语音是唯一创作输入。
 - **矢量优先**: 房子、流程图、甘特图、组织结构图、UI 草图等结构化内容走程序生成, 保持文字清晰、关系稳定、对象可编辑。
 - **生图增强**: 水墨、二次元、写实插画、复杂视觉海报等艺术型内容可走 GPT-image-2 / OpenAI 兼容 Provider。
-- **图生图精修**: 支持“精修我的图片”“把右边那个人的眼睛调亮”“继续把他的头发柔和一点”“再亮一点”等指令, 会把源图、原始提示词、目标主体、目标区域和调整动作一起传给图像编辑 Provider。
+- **图生图精修**: 支持“精修我的图片”“把右边那个人的眼睛调亮”“继续把他的头发柔和一点”“再亮一点”“同一个人衣服亮一点”“左边那个也这样处理”等指令, 会把源图、原始提示词、目标主体、目标区域和调整动作一起传给图像编辑 Provider。
 - **Agent 架构**: LangGraph + SceneGraph v2 负责复杂规划, 后端编译成受控 `CommandPlan` 后再执行。
 - **可观测**: ASR、规则解析、Agent 规划、绘图执行和端到端延迟都会记录。
 - **可测试**: 后端覆盖率门槛 85%, 前端覆盖率门槛 85%, CI 会跑后端、前端、Docker 和 API smoke test。
@@ -53,7 +53,7 @@ AI Painting 是一个 **纯语音绘图工作台**。用户不通过鼠标拖拽
 | 清空确认链 | 已支持 | “清空画布” -> “确认清空” |
 | Agent 模板 | 已支持 | 客厅、流程图、信息图、海报、UI 草图、组织结构图、甘特图 |
 | 文生图 | 已支持 Provider 链路 | “生成一张人物肖像画” |
-| 图生图精修 | 已支持 Provider 链路 | “把右边那个人的眼睛调亮”“继续把他的头发柔和一点”“再亮一点” |
+| 图生图精修 | 已支持 Provider 链路 | “把右边那个人的眼睛调亮”“继续把他的头发柔和一点”“再亮一点”“左边那个也这样处理” |
 | ASR 降级 | 已支持 | 小米 MiMo ASR -> 本地 ASR -> Web Speech API |
 | 本地 ASR | 已有脚手架 | Qwen3-ASR HTTP 服务 |
 | 真实商业级验证 | 进行中 | 真实 ASR 样本、真实图像模型效果、无鼠标端到端验收仍需继续补齐 |
@@ -73,6 +73,8 @@ AI Painting 是一个 **纯语音绘图工作台**。用户不通过鼠标拖拽
 把右边那个人的眼睛调亮
 继续把他的头发柔和一点
 再亮一点
+同一个人衣服亮一点
+左边那个也这样处理
 清空画布
 确认清空
 撤销
@@ -294,7 +296,7 @@ Voice -> ASR -> Render Strategy Router -> Rule Parser / Drawing Agent -> Structu
 - **Voice-first creation**: no mouse-based drawing toolbar is exposed in the workspace.
 - **Vector-first rendering**: diagrams, houses, Gantt charts, org charts, UI wireframes, and other structured graphics are rendered as editable SVG objects.
 - **Generative image extension**: artistic requests can go through GPT-image-2 or any OpenAI-compatible image provider.
-- **Image-to-image refinement**: Chinese voice commands such as "精修我的图片", "把右边那个人的眼睛调亮", "继续把他的头发柔和一点", or "再亮一点" carry source image, source prompt, target subject, target region, and adjustment into the image edit provider.
+- **Image-to-image refinement**: Chinese voice commands such as "精修我的图片", "把右边那个人的眼睛调亮", "继续把他的头发柔和一点", "再亮一点", or "左边那个也这样处理" carry source image, source prompt, target subject, target region, and adjustment into the image edit provider.
 - **Agent architecture**: LangGraph and SceneGraph v2 plan complex scenes, then the backend compiles them into safe `CommandPlan` operations.
 - **Observable pipeline**: ASR, rule parsing, agent planning, drawing execution, and end-to-end latency are logged.
 - **Tested workflow**: backend coverage is gated at 85%, frontend coverage is gated at 85%, and CI runs backend, frontend, Docker, and API smoke checks.
@@ -312,7 +314,7 @@ Voice -> ASR -> Render Strategy Router -> Rule Parser / Drawing Agent -> Structu
 | Clear confirmation | Supported | "Clear canvas" -> "Confirm clear" |
 | Agent templates | Supported | Living room, flowchart, infographic, poster, UI wireframe, org chart, Gantt chart |
 | Text-to-image | Provider pipeline ready | "Generate an anime character" |
-| Image-to-image | Provider pipeline ready | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点" or "再亮一点" |
+| Image-to-image | Provider pipeline ready | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点", "再亮一点", or "左边那个也这样处理" |
 | ASR fallback | Supported | Xiaomi MiMo ASR -> local ASR -> Web Speech API |
 | Local ASR | Scaffolded | Qwen3-ASR HTTP service |
 | Production-grade validation | In progress | Real ASR samples, real image model quality, and no-mouse E2E validation still need more work |
@@ -332,6 +334,8 @@ Generate an anime character
 把右边那个人的眼睛调亮
 继续把他的头发柔和一点
 再亮一点
+同一个人衣服亮一点
+左边那个也这样处理
 Clear canvas
 Confirm clear
 Undo

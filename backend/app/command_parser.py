@@ -128,6 +128,8 @@ SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方"
 SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
 IMAGE_POLISH_HINTS = ("精修", "丰富", "润色", "美化", "增强", "提升质感", "重新渲染", "风格化")
 IMAGE_FOLLOW_UP_POLISH_HINTS = ("继续", "再", "刚才", "上一张", "上一版", "他的", "她的", "它的", "这个", "那个", "同一个")
+IMAGE_REPEAT_POLISH_HINTS = ("也这样处理", "也这样改", "也同样处理", "同样处理", "照这样处理")
+IMAGE_SAME_SUBJECT_HINTS = ("同一个人", "同一个人物", "同一个角色", "同一人", "同一位")
 GROUP_SCOPE_HINTS = ("整个", "整座", "整棵", "整扇", "整组", "整张", "全部这", "这一整")
 IMAGE_ADJUSTMENT_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("更明亮一点", "调亮"),
@@ -585,6 +587,9 @@ def _is_image_polish_request(normalized_text: str, render_mode: str) -> bool:
     has_polish_hint = any(keyword in normalized_text for keyword in IMAGE_POLISH_HINTS)
     if has_polish_hint:
         return any(keyword in normalized_text for keyword in IMAGE_POLISH_TARGET_HINTS)
+    has_repeat_hint = any(keyword in normalized_text for keyword in IMAGE_REPEAT_POLISH_HINTS)
+    if has_repeat_hint:
+        return _find_image_subject_target(normalized_text) is not None
     has_adjustment = _find_image_adjustment(normalized_text) is not None
     if not has_adjustment:
         return False
@@ -1193,6 +1198,13 @@ def _find_subject_position_before(text: str, subject_position: int) -> str | Non
 
 
 def _find_image_subject_target(text: str) -> str | None:
+    if any(keyword in text for keyword in IMAGE_SAME_SUBJECT_HINTS):
+        return None
+
+    positioned_pronoun = _find_positioned_image_pronoun_subject(text)
+    if positioned_pronoun:
+        return positioned_pronoun
+
     matches: list[tuple[int, int, str]] = []
     for keyword, value in IMAGE_SUBJECT_KEYWORDS:
         for match in re.finditer(re.escape(keyword), text):
@@ -1205,6 +1217,19 @@ def _find_image_subject_target(text: str) -> str | None:
     if subject == "人":
         return f"{position}的人" if position else "人物"
     return f"{position}的{subject}" if position else subject
+
+
+def _find_positioned_image_pronoun_subject(text: str) -> str | None:
+    matches: list[tuple[int, int, str]] = []
+    pronouns = ("那个", "这个", "那位", "这位")
+    for position_keyword, position in IMAGE_SUBJECT_POSITION_KEYWORDS:
+        for match in re.finditer(re.escape(position_keyword), text):
+            trailing = text[match.end() : match.end() + 4]
+            if any(pronoun in trailing for pronoun in pronouns):
+                matches.append((match.start(), len(position_keyword), f"{position}的人"))
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
 
 
 def _find_image_corner_target(text: str) -> str | None:
@@ -1238,7 +1263,7 @@ def _image_target_selector(text: str, *, target_region: str | None = None, targe
             target["selector"] = "all"
             target["position"] = "bottommost"
 
-    rank = _extract_position_rank(text)
+    rank = None if any(keyword in text for keyword in IMAGE_SAME_SUBJECT_HINTS) else _extract_position_rank(text)
     if rank is not None:
         target["selector"] = "all"
         target["rank"] = rank
