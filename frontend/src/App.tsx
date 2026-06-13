@@ -185,7 +185,11 @@ function WorkspaceApp() {
 
   const handleFinalTranscript = useCallback(
     async (text: string, asrMetrics: AsrTranscriptionMetrics | null) => {
-      if (!artwork || isBusy) {
+      if (!artwork) {
+        return;
+      }
+      if (isBusy) {
+        setStatusMessage("正在执行上一条语音指令，请稍后再说");
         return;
       }
 

@@ -357,5 +357,293 @@
     "text": "把画面改成夜晚 保留房子的形状 给窗户加暖黄色灯光",
     "tier": "planner_expected",
     "reason": "需要跨对象语义保持、全局风格变更和局部样式修改"
+  },
+  {
+    "id": "planner-park-morning-family",
+    "text": "画一个清晨公园场景 左边有两棵树 右边有小路 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要多主体空间布局、数量约束和天空元素拆解"
+  },
+  {
+    "id": "planner-campus-entrance",
+    "text": "画一个校园入口场景 中间有房子 左边有树 右边有道路 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要开放场景中的建筑、道路、树和天空分层规划"
+  },
+  {
+    "id": "planner-riverside-cabin",
+    "text": "画一个河边小屋场景 前景有小路 中间有房子 后面有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要前中后景关系和多对象遮挡顺序"
+  },
+  {
+    "id": "planner-forest-path",
+    "text": "画一个森林道路场景 左侧有三棵树 右侧有两朵云 中间有一条小路",
+    "tier": "planner_expected",
+    "reason": "需要数量约束、左右布局和路径对象协同"
+  },
+  {
+    "id": "planner-house-garden",
+    "text": "画一个房子花园场景 前面有小路 左边有树 右边有太阳 天空有云朵",
+    "tier": "planner_expected",
+    "reason": "需要房子组、路径、树和天空对象的整体构图"
+  },
+  {
+    "id": "planner-night-camp",
+    "text": "画一个夜晚露营场景 中间有小屋 左边有树 右边有灯光 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要夜晚氛围、灯光和多主体场景拆解"
+  },
+  {
+    "id": "planner-rainy-street",
+    "text": "画一个雨天街道场景 中间有道路 两边有房子 天空有云和灯光",
+    "tier": "planner_expected",
+    "reason": "需要场景语义、道路透视和多个建筑对象"
+  },
+  {
+    "id": "planner-lakeside-sunset",
+    "text": "画一个湖边黄昏场景 左边有树 右边有小路 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要风格氛围、天空元素和景物层次规划"
+  },
+  {
+    "id": "planner-playground-scene",
+    "text": "画一个儿童游乐场场景 左侧有树 中间有道路 右侧有房子 天空有太阳",
+    "tier": "planner_expected",
+    "reason": "需要开放场景对象补全和安全可执行计划"
+  },
+  {
+    "id": "planner-farm-yard",
+    "text": "画一个农场院子场景 前面有小路 中间有房子 左右各有一棵树",
+    "tier": "planner_expected",
+    "reason": "需要左右对称数量约束和房子道路组合"
+  },
+  {
+    "id": "planner-mountain-village",
+    "text": "画一个山脚村庄场景 前景有道路 中间有三座房子 后面有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要多建筑数量约束、层级和背景关系"
+  },
+  {
+    "id": "planner-beach-house",
+    "text": "画一个海边房子场景 左边有小路 右边有树 天空有太阳和两朵云",
+    "tier": "planner_expected",
+    "reason": "需要场景语义和天空多对象数量拆解"
+  },
+  {
+    "id": "planner-city-plaza",
+    "text": "画一个城市广场场景 中间有道路 两边有房子 前景有灯光 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要多个建筑、道路和前景灯光的结构化规划"
+  },
+  {
+    "id": "planner-subway-exit",
+    "text": "画一个地铁口场景 左边有道路 右边有树 后面有房子 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要开放场景中的对象识别和相对位置规划"
+  },
+  {
+    "id": "planner-library-garden",
+    "text": "画一个图书馆花园场景 中间有房子 前景有小路 两侧有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要建筑语义、前景路径和对称树木布局"
+  },
+  {
+    "id": "planner-winter-house",
+    "text": "画一个冬天小屋场景 中间有房子 左右有树 天空有云 前景有小路",
+    "tier": "planner_expected",
+    "reason": "需要季节氛围和多层对象拆解"
+  },
+  {
+    "id": "planner-spring-yard",
+    "text": "画一个春天庭院场景 中间有房子 左边有两棵树 右边有小路 天空有太阳",
+    "tier": "planner_expected",
+    "reason": "需要季节语义、数量约束和对象布局"
+  },
+  {
+    "id": "planner-workshop-yard",
+    "text": "画一个工作室院子场景 左边有房子 右边有道路 天空有云 前景有灯光",
+    "tier": "planner_expected",
+    "reason": "需要多对象布局和前景元素规划"
+  },
+  {
+    "id": "planner-museum-square",
+    "text": "画一个博物馆广场场景 中间有房子 前方有道路 左右有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要建筑主体、道路和树的组合规划"
+  },
+  {
+    "id": "planner-market-street",
+    "text": "画一个集市街道场景 左侧有房子 右侧有树 中间有道路 天空有太阳",
+    "tier": "planner_expected",
+    "reason": "需要街道构图和左右对象布局"
+  },
+  {
+    "id": "planner-railway-cottage",
+    "text": "画一个铁路旁小屋场景 中间有小屋 左边有道路 右边有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要场景对象转换为可编辑矢量计划"
+  },
+  {
+    "id": "planner-community-garden",
+    "text": "画一个社区花园场景 左边有两棵树 中间有小路 右边有房子 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要多主体数量和相对位置拆解"
+  },
+  {
+    "id": "planner-ski-lodge",
+    "text": "画一个滑雪小屋场景 中间有房子 后面有树 天空有云 前面有道路",
+    "tier": "planner_expected",
+    "reason": "需要场景氛围、前后景和建筑对象规划"
+  },
+  {
+    "id": "planner-courtyard-night",
+    "text": "画一个夜晚庭院场景 中间有小屋 左边有树 右边有灯光 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要夜晚场景、灯光和主体对象联动"
+  },
+  {
+    "id": "planner-schoolyard-clouds",
+    "text": "画一个操场场景 左边有房子 右边有两棵树 天空有三朵云",
+    "tier": "planner_expected",
+    "reason": "需要数量约束和多对象自动布局"
+  },
+  {
+    "id": "planner-terrace-house",
+    "text": "画一个露台小屋场景 前景有道路 中间有房子 左右有树 天空有太阳",
+    "tier": "planner_expected",
+    "reason": "需要前景道路、主体房子和天空元素协同"
+  },
+  {
+    "id": "planner-bridge-park",
+    "text": "画一个桥边公园场景 左边有树 右边有房子 中间有道路 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要开放场景中的主体补全和空间关系规划"
+  },
+  {
+    "id": "planner-foggy-village",
+    "text": "画一个雾天村庄场景 中间有房子 两边有树 前景有道路 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要天气氛围和多层矢量对象计划"
+  },
+  {
+    "id": "planner-avenue-scene",
+    "text": "画一个林荫大道场景 左右两边有树 中间有道路 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要对称布局、道路透视和天空对象规划"
+  },
+  {
+    "id": "planner-harbor-walk",
+    "text": "画一个港口步道场景 左边有房子 右边有道路 天空有云和太阳",
+    "tier": "planner_expected",
+    "reason": "需要场景语义、路径和天空对象拆解"
+  },
+  {
+    "id": "planner-eco-house",
+    "text": "画一个绿色生态小屋场景 中间有房子 左边有三棵树 右边有小路",
+    "tier": "planner_expected",
+    "reason": "需要数量约束、生态主题和对象组规划"
+  },
+  {
+    "id": "planner-cafe-street",
+    "text": "画一个咖啡馆街角场景 左边有房子 右边有树 前景有道路 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要街角构图和主体对象拆解"
+  },
+  {
+    "id": "planner-bus-stop",
+    "text": "画一个公交站场景 左边有道路 右边有树 后面有房子 天空有太阳",
+    "tier": "planner_expected",
+    "reason": "需要交通场景、道路和背景对象规划"
+  },
+  {
+    "id": "planner-quiet-alley",
+    "text": "画一个安静小巷场景 左右有房子 中间有道路 天空有云 前景有灯光",
+    "tier": "planner_expected",
+    "reason": "需要小巷透视和前景灯光拆解"
+  },
+  {
+    "id": "planner-rooftop-garden",
+    "text": "画一个屋顶花园场景 中间有小路 左边有树 右边有灯光 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要非典型场景的对象补全和可编辑计划"
+  },
+  {
+    "id": "planner-desert-house",
+    "text": "画一个沙漠小屋场景 中间有房子 前面有道路 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要环境风格、主体和路径对象拆解"
+  },
+  {
+    "id": "planner-garden-party",
+    "text": "画一个花园聚会场景 左边有树 右边有房子 天空有灯光和云",
+    "tier": "planner_expected",
+    "reason": "需要场景氛围、灯光和对象布局规划"
+  },
+  {
+    "id": "planner-rural-road",
+    "text": "画一个乡村道路场景 左边有房子 右边有三棵树 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要数量约束和乡村场景布局"
+  },
+  {
+    "id": "planner-waterfront-town",
+    "text": "画一个水边小镇场景 中间有道路 两边有房子 天空有云和太阳",
+    "tier": "planner_expected",
+    "reason": "需要多建筑、道路和天空对象的可执行计划"
+  },
+  {
+    "id": "planner-hill-house",
+    "text": "画一个山坡房子场景 前景有小路 中间有房子 后面有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要地形、前后景和主体对象规划"
+  },
+  {
+    "id": "planner-moonlit-garden",
+    "text": "画一个月光花园场景 中间有小路 左边有树 右边有房子 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要夜间氛围和多对象布局"
+  },
+  {
+    "id": "planner-rainbow-yard",
+    "text": "画一个雨后庭院场景 中间有房子 左边有树 右边有道路 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要天气变化、天空和地面对象组合"
+  },
+  {
+    "id": "planner-office-campus",
+    "text": "画一个办公园区场景 左边有房子 中间有道路 右边有树 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要园区布局和多对象结构化规划"
+  },
+  {
+    "id": "planner-sunrise-road",
+    "text": "画一个日出道路场景 前景有道路 左右有树 天空有太阳和两朵云",
+    "tier": "planner_expected",
+    "reason": "需要天空数量约束、道路和树木关系"
+  },
+  {
+    "id": "planner-evening-house-lights",
+    "text": "画一个傍晚房子场景 中间有房子 前景有道路 窗户有灯光 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要全局时间氛围和局部灯光对象规划"
+  },
+  {
+    "id": "planner-small-town-square",
+    "text": "画一个小镇广场场景 左右有房子 中间有道路 天空有太阳和云",
+    "tier": "planner_expected",
+    "reason": "需要左右建筑、道路和天空元素布局"
+  },
+  {
+    "id": "planner-river-bridge-house",
+    "text": "画一个河桥小屋场景 中间有小路 左边有树 右边有房子 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要跨领域场景对象补全和布局确认"
+  },
+  {
+    "id": "planner-meadow-cottage",
+    "text": "画一个草地小屋场景 中间有房子 左边有三棵树 右边有小路 天空有云",
+    "tier": "planner_expected",
+    "reason": "需要草地、房子、树和路径的复杂构图"
   }
 ]

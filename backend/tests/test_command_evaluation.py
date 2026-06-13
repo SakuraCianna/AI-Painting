@@ -15,7 +15,7 @@ ASR_TRANSCRIPTS_PATH = Path(__file__).resolve().parents[2] / "docs" / "evaluatio
 def test_complex_voice_command_evaluation_set_is_well_formed() -> None:
     cases = json.loads(EVALUATION_PATH.read_text(encoding="utf-8"))
     ids = [case["id"] for case in cases]
-    assert 50 <= len(cases) <= 100
+    assert len(cases) == 100
     assert len(ids) == len(set(ids))
     assert {"rules", "agent", "planner_expected"}.issubset({case["tier"] for case in cases})
     assert {case["tier"] for case in cases}.issubset({"rules", "agent", "planner_expected"})

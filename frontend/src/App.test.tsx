@@ -59,6 +59,13 @@ function makeArtwork(objects: Artwork["objects"] = []): Artwork {
   };
 }
 
+function makeArtworkWithTitle(title: string, objects: Artwork["objects"] = []): Artwork {
+  return {
+    ...makeArtwork(objects),
+    title,
+  };
+}
+
 function makePlan(overrides: Partial<CommandPlan> = {}): CommandPlan {
   return {
     raw_text: "画一个蓝色圆形",
@@ -223,6 +230,126 @@ describe("App", () => {
     expect(screen.getByText("1 个对象")).toBeInTheDocument();
     expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
     expect(audioPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("completes a voice-only acceptance workflow without toolbar export clicks", async () => {
+    const houseObjects: Artwork["objects"] = [
+      {
+        id: "house-body",
+        type: "rect",
+        name: "房子主体",
+        layer_id: "middle",
+        group_id: "house",
+        semantic_tags: ["house.body"],
+        transform: {},
+        geometry: { x: 360, y: 330, width: 300, height: 220 },
+        style: { fill: "#f3f4f6", stroke: "#111827", strokeWidth: 2 },
+        z_index: 0,
+      },
+      {
+        id: "house-door",
+        type: "rect",
+        name: "门",
+        layer_id: "middle",
+        group_id: "house",
+        semantic_tags: ["house.door"],
+        transform: {},
+        geometry: { x: 470, y: 440, width: 80, height: 110 },
+        style: { fill: "#2563eb", stroke: "#111827", strokeWidth: 2 },
+        z_index: 1,
+      },
+    ];
+    const editedHouseObjects: Artwork["objects"] = [
+      houseObjects[0],
+      {
+        ...houseObjects[1],
+        style: { fill: "#16a34a", stroke: "#111827", strokeWidth: 2 },
+      },
+    ];
+    apiMocks.submitVoiceCommand
+      .mockResolvedValueOnce({
+        message: "已画好房子",
+        plan: makePlan({ raw_text: "画一个房子 红色屋顶 蓝色门 两扇窗户", operations: [{ operation_type: "add_object", payload: {} }] }),
+        artwork: makeArtwork(houseObjects),
+        metrics: makeMetrics(),
+      })
+      .mockResolvedValueOnce({
+        message: "已把门改成绿色",
+        plan: makePlan({ raw_text: "把门改成绿色", operations: [{ operation_type: "set_style_many", payload: {} }] }),
+        artwork: makeArtwork(editedHouseObjects),
+        metrics: makeMetrics(),
+      })
+      .mockResolvedValueOnce({
+        message: "已撤销上一步",
+        plan: makePlan({ raw_text: "撤销", operations: [{ operation_type: "undo", payload: {} }] }),
+        artwork: makeArtwork(houseObjects),
+        metrics: makeMetrics(),
+      })
+      .mockResolvedValueOnce({
+        message: "已恢复上一步",
+        plan: makePlan({ raw_text: "恢复", operations: [{ operation_type: "redo", payload: {} }] }),
+        artwork: makeArtwork(editedHouseObjects),
+        metrics: makeMetrics(),
+      })
+      .mockResolvedValueOnce({
+        message: "已保存作品版本",
+        plan: makePlan({ raw_text: "保存作品 名字叫语音验收", operations: [{ operation_type: "save_artwork", payload: {} }] }),
+        artwork: makeArtworkWithTitle("语音验收", editedHouseObjects),
+        metrics: makeMetrics(),
+      })
+      .mockResolvedValueOnce({
+        message: "已准备导出",
+        plan: makePlan({ raw_text: "导出 PNG", operations: [{ operation_type: "export_artwork", payload: { format: "png" } }] }),
+        artwork: makeArtworkWithTitle("语音验收", editedHouseObjects),
+        metrics: makeMetrics(),
+      });
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    for (const transcript of ["画一个房子 红色屋顶 蓝色门 两扇窗户", "把门改成绿色", "撤销", "恢复", "保存作品 名字叫语音验收", "导出 PNG"]) {
+      await act(async () => {
+        await voiceRuntime.onFinalTranscript?.(transcript, null);
+      });
+    }
+
+    expect(apiMocks.submitVoiceCommand).toHaveBeenCalledTimes(6);
+    expect(exportMocks.exportSvgAsPng).toHaveBeenCalledTimes(1);
+    expect(exportMocks.exportSvgAsPng).toHaveBeenCalledWith("voice-canvas-svg", "语音验收.png");
+    expect(screen.getByText("导出 PNG")).toBeInTheDocument();
+    expect(screen.getAllByText("已准备导出").length).toBeGreaterThan(0);
+  });
+
+  it("keeps voice command execution single-flight and reports ignored overlapping input", async () => {
+    let resolveCommand: (response: CommandExecutionResponse) => void = () => undefined;
+    const pendingCommand = new Promise<CommandExecutionResponse>((resolve) => {
+      resolveCommand = resolve;
+    });
+    apiMocks.submitVoiceCommand.mockReturnValue(pendingCommand);
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    let firstTranscriptPromise: void | Promise<void>;
+    await act(async () => {
+      firstTranscriptPromise = voiceRuntime.onFinalTranscript?.("画一个蓝色圆形", null);
+    });
+    await waitFor(() => expect(apiMocks.submitVoiceCommand).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("把它改成绿色", null);
+    });
+
+    expect(apiMocks.submitVoiceCommand).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("正在执行上一条语音指令，请稍后再说")).toBeInTheDocument();
+
+    resolveCommand({
+      message: "已添加蓝色圆形",
+      plan: makePlan(),
+      artwork: makeArtwork(),
+      metrics: makeMetrics(),
+    });
+    await act(async () => {
+      await firstTranscriptPromise;
+    });
   });
 
   it("shows an image generation state while an artistic image command is pending", async () => {

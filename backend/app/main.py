@@ -320,6 +320,37 @@ async def build_command_plan(text: str) -> CommandPlan:
     return (await build_command_plan_with_metrics(text)).plan
 
 
+def _build_rules_fallback_command(
+    rule_plan: CommandPlan,
+    metrics: CommandExecutionMetrics,
+    *,
+    started_at: float,
+    agent_started_at: float,
+) -> PlannedCommand:
+    agent_finished_at = perf_counter()
+    plan = _with_plan_metadata(rule_plan, "rules_fallback")
+    metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
+    metrics.llm_planner_ms = metrics.agent_planner_ms
+    metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
+    metrics.fallback_used = True
+    metrics.planner_source = plan.planner_source
+    return PlannedCommand(plan, metrics)
+
+
+def _build_rules_routing_fallback_command(
+    rule_plan: CommandPlan,
+    metrics: CommandExecutionMetrics,
+    *,
+    started_at: float,
+) -> PlannedCommand:
+    finished_at = perf_counter()
+    plan = _with_plan_metadata(rule_plan, "rules_fallback")
+    metrics.planner_total_ms = round((finished_at - started_at) * 1000, 2)
+    metrics.fallback_used = True
+    metrics.planner_source = plan.planner_source
+    return PlannedCommand(plan, metrics)
+
+
 async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
     started_at = perf_counter()
     rule_started_at = perf_counter()
@@ -329,7 +360,11 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
         rule_parse_ms=round((rule_finished_at - rule_started_at) * 1000, 2),
         planner_source=rule_plan.planner_source,
     )
-    if not should_use_drawing_agent(text, rule_plan):
+    try:
+        use_agent = should_use_drawing_agent(text, rule_plan)
+    except Exception:
+        return _build_rules_routing_fallback_command(rule_plan, metrics, started_at=started_at)
+    if not use_agent:
         metrics.planner_total_ms = round((rule_finished_at - started_at) * 1000, 2)
         return PlannedCommand(rule_plan, metrics)
 
@@ -347,14 +382,9 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
         metrics.planner_source = plan.planner_source
         return PlannedCommand(plan, metrics)
     except DrawingAgentError:
-        agent_finished_at = perf_counter()
-        plan = _with_plan_metadata(rule_plan, "rules_fallback")
-        metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
-        metrics.llm_planner_ms = metrics.agent_planner_ms
-        metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
-        metrics.fallback_used = True
-        metrics.planner_source = plan.planner_source
-        return PlannedCommand(plan, metrics)
+        return _build_rules_fallback_command(rule_plan, metrics, started_at=started_at, agent_started_at=agent_started_at)
+    except Exception:
+        return _build_rules_fallback_command(rule_plan, metrics, started_at=started_at, agent_started_at=agent_started_at)
 
 
 def _is_confirmation_text(text: str) -> bool:
