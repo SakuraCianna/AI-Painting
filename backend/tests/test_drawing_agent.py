@@ -253,6 +253,33 @@ def test_agent_template_builds_org_chart(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_builds_gantt_chart(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "gantt_chart_scene"
+    assert result.plan.scene_plan.expected_object_count == 20
+    assert len(result.plan.operations) == 20
+    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
+    assert object_types.count("rect") == 6
+    assert object_types.count("text") == 11
+    assert object_types.count("line") == 2
+    assert object_types.count("circle") == 1
+    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
+    assert "gantt_chart.timeline" in semantic_tags
+    assert "gantt_chart.task_bar" in semantic_tags
+    assert "gantt_chart.milestone" in semantic_tags
+    assert "gantt_chart.legend" in semantic_tags
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+
+
 def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     from app import main
     from app.agent import planner
