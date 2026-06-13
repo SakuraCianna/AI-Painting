@@ -10,6 +10,9 @@ from .metrics import percentile
 
 
 PUNCTUATION_PATTERN = re.compile(r"[\s,.;:!?，。；：！？、'\"“”‘’（）()【】\[\]{}<>《》\-—_]+")
+MIN_ASR_SUCCESS_RATE = 0.95
+MAX_AVERAGE_CER = 0.05
+MAX_P75_LATENCY_MS = 1500
 
 
 @dataclass(frozen=True)
@@ -98,16 +101,44 @@ def summarize_asr_evaluation_results(results: Iterable[dict[str, Any]]) -> dict[
     def _average(values: list[float]) -> float | None:
         return round(sum(values) / len(values), 4) if values else None
 
+    success_rate = round(len(success_results) / len(result_list), 4) if result_list else 0.0
+    average_cer = _average(cer_values)
+    p75_latency_ms = percentile(latency_values, 75) if latency_values else None
+    readiness_passed = (
+        success_rate >= MIN_ASR_SUCCESS_RATE
+        and average_cer is not None
+        and average_cer <= MAX_AVERAGE_CER
+        and p75_latency_ms is not None
+        and p75_latency_ms <= MAX_P75_LATENCY_MS
+    )
+    failure_reasons = []
+    if success_rate < MIN_ASR_SUCCESS_RATE:
+        failure_reasons.append("success_rate_below_threshold")
+    if average_cer is None or average_cer > MAX_AVERAGE_CER:
+        failure_reasons.append("average_cer_above_threshold")
+    if p75_latency_ms is None or p75_latency_ms > MAX_P75_LATENCY_MS:
+        failure_reasons.append("p75_latency_above_threshold")
+
     return {
         "sample_count": len(result_list),
         "success_count": len(success_results),
         "failed_count": len(result_list) - len(success_results),
         "exact_match_count": sum(1 for result in success_results if result.get("score", {}).get("exact_match")),
-        "average_cer": _average(cer_values),
+        "average_cer": average_cer,
         "p75_cer": percentile(cer_values, 75) if cer_values else None,
         "p95_cer": percentile(cer_values, 95) if cer_values else None,
         "average_latency_ms": _average(latency_values),
-        "p75_latency_ms": percentile(latency_values, 75) if latency_values else None,
+        "p75_latency_ms": p75_latency_ms,
         "p95_latency_ms": percentile(latency_values, 95) if latency_values else None,
         "provider_counts": dict(sorted(provider_counts.items())),
+        "readiness_gate": {
+            "status": "pass" if readiness_passed else "fail",
+            "min_success_rate": MIN_ASR_SUCCESS_RATE,
+            "max_average_cer": MAX_AVERAGE_CER,
+            "max_p75_latency_ms": MAX_P75_LATENCY_MS,
+            "success_rate": success_rate,
+            "average_cer": average_cer,
+            "p75_latency_ms": p75_latency_ms,
+            "failure_reasons": failure_reasons,
+        },
     }

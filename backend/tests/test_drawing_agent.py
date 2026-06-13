@@ -60,6 +60,77 @@ def test_build_command_plan_falls_back_when_agent_fails(monkeypatch) -> None:
     assert plan.explanation is not None
 
 
+def test_build_command_plan_falls_back_when_agent_crashes(monkeypatch) -> None:
+    from app import main
+
+    async def fake_plan_with_drawing_agent(_: str, *, rule_plan: CommandPlan | None = None) -> CommandPlan:
+        raise RuntimeError("unexpected planner crash")
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setattr(main, "plan_with_drawing_agent", fake_plan_with_drawing_agent)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个森林场景然后加一些层次"))
+
+    assert result.plan.requires_confirmation is True
+    assert result.plan.operations == []
+    assert result.plan.planner_source == "rules_fallback"
+    assert result.metrics.fallback_used is True
+    assert result.metrics.agent_succeeded is False
+    assert result.metrics.planner_source == "rules_fallback"
+
+
+def test_agent_high_risk_plan_without_confirmation_falls_back(monkeypatch) -> None:
+    from app import main
+    from app.agent import planner
+
+    async def fake_run_drawing_agent_graph(
+        text: str,
+        normalized_text: str,
+        **_: object,
+    ) -> CommandPlan:
+        return CommandPlan(
+            raw_text=text,
+            normalized_text=normalized_text,
+            operations=[OperationRequest(operation_type="clear_canvas", payload={})],
+            confidence=0.78,
+            requires_confirmation=False,
+            risk_level="high",
+            planner_source="agent",
+        )
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setattr(planner, "run_drawing_agent_graph", fake_run_drawing_agent_graph)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("清空画布然后画一个森林场景"))
+
+    assert result.plan.requires_confirmation is True
+    assert result.plan.operations[0].operation_type == "clear_canvas"
+    assert result.plan.planner_source == "rules_fallback"
+    assert result.metrics.fallback_used is True
+    assert result.metrics.agent_succeeded is False
+
+
+def test_build_command_plan_uses_rules_when_agent_routing_crashes(monkeypatch) -> None:
+    from app import main
+
+    def fake_should_use_drawing_agent(_: str, __: CommandPlan) -> bool:
+        raise RuntimeError("routing crashed")
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.setattr(main, "should_use_drawing_agent", fake_should_use_drawing_agent)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个蓝色圆形"))
+
+    assert result.plan.operations[0].operation_type == "add_object"
+    assert result.plan.planner_source == "rules_fallback"
+    assert result.metrics.fallback_used is True
+    assert result.metrics.agent_attempted is False
+    assert result.metrics.agent_planner_ms is None
+    assert result.metrics.planner_source == "rules_fallback"
+
+
 def test_build_command_plan_skips_mimo_for_voice_noise(monkeypatch) -> None:
     from app import main
 

@@ -205,8 +205,14 @@ async function installFakeSpeechRecognition(page: Page) {
       }
     }
 
-    win.SpeechRecognition = FakeSpeechRecognition as unknown as new () => unknown;
-    win.webkitSpeechRecognition = FakeSpeechRecognition as unknown as new () => unknown;
+    Object.defineProperty(window, "SpeechRecognition", {
+      configurable: true,
+      value: FakeSpeechRecognition
+    });
+    Object.defineProperty(window, "webkitSpeechRecognition", {
+      configurable: true,
+      value: FakeSpeechRecognition
+    });
     win.__aiPaintingEmitFinalTranscript = (text: string) => {
       const alternative = { transcript: text, confidence: 0.99 };
       const result = {

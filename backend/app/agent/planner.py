@@ -109,6 +109,7 @@ OPEN_SCENE_COUNT_WORDS = {
     "九": 9,
     "十": 10,
 }
+HIGH_RISK_OPERATION_TYPES = {"clear_canvas"}
 
 
 class DrawingAgentError(RuntimeError):
@@ -159,6 +160,10 @@ def _validate_command_plan(plan: CommandPlan) -> CommandPlan:
         obj = operation.payload.get("object")
         if isinstance(obj, dict) and obj.get("type") not in ALLOWED_OBJECT_TYPES:
             raise DrawingAgentError(f"Drawing Agent 包含不支持的对象: {obj.get('type')}")
+    if not plan.requires_confirmation and (
+        plan.risk_level == "high" or any(operation.operation_type in HIGH_RISK_OPERATION_TYPES for operation in plan.operations)
+    ):
+        raise DrawingAgentError("Drawing Agent 高风险计划缺少确认")
     if not plan.operations and not plan.requires_confirmation:
         raise DrawingAgentError("Drawing Agent 没有可执行操作")
     plan.confidence = min(plan.confidence, 0.84)

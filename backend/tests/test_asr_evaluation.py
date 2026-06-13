@@ -79,3 +79,60 @@ def test_summarize_asr_evaluation_results_reports_cer_and_latency() -> None:
     assert summary["average_cer"] == 0.25
     assert summary["p75_latency_ms"] == 300
     assert summary["provider_counts"] == {"local": 1, "xiaomi": 1}
+
+
+def test_summarize_asr_evaluation_results_reports_readiness_gate() -> None:
+    summary = summarize_asr_evaluation_results(
+        [
+            {
+                "status": "success",
+                "provider": "xiaomi",
+                "latency_ms": 700,
+                "score": {"cer": 0.0, "exact_match": True},
+            },
+            {
+                "status": "success",
+                "provider": "xiaomi",
+                "latency_ms": 1200,
+                "score": {"cer": 0.04, "exact_match": False},
+            },
+            {
+                "status": "success",
+                "provider": "local",
+                "latency_ms": 1500,
+                "score": {"cer": 0.03, "exact_match": False},
+            },
+        ]
+    )
+
+    assert summary["readiness_gate"] == {
+        "status": "pass",
+        "min_success_rate": 0.95,
+        "max_average_cer": 0.05,
+        "max_p75_latency_ms": 1500,
+        "success_rate": 1.0,
+        "average_cer": 0.0233,
+        "p75_latency_ms": 1500,
+        "failure_reasons": [],
+    }
+
+
+def test_summarize_asr_evaluation_results_explains_readiness_failures() -> None:
+    summary = summarize_asr_evaluation_results(
+        [
+            {
+                "status": "success",
+                "provider": "xiaomi",
+                "latency_ms": 1800,
+                "score": {"cer": 0.12, "exact_match": False},
+            },
+            {"status": "failed", "error": "unavailable"},
+        ]
+    )
+
+    assert summary["readiness_gate"]["status"] == "fail"
+    assert summary["readiness_gate"]["failure_reasons"] == [
+        "success_rate_below_threshold",
+        "average_cer_above_threshold",
+        "p75_latency_above_threshold",
+    ]

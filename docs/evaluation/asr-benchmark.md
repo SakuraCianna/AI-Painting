@@ -16,6 +16,7 @@
 - 平均延迟
 - P75/P95 延迟
 - Provider 命中分布
+- readiness gate: 默认要求成功率不低于 95%, 平均 CER 不高于 5%, P75 延迟不超过 1500ms
 
 ## 样本清单
 
@@ -63,7 +64,7 @@ $env:AI_PAINTING_LOCAL_ASR_URL="http://127.0.0.1:9001/asr"
 输出 JSON 包含:
 
 - `provider_status`: 当前后端可用 ASR Provider
-- `summary`: 汇总指标
+- `summary`: 汇总指标和 `readiness_gate`
 - `results`: 每条样本的转写文本、延迟、Provider、尝试记录和 CER
 
 ## 已验证
@@ -73,6 +74,7 @@ $env:AI_PAINTING_LOCAL_ASR_URL="http://127.0.0.1:9001/asr"
 - 文本规范化
 - CER 计算
 - 汇总统计
+- readiness gate 判定
 
 ## 未验证
 
