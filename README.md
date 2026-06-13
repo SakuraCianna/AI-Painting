@@ -342,7 +342,7 @@ docker compose up
 
 提交 PR 前请阅读:
 
-- [.github/README.md](.github/README.md)
+- [.github/GITHUB_WORKFLOW.md](.github/GITHUB_WORKFLOW.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)
 - [.github/ISSUE_TEMPLATE/bug_report.md](.github/ISSUE_TEMPLATE/bug_report.md)
 
@@ -679,7 +679,7 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 
 Before opening a pull request, read:
 
-- [.github/README.md](.github/README.md)
+- [.github/GITHUB_WORKFLOW.md](.github/GITHUB_WORKFLOW.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)
 - [.github/ISSUE_TEMPLATE/bug_report.md](.github/ISSUE_TEMPLATE/bug_report.md)
 
