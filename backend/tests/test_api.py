@@ -640,6 +640,88 @@ def test_voice_command_moves_image_covering_title(client: TestClient) -> None:
     assert objects_by_name["右侧图片"]["geometry"]["x"] == 620
 
 
+def test_voice_command_edits_text_inside_card_and_button_on_title_row(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "主卡片",
+            "semantic_tags": ["ui.hero"],
+            "geometry": {"x": 180, "y": 140, "width": 360, "height": 220, "radius": 20},
+            "style": {"fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 2},
+            "z_index": 1,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "text",
+            "name": "卡片内文字",
+            "semantic_tags": ["ui.hero.title"],
+            "geometry": {"x": 360, "y": 230, "fontSize": 36, "content": "卡片内文字"},
+            "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+            "z_index": 2,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "text",
+            "name": "卡片外文字",
+            "semantic_tags": ["ui.footer"],
+            "geometry": {"x": 740, "y": 230, "fontSize": 36, "content": "卡片外文字"},
+            "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+            "z_index": 2,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "text",
+            "name": "主标题",
+            "semantic_tags": ["poster.headline"],
+            "geometry": {"x": 240, "y": 500, "fontSize": 44, "content": "主标题"},
+            "style": {"fill": "#111827", "stroke": "#111827", "strokeWidth": 0},
+            "z_index": 5,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "同一行按钮",
+            "semantic_tags": ["poster.cta"],
+            "geometry": {"x": 500, "y": 470, "width": 150, "height": 60, "radius": 18},
+            "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+            "z_index": 6,
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "错行按钮",
+            "semantic_tags": ["poster.cta"],
+            "geometry": {"x": 500, "y": 610, "width": 150, "height": 60, "radius": 18},
+            "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+            "z_index": 6,
+        },
+    )
+
+    text_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把卡片里的文字改成蓝色"})
+    assert text_response.status_code == 200
+    objects_by_name = {obj["name"]: obj for obj in text_response.json()["artwork"]["objects"]}
+    assert objects_by_name["卡片内文字"]["style"]["fill"] == "#2563eb"
+    assert objects_by_name["卡片外文字"]["style"]["fill"] == "#111827"
+
+    button_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把和标题同一行的按钮改成绿色"})
+    assert button_response.status_code == 200
+    objects_by_name = {obj["name"]: obj for obj in button_response.json()["artwork"]["objects"]}
+    assert objects_by_name["同一行按钮"]["style"]["fill"] == "#16a34a"
+    assert objects_by_name["错行按钮"]["style"]["fill"] == "#2563eb"
+
+
 def test_rename_latest_and_move_layer(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色圆形 命名为太阳 放到前景层"})

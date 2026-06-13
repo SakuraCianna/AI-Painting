@@ -35,6 +35,7 @@ TARGET_RULES: tuple[tuple[tuple[str, ...], dict[str, Any]], ...] = (
     (("海报标题", "主标题", "标题"), {"selector": "all", "semantic_tag": "poster.headline"}),
     (("卖点文字", "卖点"), {"selector": "all", "semantic_tag": "poster.feature_text"}),
     (("图片", "图像", "照片"), {"selector": "all", "type": "image"}),
+    (("文字", "文本"), {"selector": "all", "type": "text"}),
     (("按钮", "行动按钮", "cta"), {"selector": "all", "semantic_tags": ["poster.cta", "ui.cta"]}),
     (("侧边导航", "侧边栏"), {"selector": "all", "semantic_tag": "ui.sidebar"}),
     (("搜索框",), {"selector": "all", "semantic_tag": "ui.search"}),
@@ -66,6 +67,14 @@ def _find_shape(text: str) -> str | None:
     if not matches:
         return None
     return sorted(matches, key=lambda item: text.rfind(item[0]))[-1][1]
+
+
+def _find_replacement_shape(text: str) -> str | None:
+    link_positions = [(text.rfind(link_word), link_word) for link_word in ("改成", "换成", "变成") if link_word in text]
+    if not link_positions:
+        return None
+    position, link_word = sorted(link_positions)[-1]
+    return _find_shape(text[position + len(link_word) :])
 
 
 def _movement_amount(text: str) -> int:
@@ -115,6 +124,30 @@ def _relation_hint_for_clause(clause: str) -> dict[str, Any] | None:
         return {"relation": "covering", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
     if any(keyword in clause for keyword in ("和标题重叠", "与标题重叠", "重叠标题")):
         return {"relation": "overlap", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in clause for keyword in ("卡片里的", "卡片里面", "卡片内", "卡片中的", "卡片里")):
+        return {
+            "relation": "inside",
+            "margin": 8,
+            "target": {
+                "selector": "all",
+                "semantic_tags": [
+                    "poster.hero",
+                    "ui.hero",
+                    "ui.metric",
+                    "ui.chart",
+                    "infographic.metric_card",
+                    "org_chart.node",
+                ],
+            },
+        }
+    if any(keyword in clause for keyword in ("和标题同一行", "与标题同一行", "标题同一行")):
+        return {"relation": "same_row", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in clause for keyword in ("和标题同一列", "与标题同一列", "标题同一列")):
+        return {"relation": "same_column", "tolerance": 48, "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in clause for keyword in ("标题前面的", "标题上层的", "图层在标题前面", "盖在标题前面")):
+        return {"relation": "front_of", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
+    if any(keyword in clause for keyword in ("标题后面的", "标题下层的", "图层在标题后面", "放在标题后面")):
+        return {"relation": "behind", "target": {"selector": "all", "semantic_tag": "poster.headline"}}
     return None
 
 
@@ -170,8 +203,8 @@ def _target_for_clause(clause: str) -> tuple[dict[str, Any] | None, str | None]:
         matched_keywords = [keyword for keyword in keywords if keyword in clause]
         if not matched_keywords:
             continue
-        best_keyword = sorted(matched_keywords, key=lambda keyword: (clause.rfind(keyword), len(keyword)))[-1]
-        target_matches.append((clause.rfind(best_keyword), len(best_keyword), best_keyword, target))
+        best_keyword = sorted(matched_keywords, key=lambda keyword: (clause.rfind(keyword) + len(keyword), len(keyword)))[-1]
+        target_matches.append((clause.rfind(best_keyword) + len(best_keyword), len(best_keyword), best_keyword, target))
     if target_matches:
         _, _, matched_keyword, target = sorted(target_matches, key=lambda item: (item[0], item[1]))[-1]
         return _apply_query_hints(clause, target), matched_keyword
@@ -221,7 +254,7 @@ def _build_style_operation(clause: str, target: dict[str, Any]) -> OperationRequ
 def _build_replace_operation(clause: str, target: dict[str, Any]) -> OperationRequest | None:
     if not any(keyword in clause for keyword in ("改成", "换成", "变成")):
         return None
-    shape = _find_shape(clause)
+    shape = _find_replacement_shape(clause)
     if not shape:
         return None
     operation_type = "replace_shape_many" if _target_is_specific(target) else "replace_shape"
