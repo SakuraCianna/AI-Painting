@@ -123,6 +123,38 @@ def test_agent_living_room_command_executes_complex_scene(client: TestClient, mo
     assert "floor_lamp" in semantic_tags
 
 
+def test_agent_edit_command_updates_existing_semantic_objects_and_undoes_as_group(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    create_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个温馨客厅，有沙发、茶几、窗户和落地灯"})
+    assert create_response.status_code == 200
+    before_sofas = [obj for obj in create_response.json()["artwork"]["objects"] if "sofa" in obj["semantic_tags"]]
+    before_x = {obj["name"]: obj["geometry"].get("x") for obj in before_sofas if "x" in obj["geometry"]}
+
+    edit_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "把客厅的沙发改成绿色并向右移动一点"})
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert [operation["operation_type"] for operation in body["plan"]["operations"]] == ["set_style_many", "move_many"]
+    edited_sofas = [obj for obj in body["artwork"]["objects"] if "sofa" in obj["semantic_tags"]]
+    assert edited_sofas
+    assert all(obj["style"]["fill"] == "#16a34a" for obj in edited_sofas)
+    for obj in edited_sofas:
+        if obj["name"] in before_x:
+            assert obj["geometry"]["x"] == before_x[obj["name"]] + 20
+
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    restored_sofas = [obj for obj in undo_response.json()["artwork"]["objects"] if "sofa" in obj["semantic_tags"]]
+    assert all(obj["style"]["fill"] != "#16a34a" for obj in restored_sofas)
+    for obj in restored_sofas:
+        if obj["name"] in before_x:
+            assert obj["geometry"]["x"] == before_x[obj["name"]]
+
+
 def test_agent_flowchart_command_executes_diagram_scene(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)

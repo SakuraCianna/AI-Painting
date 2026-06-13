@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from ..command_parser import is_voice_noise_input, normalize_text
 from ..schemas import CommandPlan
 from .compiler import ALLOWED_OBJECT_TYPES, ALLOWED_OPERATION_TYPES
+from .edit_planner import build_local_edit_plan
 from .graph import run_drawing_agent_graph
 from .model_client import AgentModelError, build_scene_graph_with_mimo, has_mimo_model_config, repair_scene_graph_with_mimo
 from .scene_graph import AgentSceneGraph, AgentSceneObject, AgentSceneRelation, AgentStyle
@@ -65,6 +66,8 @@ def should_use_drawing_agent(text: str, rule_plan: CommandPlan) -> bool:
     if any(operation.operation_type in {"generate_image_asset", "polish_image_asset"} for operation in rule_plan.operations):
         return False
     normalized = normalize_text(text)
+    if build_local_edit_plan(text, normalized) is not None:
+        return True
     if _local_scene_graph_for_text(normalized) is not None:
         return True
     if not has_mimo_model_config():
@@ -1465,6 +1468,9 @@ def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
 async def plan_with_drawing_agent(text: str, *, rule_plan: CommandPlan | None = None) -> CommandPlan:
     normalized = normalize_text(text)
     try:
+        edit_plan = build_local_edit_plan(text, normalized)
+        if edit_plan is not None:
+            return _validate_command_plan(edit_plan)
         scene_graph = _local_scene_graph_for_text(normalized)
         plan = await run_drawing_agent_graph(
             text,
