@@ -66,6 +66,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
 - `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、语义编辑模板、流程图模板、信息图模板、海报模板、UI 草图模板、组织结构图模板、甘特图模板和 Graph 调度
 - `backend/app/render_strategy.py`: 渲染策略分类器, 区分程序生成、生图模型和图生图精修
+- `backend/app/image_generation.py`: 图片生成和图生图精修 Provider 适配层, 会把 `source_prompt`、`target_subject`、`target_region` 和 `adjustment` 写入精修结果元数据
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
 
@@ -96,7 +97,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 6. 输出速度策略
 
 - 简单命令继续走规则解析, 不调用模型
-- 结构精确类图形优先走程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图
+- 结构精确类图形优先走程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图, 其中“把右边那个人的眼睛调亮”这类图片内主体追改会作为图生图目标元数据处理
 - 已知复杂模板先用本地 Agent 模板, 例如客厅场景、语音绘图流程图、销售增长信息图、新品发布海报、产品 UI 草图、产品团队组织结构图和项目排期甘特图
 - 已知语义编辑先用本地 Agent 编辑计划, 例如改沙发颜色并移动、改流程图节点颜色并加粗箭头、编辑屋顶下面的门、靠近门的树、挡住标题的图片、卡片里的文字、卡片里和标题同一行的按钮或暖色小物件
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo

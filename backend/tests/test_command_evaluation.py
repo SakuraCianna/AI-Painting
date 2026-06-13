@@ -48,6 +48,10 @@ def test_rules_tier_complex_voice_commands_match_expected_plans() -> None:
             assert plan.operations[0].payload["target"]["corner"] == case["expected_target_corner"], case["id"]
         if case.get("expected_target_region"):
             assert plan.operations[0].payload["target_region"] == case["expected_target_region"], case["id"]
+        if case.get("expected_target_subject"):
+            assert plan.operations[0].payload["target_subject"] == case["expected_target_subject"], case["id"]
+        if case.get("expected_adjustment"):
+            assert plan.operations[0].payload["adjustment"] == case["expected_adjustment"], case["id"]
 
 
 def test_planner_expected_commands_require_clarification_in_rules_layer() -> None:

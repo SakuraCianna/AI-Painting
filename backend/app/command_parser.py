@@ -128,6 +128,25 @@ SCENE_LAYOUT_HINTS = ("左边", "左侧", "右边", "右侧", "上方", "下方"
 SCENE_REFINEMENT_HINTS = ("画面", "场景", "保留", "局部", "整体", "氛围", "风格", "灯光")
 IMAGE_POLISH_HINTS = ("精修", "丰富", "润色", "美化", "增强", "提升质感", "重新渲染", "风格化")
 GROUP_SCOPE_HINTS = ("整个", "整座", "整棵", "整扇", "整组", "整张", "全部这", "这一整")
+IMAGE_ADJUSTMENT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("更明亮一点", "调亮"),
+    ("亮一点", "调亮"),
+    ("调亮", "调亮"),
+    ("提亮", "调亮"),
+    ("变亮", "调亮"),
+    ("加亮", "调亮"),
+    ("调暗", "调暗"),
+    ("压暗", "调暗"),
+    ("变暗", "调暗"),
+    ("更清晰一点", "变清晰"),
+    ("清晰一点", "变清晰"),
+    ("变清晰", "变清晰"),
+    ("更清晰", "变清晰"),
+    ("修清晰", "变清晰"),
+    ("锐化", "锐化"),
+    ("柔和一点", "柔和"),
+    ("柔和", "柔和"),
+)
 IMAGE_POLISH_TARGET_HINTS = (
     "图片",
     "图像",
@@ -151,6 +170,47 @@ IMAGE_POLISH_TARGET_HINTS = (
     "头发",
     "衣服",
     "海报",
+)
+IMAGE_ADJUSTMENT_TARGET_HINTS = (
+    "图片",
+    "图像",
+    "画面",
+    "照片",
+    "生成图",
+    "生成的",
+    "肖像",
+    "头像",
+    "人物",
+    "人像",
+    "背景",
+    "天空",
+    "眼睛",
+    "脸",
+    "头发",
+    "衣服",
+)
+IMAGE_SUBJECT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("那个人物", "人"),
+    ("这个人物", "人"),
+    ("那个人", "人"),
+    ("这个人", "人"),
+    ("人物", "人"),
+    ("人像", "人"),
+    ("角色", "角色"),
+    ("主体", "主体"),
+    ("人", "人"),
+)
+IMAGE_SUBJECT_POSITION_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("最右边", "右边"),
+    ("右边", "右边"),
+    ("右侧", "右边"),
+    ("最左边", "左边"),
+    ("左边", "左边"),
+    ("左侧", "左边"),
+    ("中间", "中间"),
+    ("中央", "中间"),
+    ("前面", "前面"),
+    ("后面", "后面"),
 )
 IMAGE_PROMPT_TARGET_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("人物肖像", "肖像"),
@@ -521,9 +581,15 @@ def _scene_clarification_plan(raw_text: str, normalized_text: str) -> CommandPla
 def _is_image_polish_request(normalized_text: str, render_mode: str) -> bool:
     if render_mode == "image_polish":
         return True
-    return any(keyword in normalized_text for keyword in IMAGE_POLISH_HINTS) and any(
-        keyword in normalized_text for keyword in IMAGE_POLISH_TARGET_HINTS
-    )
+    has_polish_hint = any(keyword in normalized_text for keyword in IMAGE_POLISH_HINTS)
+    if has_polish_hint:
+        return any(keyword in normalized_text for keyword in IMAGE_POLISH_TARGET_HINTS)
+    has_adjustment = _find_image_adjustment(normalized_text) is not None
+    if not has_adjustment:
+        return False
+    has_subject_target = _find_image_subject_target(normalized_text) is not None
+    has_image_target = any(keyword in normalized_text for keyword in IMAGE_ADJUSTMENT_TARGET_HINTS)
+    return has_subject_target or has_image_target
 
 
 def _target_selector(text: str, *, include_layer: bool = True, include_color: bool = True) -> dict[str, Any]:
@@ -1105,6 +1171,40 @@ def _find_image_region_target(text: str) -> str | None:
     return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
 
 
+def _find_image_adjustment(text: str) -> str | None:
+    matches = [(text.rfind(keyword), len(keyword), value) for keyword, value in IMAGE_ADJUSTMENT_KEYWORDS if keyword in text]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
+
+
+def _find_subject_position_before(text: str, subject_position: int) -> str | None:
+    matches: list[tuple[int, int, str]] = []
+    for keyword, value in IMAGE_SUBJECT_POSITION_KEYWORDS:
+        for match in re.finditer(re.escape(keyword), text):
+            distance = subject_position - match.end()
+            if 0 <= distance <= 6:
+                matches.append((match.start(), len(keyword), value))
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
+
+
+def _find_image_subject_target(text: str) -> str | None:
+    matches: list[tuple[int, int, str]] = []
+    for keyword, value in IMAGE_SUBJECT_KEYWORDS:
+        for match in re.finditer(re.escape(keyword), text):
+            matches.append((match.start(), len(keyword), value))
+    if not matches:
+        return None
+
+    subject_position, _, subject = sorted(matches, key=lambda item: (item[0], item[1]))[-1]
+    position = _find_subject_position_before(text, subject_position)
+    if subject == "人":
+        return f"{position}的人" if position else "人物"
+    return f"{position}的{subject}" if position else subject
+
+
 def _find_image_corner_target(text: str) -> str | None:
     matches = [(text.rfind(keyword), len(keyword), value) for keyword, value in IMAGE_CORNER_TARGET_KEYWORDS if keyword in text]
     if not matches:
@@ -1112,27 +1212,29 @@ def _find_image_corner_target(text: str) -> str | None:
     return sorted(matches, key=lambda item: (item[0], item[1]))[-1][2]
 
 
-def _image_target_selector(text: str, *, target_region: str | None = None) -> dict[str, Any]:
+def _image_target_selector(text: str, *, target_region: str | None = None, target_subject: str | None = None) -> dict[str, Any]:
     target: dict[str, Any] = {"selector": "latest", "type": "image"}
-    if any(keyword in text for keyword in IMAGE_OBJECT_TARGET_HINTS):
+    has_explicit_image_target = any(keyword in text for keyword in IMAGE_OBJECT_TARGET_HINTS)
+    if has_explicit_image_target:
         target["selector"] = "all"
 
     corner = _find_image_corner_target(text)
     if corner:
         target["selector"] = "all"
         target["corner"] = corner
-    elif "左边" in text or "左侧" in text:
-        target["selector"] = "all"
-        target["position"] = "leftmost"
-    elif "右边" in text or "右侧" in text:
-        target["selector"] = "all"
-        target["position"] = "rightmost"
-    elif "上方" in text or "顶部" in text:
-        target["selector"] = "all"
-        target["position"] = "topmost"
-    elif "下方" in text or "底部" in text:
-        target["selector"] = "all"
-        target["position"] = "bottommost"
+    elif not target_subject or has_explicit_image_target:
+        if "左边" in text or "左侧" in text:
+            target["selector"] = "all"
+            target["position"] = "leftmost"
+        elif "右边" in text or "右侧" in text:
+            target["selector"] = "all"
+            target["position"] = "rightmost"
+        elif "上方" in text or "顶部" in text:
+            target["selector"] = "all"
+            target["position"] = "topmost"
+        elif "下方" in text or "底部" in text:
+            target["selector"] = "all"
+            target["position"] = "bottommost"
 
     rank = _extract_position_rank(text)
     if rank is not None:
@@ -1161,26 +1263,42 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
     if style_prompt == normalized_text:
         style_prompt = f"{normalized_text}, 保留当前画布的主体构图和对象位置"
     target_region = _find_image_region_target(normalized_text)
-    target = _image_target_selector(normalized_text, target_region=target_region)
+    target_subject = _find_image_subject_target(normalized_text)
+    adjustment = _find_image_adjustment(normalized_text)
+    target = _image_target_selector(normalized_text, target_region=target_region, target_subject=target_subject)
+    if target_subject:
+        style_prompt = f"{style_prompt}, 目标对象: {target_subject}"
     if target_region:
         style_prompt = f"{style_prompt}, 局部精修目标: {target_region}, 保留其他区域"
+    if adjustment:
+        style_prompt = f"{style_prompt}, 调整方式: {adjustment}"
+    payload = {
+        "prompt": style_prompt,
+        "x": 0,
+        "y": 0,
+        "width": 1024,
+        "height": 768,
+        "name": "精修版本",
+        "layer_id": "foreground",
+        "target": target,
+        "target_region": target_region,
+        "target_subject": target_subject,
+        "adjustment": adjustment,
+    }
+    step_target = {"target": target}
+    if target_region:
+        step_target["target_region"] = target_region
+    if target_subject:
+        step_target["target_subject"] = target_subject
+    if adjustment:
+        step_target["adjustment"] = adjustment
     return CommandPlan(
         raw_text=raw_text,
         normalized_text=normalized_text,
         operations=[
             OperationRequest(
                 operation_type="polish_image_asset",
-                payload={
-                    "prompt": style_prompt,
-                    "x": 0,
-                    "y": 0,
-                    "width": 1024,
-                    "height": 768,
-                    "name": "精修版本",
-                    "layer_id": "foreground",
-                    "target": target,
-                    "target_region": target_region,
-                },
+                payload=payload,
             )
         ],
         scene_plan=ScenePlan(
@@ -1191,7 +1309,7 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
                     step_id="polish-image",
                     title="精修当前画布",
                     intent="image_to_image",
-                    target={"target": target, "target_region": target_region} if target_region else {"target": target},
+                    target=step_target,
                     operation_indexes=[0],
                 )
             ],

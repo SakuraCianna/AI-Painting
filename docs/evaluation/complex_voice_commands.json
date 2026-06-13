@@ -251,6 +251,15 @@
     "expected_target_region": "天空"
   },
   {
+    "id": "partial-generated-image-subject-polish",
+    "text": "把右边那个人的眼睛调亮",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_subject": "右边的人",
+    "expected_target_region": "眼睛",
+    "expected_adjustment": "调亮"
+  },
+  {
     "id": "partial-generated-image-ranked-polish",
     "text": "把第二张生成图精修一下",
     "tier": "rules",

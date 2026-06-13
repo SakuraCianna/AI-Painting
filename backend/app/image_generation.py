@@ -332,8 +332,11 @@ async def polish_image_object(payload: dict[str, Any], *, fallback_width: int, f
         provider_name = "placeholder"
     semantic_tags = ["generated.image", "image", "polished.image"]
     target_region = str(payload.get("target_region") or "").strip()
+    target_subject = str(payload.get("target_subject") or "").strip()
     if target_region:
         semantic_tags.append("polished.region")
+    if target_subject:
+        semantic_tags.append("polished.subject")
     geometry = {
         "x": int(payload.get("x", 0)),
         "y": int(payload.get("y", 0)),
@@ -344,7 +347,7 @@ async def polish_image_object(payload: dict[str, Any], *, fallback_width: int, f
         "provider": provider_name,
         "preserveAspectRatio": payload.get("preserveAspectRatio", "xMidYMid slice"),
     }
-    for key in ("source_prompt", "source_object_id", "source_object_name", "target_region"):
+    for key in ("source_prompt", "source_object_id", "source_object_name", "target_region", "target_subject", "adjustment"):
         value = payload.get(key)
         if value:
             geometry[key] = str(value)
