@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from app.agent.planner import DrawingAgentError
+from app.agent.scene_graph import AgentSceneGraph, AgentSceneObject, AgentStyle
 from app.schemas import CommandPlan, OperationRequest
 
 
@@ -116,3 +117,47 @@ def test_agent_template_builds_complex_living_room(monkeypatch) -> None:
     assert "floor_lamp" in semantic_tags
     assert result.metrics.llm_attempted is True
     assert result.metrics.llm_succeeded is True
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+    assert result.metrics.agent_planner_ms is not None
+
+
+def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
+    from app import main
+    from app.agent import planner
+
+    async def fake_build_scene_graph(text: str) -> AgentSceneGraph:
+        return AgentSceneGraph(
+            intent="compose_scene",
+            domain="office_scene",
+            summary=f"绘制{text}",
+            objects=[
+                AgentSceneObject(
+                    object_id="office-window",
+                    type="rect",
+                    name="办公室窗户",
+                    layer_id="foreground",
+                    group_id="office",
+                    semantic_tags=["window"],
+                    geometry={"x": 650, "y": 130, "width": 180, "height": 130, "radius": 8},
+                    style=AgentStyle(fill="#bfdbfe", stroke="#1e3a8a", strokeWidth=3, opacity=1),
+                )
+            ],
+            relations=[],
+            confidence=0.8,
+        )
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setattr(planner, "build_scene_graph_with_mimo", fake_build_scene_graph)
+    monkeypatch.setattr(planner, "repair_scene_graph_with_mimo", None)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个办公室场景然后加一个窗户"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.steps[0].target["domain"] == "office_scene"
+    assert result.plan.operations[0].payload["object"]["name"] == "办公室窗户"
+    assert result.metrics.agent_attempted is True
+    assert result.metrics.agent_succeeded is True
+    assert result.metrics.agent_planner_ms == result.metrics.llm_planner_ms

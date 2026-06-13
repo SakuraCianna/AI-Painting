@@ -23,7 +23,7 @@ def test_summarize_latency_rows_counts_statuses_and_planner_sources() -> None:
         {
             "status": "failed",
             "created_at": "2026-06-12T12:00:01Z",
-            "latency_json": json.dumps({"planner_total_ms": 300, "execute_ms": 20, "total_ms": 340, "planner_source": "mimo"}),
+            "latency_json": json.dumps({"agent_planner_ms": 260, "planner_total_ms": 300, "execute_ms": 20, "total_ms": 340, "planner_source": "agent"}),
         },
     ]
 
@@ -34,6 +34,7 @@ def test_summarize_latency_rows_counts_statuses_and_planner_sources() -> None:
     assert summary.sample_count == 2
     assert summary.success_count == 1
     assert summary.failed_count == 1
-    assert summary.planner_sources == {"mimo": 1, "rules": 1}
+    assert summary.planner_sources == {"agent": 1, "rules": 1}
+    assert summary.metrics["agent_planner_ms"].max_ms == 260
     assert summary.metrics["planner_total_ms"].p75_ms == 300
     assert summary.metrics["total_ms"].max_ms == 340

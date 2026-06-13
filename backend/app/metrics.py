@@ -9,7 +9,7 @@ from typing import Any
 from .schemas import LatencyMetricStats, LatencyMetricsSummary
 
 
-TRACKED_LATENCY_KEYS = ("rule_parse_ms", "llm_planner_ms", "planner_total_ms", "execute_ms", "total_ms")
+TRACKED_LATENCY_KEYS = ("rule_parse_ms", "llm_planner_ms", "agent_planner_ms", "planner_total_ms", "execute_ms", "total_ms")
 
 
 def _round_ms(value: float) -> float:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from app.agent.graph import run_agent_graph
+import asyncio
+
+from app.agent.graph import run_agent_graph, run_drawing_agent_graph
 from app.agent.scene_graph import AgentSceneGraph, AgentSceneObject, AgentSceneRelation, AgentStyle
 
 
@@ -58,3 +60,50 @@ def test_agent_graph_requires_confirmation_for_high_risk_scene() -> None:
     assert plan.operations == []
     assert plan.risk_level == "high"
     assert plan.clarification_question is not None
+
+
+def test_agent_graph_repairs_invalid_scene_with_model_repairer() -> None:
+    broken_graph = AgentSceneGraph(
+        intent="compose_scene",
+        domain="office_scene",
+        summary="缺少对象的办公室场景",
+        objects=[],
+        relations=[],
+        confidence=0.62,
+    )
+    repair_errors: list[str] = []
+
+    async def fake_repairer(text: str, scene_graph: AgentSceneGraph, validation_error: str) -> AgentSceneGraph:
+        repair_errors.append(validation_error)
+        return AgentSceneGraph(
+            intent="compose_scene",
+            domain=scene_graph.domain,
+            summary=f"修复后的{text}",
+            objects=[
+                AgentSceneObject(
+                    object_id="desk",
+                    type="rect",
+                    name="办公桌",
+                    layer_id="middle",
+                    group_id="office",
+                    semantic_tags=["desk"],
+                    geometry={"x": 280, "y": 430, "width": 360, "height": 110, "radius": 14},
+                    style=AgentStyle(fill="#d6d3d1", stroke="#44403c", strokeWidth=3, opacity=1),
+                )
+            ],
+            relations=[],
+            confidence=0.78,
+        )
+
+    plan = asyncio.run(
+        run_drawing_agent_graph(
+            "画一个办公室场景",
+            "画一个办公室场景",
+            scene_graph=broken_graph,
+            scene_graph_repairer=fake_repairer,
+        )
+    )
+
+    assert repair_errors == ["SceneGraph 没有对象"]
+    assert plan.planner_source == "agent"
+    assert plan.operations[0].payload["object"]["name"] == "办公桌"

@@ -57,9 +57,10 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 
 - `backend/app/agent/scene_graph.py`: SceneGraph v2 Pydantic schema
 - `backend/app/agent/validator.py`: SceneGraph repair 与约束校验
-- `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 repair、validate、compile
+- `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 classify、build、repair、validate、repair_with_model、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
-- `backend/app/agent/planner.py`: Drawing Agent Planner, 包含本地模板和 MiMo SceneGraph 规划
+- `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
+- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板和 Graph 调度
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
 
@@ -67,36 +68,40 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 
 `langgraph` 已作为后端依赖加入。当前已接入明确的 StateGraph 节点:
 
+- `classify_intent`
+- `build_scene_graph`
 - `repair_scene_graph`
 - `validate_scene_graph`
+- `repair_with_model`
 - `compile_plan`
 
 如果运行环境不可用或 LangGraph 节点执行失败, 会自动回退到同步 repair、validate、compile 路径。
 - 简单规则路径不依赖 LangGraph, 保证基础绘图速度和稳定性
 
-后续会继续扩展更完整的 LangGraph 节点:
+当前阶段使用 LangGraph + Pydantic schema + 受控模型客户端落地 LangChain 风格的结构化输出链路。完整 `langchain` / `langchain-openai` 依赖尚未加入, 后续会在确认版本和中转站兼容性后再接入官方 structured output 封装。
 
-1. `classify_intent`
-2. `build_scene_graph`
-3. `repair_scene_graph`
-4. `validate_scene_graph`
-5. `repair_with_model`
-6. `compile_operations`
-7. `ask_confirmation`
-8. `execute_tools`
+后续会继续扩展:
+
+1. 更细粒度的领域路由
+2. Mermaid / PlantUML 结构图执行器
+3. 海报、信息图和 UI 草图工具执行器
+4. `ask_confirmation` 条件分支
+5. `execute_tools` 工具路由
 
 ## 6. 输出速度策略
 
 - 简单命令继续走规则解析, 不调用模型
 - 已知复杂模板先用本地 Agent 模板, 例如客厅场景
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo
+- 模型输出校验失败时, Graph 会先尝试一次模型修复, 再进入编译
 - Agent 输出限制对象数量和操作数量
-- 规划、执行和端到端耗时继续写入 `voice_command_logs.latency_json`
+- 规划、执行和端到端耗时继续写入 `voice_command_logs.latency_json`, 新增 `agent_planner_ms` 并保留旧 `llm_planner_ms` 兼容字段
 
 ## 7. 输出质量策略
 
 - SceneGraph 使用 Pydantic schema 校验
 - Repair 节点会修复坐标越界、无效图层、无效关系和高风险确认标记
+- Repair with model 节点会把校验错误和当前 SceneGraph 发回模型, 要求保留意图并修复为可编译结构
 - 编译器只允许项目支持的对象类型和操作类型
 - 复杂计划必须带语义标签、分组和图层
 - 高风险操作必须走确认链

@@ -176,20 +176,24 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
         return PlannedCommand(rule_plan, metrics)
 
     metrics.llm_attempted = True
-    llm_started_at = perf_counter()
+    metrics.agent_attempted = True
+    agent_started_at = perf_counter()
     try:
         plan = _with_plan_metadata(await plan_with_drawing_agent(text, rule_plan=rule_plan), "agent")
-        llm_finished_at = perf_counter()
-        metrics.llm_planner_ms = round((llm_finished_at - llm_started_at) * 1000, 2)
-        metrics.planner_total_ms = round((llm_finished_at - started_at) * 1000, 2)
+        agent_finished_at = perf_counter()
+        metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
+        metrics.llm_planner_ms = metrics.agent_planner_ms
+        metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
         metrics.llm_succeeded = True
+        metrics.agent_succeeded = True
         metrics.planner_source = plan.planner_source
         return PlannedCommand(plan, metrics)
     except DrawingAgentError:
-        llm_finished_at = perf_counter()
+        agent_finished_at = perf_counter()
         plan = _with_plan_metadata(rule_plan, "rules_fallback")
-        metrics.llm_planner_ms = round((llm_finished_at - llm_started_at) * 1000, 2)
-        metrics.planner_total_ms = round((llm_finished_at - started_at) * 1000, 2)
+        metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
+        metrics.llm_planner_ms = metrics.agent_planner_ms
+        metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
         metrics.fallback_used = True
         metrics.planner_source = plan.planner_source
         return PlannedCommand(plan, metrics)

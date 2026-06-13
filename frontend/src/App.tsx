@@ -386,9 +386,9 @@ export default function App() {
           </div>
           <p className="metrics-note">
             {latestCommandMetrics?.fallback_used
-              ? "MiMo 规划失败，已使用规则兜底"
-              : latestCommandMetrics?.llm_succeeded
-                ? "MiMo 规划已命中"
+              ? "Drawing Agent 规划失败，已使用规则兜底"
+              : latestCommandMetrics?.agent_succeeded || latestCommandMetrics?.llm_succeeded
+                ? "Drawing Agent 已命中"
                 : latestCommandMetrics
                   ? "规则解析已命中"
                   : "等待一次完整语音指令"}

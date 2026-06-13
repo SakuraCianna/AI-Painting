@@ -125,11 +125,14 @@ class TtsSynthesisResponse(BaseModel):
 class CommandExecutionMetrics(BaseModel):
     rule_parse_ms: float | None = None
     llm_planner_ms: float | None = None
+    agent_planner_ms: float | None = None
     planner_total_ms: float | None = None
     execute_ms: float | None = None
     total_ms: float | None = None
     llm_attempted: bool = False
     llm_succeeded: bool = False
+    agent_attempted: bool = False
+    agent_succeeded: bool = False
     fallback_used: bool = False
     planner_source: str | None = None
 
