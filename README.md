@@ -182,9 +182,18 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\pre-commit.exe run --all-files
 npm run test:coverage --prefix frontend
+npm run test:e2e --prefix frontend
 npm run build --prefix frontend
 git diff --check
 ```
+
+首次运行 e2e 如果提示缺少 Chromium 浏览器, 先在 Windows PowerShell 执行:
+
+```powershell
+npm --prefix frontend exec -- playwright install chromium
+```
+
+`npm run test:e2e --prefix frontend` 会启动 Vite dev server, 使用 Playwright Chromium 模拟 Web Speech API 最终转写文本, 验证无键盘快捷绘图入口、语音新建画布、绘制、编辑、撤销、恢复、PNG/SVG/项目 JSON 下载边界、SVG 像素抽样、重叠语音指令单飞保护、麦克风拒绝后的 Web Speech fallback 和无语音识别能力时的禁用状态。
 
 CI 会在 `push`、`pull_request` 和手动触发时运行 Ruff、渐进式 mypy、pre-commit、后端测试、前端测试、前端构建、Docker 校验和 API smoke test。当前 mypy 先覆盖 Agent 图执行、SceneGraph、编译器、validator、metrics 和策略模块, planner 大文件仍在后续拆分计划内。
 
