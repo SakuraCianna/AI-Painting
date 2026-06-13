@@ -138,11 +138,31 @@ def _data_url_or_none(value: object) -> str | None:
 
 
 def _source_prompt_for_image(source_object: DrawingObject) -> str | None:
-    for key in ("prompt", "source_prompt"):
+    for key in ("source_prompt", "prompt"):
         value = source_object.geometry.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
+
+
+FOLLOW_UP_POLISH_HINTS = ("继续", "再", "刚才", "上一张", "上一版", "他的", "她的", "它的", "这个", "那个", "同一个")
+
+
+def _is_follow_up_polish_prompt(user_prompt: str) -> bool:
+    return any(hint in user_prompt for hint in FOLLOW_UP_POLISH_HINTS)
+
+
+def _image_context_value(source_object: DrawingObject, key: str) -> str | None:
+    value = source_object.geometry.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _polish_source_display_name(source_object: DrawingObject) -> str | None:
+    if source_object.name and not source_object.name.startswith("精修版本"):
+        return source_object.name
+    return _image_context_value(source_object, "source_object_name") or source_object.name
 
 
 def _compose_image_edit_prompt(
@@ -197,11 +217,15 @@ def _resolve_polish_source_payload(
     source_image = _data_url_or_none(source_object.geometry.get("src"))
     payload["input_image_data_url"] = source_image or canvas_image_data_url
     source_prompt = _source_prompt_for_image(source_object)
+    user_prompt = str(payload.get("prompt") or "")
     target_region = str(payload.get("target_region") or "").strip() or None
     target_subject = str(payload.get("target_subject") or "").strip() or None
     adjustment = str(payload.get("adjustment") or "").strip() or None
+    if _is_follow_up_polish_prompt(user_prompt):
+        target_subject = target_subject or _image_context_value(source_object, "target_subject")
+        target_region = target_region or _image_context_value(source_object, "target_region")
     payload["prompt"] = _compose_image_edit_prompt(
-        str(payload.get("prompt") or ""),
+        user_prompt,
         source_prompt,
         target_region,
         target_subject,
@@ -220,8 +244,9 @@ def _resolve_polish_source_payload(
     for key in ("x", "y", "width", "height", "preserveAspectRatio"):
         if source_object.geometry.get(key) is not None:
             payload[key] = source_object.geometry[key]
-    if source_object.name:
-        payload["name"] = f"精修版本: {source_object.name}"
+    source_display_name = _polish_source_display_name(source_object)
+    if source_display_name:
+        payload["name"] = f"精修版本: {source_display_name}"
     return payload
 
 

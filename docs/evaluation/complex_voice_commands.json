@@ -260,6 +260,14 @@
     "expected_adjustment": "调亮"
   },
   {
+    "id": "follow-up-generated-image-polish",
+    "text": "继续把他的头发柔和一点",
+    "tier": "rules",
+    "expected_operation_types": ["polish_image_asset"],
+    "expected_target_region": "头发",
+    "expected_adjustment": "柔和"
+  },
+  {
     "id": "partial-generated-image-ranked-polish",
     "text": "把第二张生成图精修一下",
     "tier": "rules",
