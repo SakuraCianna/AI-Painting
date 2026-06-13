@@ -452,7 +452,266 @@ def _infographic_scene_graph(text: str) -> AgentSceneGraph:
     )
 
 
+def _poster_scene_graph(text: str) -> AgentSceneGraph:
+    is_launch = any(keyword in text for keyword in ("发布", "新品", "上线", "首发"))
+    brand = "AI Painting" if "ai" in text or "语音" in text else "NOVA Studio"
+    headline = "语音绘图正式发布" if is_launch else "创意工具限时活动"
+    subtitle = "只用一句话, 生成可编辑设计画面" if "语音" in text or "绘图" in text else "高效完成海报、图表和视觉草图"
+    badge_text = "新品发布" if is_launch else "限时优惠"
+    cta_text = "立即体验"
+    summary = "绘制产品发布海报, 包含品牌、标题、主视觉、卖点和行动按钮"
+
+    objects = [
+        _object(
+            "poster-background",
+            "rect",
+            "海报背景",
+            {"x": 0, "y": 0, "width": 1024, "height": 768, "radius": 0},
+            "#f8fafc",
+            stroke="#f8fafc",
+            stroke_width=0,
+            layer_id="background",
+            group_id="launch-poster",
+            semantic_tags=["poster.background", "poster"],
+            z_index=-10,
+        ),
+        _object(
+            "poster-accent-left",
+            "circle",
+            "左侧品牌色块",
+            {"cx": 82, "cy": 118, "radius": 120},
+            "#e8f0fe",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="background",
+            group_id="launch-poster",
+            semantic_tags=["poster.decor", "poster"],
+            z_index=-8,
+        ),
+        _object(
+            "poster-accent-right",
+            "ellipse",
+            "右侧视觉氛围",
+            {"cx": 872, "cy": 642, "rx": 180, "ry": 108},
+            "#e6f4ea",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="background",
+            group_id="launch-poster",
+            semantic_tags=["poster.decor", "poster"],
+            z_index=-7,
+        ),
+        _object(
+            "poster-brand-mark",
+            "rect",
+            "品牌标识底",
+            {"x": 104, "y": 72, "width": 56, "height": 56, "radius": 16},
+            "#1a73e8",
+            stroke="#185abc",
+            stroke_width=2,
+            layer_id="middle",
+            group_id="launch-poster",
+            semantic_tags=["poster.brand", "poster"],
+            z_index=0,
+            role="brand_mark",
+        ),
+        _object(
+            "poster-brand-text",
+            "text",
+            "品牌文字",
+            {"x": 250, "y": 102, "content": brand, "fontSize": 28},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.brand", "poster"],
+            z_index=1,
+            role="brand_name",
+        ),
+        _object(
+            "poster-badge",
+            "rect",
+            "海报徽标",
+            {"x": 104, "y": 172, "width": 132, "height": 44, "radius": 22},
+            "#fef7e0",
+            stroke="#fbbc04",
+            stroke_width=2,
+            layer_id="middle",
+            group_id="launch-poster",
+            semantic_tags=["poster.badge", "poster"],
+            z_index=2,
+            role="badge",
+        ),
+        _object(
+            "poster-badge-text",
+            "text",
+            "徽标文字",
+            {"x": 170, "y": 196, "content": badge_text, "fontSize": 20},
+            "#92400e",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.badge_text", "poster"],
+            z_index=3,
+            role="badge_label",
+        ),
+        _object(
+            "poster-headline",
+            "text",
+            "主标题",
+            {"x": 330, "y": 292, "content": headline, "fontSize": 54},
+            "#202124",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.headline", "poster"],
+            z_index=4,
+            role="headline",
+        ),
+        _object(
+            "poster-subtitle",
+            "text",
+            "副标题",
+            {"x": 330, "y": 352, "content": subtitle, "fontSize": 24},
+            "#5f6368",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.subtitle", "poster"],
+            z_index=5,
+            role="subtitle",
+        ),
+        _object(
+            "poster-device-card",
+            "rect",
+            "产品主视觉卡片",
+            {"x": 635, "y": 190, "width": 260, "height": 330, "radius": 36},
+            "#ffffff",
+            stroke="#dadce0",
+            stroke_width=3,
+            layer_id="middle",
+            group_id="launch-poster",
+            semantic_tags=["poster.hero", "poster"],
+            z_index=6,
+            role="hero_visual",
+        ),
+        _object(
+            "poster-device-screen",
+            "rect",
+            "产品屏幕",
+            {"x": 668, "y": 238, "width": 194, "height": 200, "radius": 24},
+            "#e8f0fe",
+            stroke="#1a73e8",
+            stroke_width=3,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.hero.screen", "poster"],
+            z_index=7,
+            role="hero_screen",
+        ),
+        _object(
+            "poster-hero-line",
+            "path",
+            "屏幕绘图线",
+            {"commands": [{"cmd": "M", "x": 700, "y": 365}, {"cmd": "C", "x1": 735, "y1": 298, "x2": 796, "y2": 418, "x": 835, "y": 320}]},
+            "transparent",
+            stroke="#1a73e8",
+            stroke_width=8,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.hero.stroke", "poster"],
+            z_index=8,
+            role="hero_stroke",
+        ),
+        _object(
+            "poster-cta-button",
+            "rect",
+            "行动按钮",
+            {"x": 104, "y": 500, "width": 196, "height": 64, "radius": 32},
+            "#1a73e8",
+            stroke="#185abc",
+            stroke_width=2,
+            layer_id="middle",
+            group_id="launch-poster",
+            semantic_tags=["poster.cta", "poster"],
+            z_index=9,
+            role="cta",
+        ),
+        _object(
+            "poster-cta-text",
+            "text",
+            "行动按钮文字",
+            {"x": 202, "y": 535, "content": cta_text, "fontSize": 24},
+            "#ffffff",
+            stroke="transparent",
+            stroke_width=0,
+            layer_id="foreground",
+            group_id="launch-poster",
+            semantic_tags=["poster.cta_text", "poster"],
+            z_index=10,
+            role="cta_label",
+        ),
+    ]
+
+    feature_items = ["自然语言绘图", "对象可继续编辑", "支持图生图精修"]
+    for index, item in enumerate(feature_items):
+        y = 612 + index * 42
+        objects.append(
+            _object(
+                f"poster-feature-dot-{index + 1}",
+                "circle",
+                f"卖点{index + 1}圆点",
+                {"cx": 120, "cy": y, "radius": 9},
+                "#34a853",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="launch-poster",
+                semantic_tags=["poster.feature_dot", "poster", f"poster.feature.{index + 1}"],
+                z_index=11 + index * 2,
+                role="feature_dot",
+            )
+        )
+        objects.append(
+            _object(
+                f"poster-feature-text-{index + 1}",
+                "text",
+                f"卖点{index + 1}",
+                {"x": 238, "y": y + 2, "content": item, "fontSize": 22},
+                "#3c4043",
+                stroke="transparent",
+                stroke_width=0,
+                layer_id="foreground",
+                group_id="launch-poster",
+                semantic_tags=["poster.feature_text", "poster", f"poster.feature.{index + 1}"],
+                z_index=12 + index * 2,
+                role="feature_text",
+            )
+        )
+
+    relations = [
+        AgentSceneRelation(subject="poster-headline", relation="above", target="poster-subtitle", note="主标题位于副标题上方"),
+        AgentSceneRelation(subject="poster-device-card", relation="right_of", target="poster-headline", note="产品主视觉在标题右侧"),
+        AgentSceneRelation(subject="poster-cta-button", relation="below", target="poster-subtitle", note="行动按钮在副标题下方"),
+    ]
+    return AgentSceneGraph(
+        intent="compose_poster",
+        domain="poster_scene",
+        summary=summary,
+        background="#f8fafc",
+        objects=objects,
+        relations=relations,
+        confidence=0.82,
+    )
+
+
 def _local_scene_graph_for_text(normalized_text: str) -> AgentSceneGraph | None:
+    if "海报" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
+        return _poster_scene_graph(normalized_text)
     if "信息图" in normalized_text and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):
         return _infographic_scene_graph(normalized_text)
     if any(keyword in normalized_text for keyword in ("流程图", "结构图", "架构图")) and any(keyword in normalized_text for keyword in ("画", "创建", "生成")):

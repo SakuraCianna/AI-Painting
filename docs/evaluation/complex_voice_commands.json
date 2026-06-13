@@ -121,6 +121,13 @@
     "expected_object_types": ["text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "line", "line", "rect", "text", "rect", "text", "rect", "text"]
   },
   {
+    "id": "agent-launch-poster",
+    "text": "画一个AI语音绘图新品发布海报，突出主标题、产品视觉、三个卖点和立即体验按钮",
+    "tier": "agent",
+    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
+    "expected_object_types": ["rect", "circle", "ellipse", "rect", "text", "rect", "text", "text", "text", "rect", "rect", "path", "rect", "text", "circle", "text", "circle", "text", "circle", "text"]
+  },
+  {
     "id": "portrait-image-generation",
     "text": "生成一张人物肖像画",
     "tier": "rules",
