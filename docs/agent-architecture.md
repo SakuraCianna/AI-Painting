@@ -67,6 +67,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、语义编辑模板、流程图模板、系统架构图模板、自定义实体和关系的 ER 图模板、自定义泳道和节点的泳道图模板、信息图模板、海报模板、UI 草图模板、自定义角色组织结构图模板、甘特图模板和 Graph 调度
 - `backend/app/render_strategy.py`: 渲染策略分类器, 区分程序生成、生图模型和图生图精修
 - `backend/app/image_generation.py`: 图片生成和图生图精修 Provider 适配层, 会把 `source_prompt`、`target_subject`、`target_region` 和 `adjustment` 写入精修结果元数据
+- `backend/app/image_evaluation.py`: 图片 Provider 评测汇总和 readiness gate, 记录文生图/图生图成功率、延迟、Provider 分布和尺寸分布
 - `backend/app/main.py`: 已切换到 Drawing Agent, 不再引用旧 `llm_planner.py`
 - `docs/evaluation/complex_voice_commands.json`: 新增 `agent` tier 复杂用例
 
@@ -118,11 +119,10 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 
 ## 8. 下一阶段
 
-- 增加 50 到 100 条复杂语音评测集
-- 扩展领域工具: 室内、人物、泳道图、看板图
+- 用真实 ASR transcript 和图片 Provider 样本持续回归 100 条复杂语音评测集, 不再只看规则文本样本
+- 扩展领域工具: 室内、人物、泳道图、看板图、UML、Mermaid / PlantUML 和海报版式
 - 将当前本地流程图模板升级为 Mermaid / PlantUML 结构图执行器
-- 增加模型驱动的 SceneGraph repair 节点
+- 强化模型驱动的 SceneGraph repair 节点, 让模型修复只在 schema 校验失败时触发
 - 完善编组编辑, 例如取消编组、组内排序、组级局部重绘和命名历史
 - 扩展更细的语义关系选择, 例如组内相邻对象、最近对象、路径附近对象和跨领域关系模板
-- 引入 Mermaid / PlantUML 执行器
-- 引入 Canvas 或 OffscreenCanvas 作为滤镜、笔刷和大图导出增强层
+- 引入 Canvas 或 OffscreenCanvas 作为滤镜、笔刷和大图导出增强层, 但继续保留 SVG 作为可编辑主图层

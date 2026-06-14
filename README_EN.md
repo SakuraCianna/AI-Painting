@@ -168,7 +168,7 @@ flowchart TD
 | Agent | LangGraph, SceneGraph v2, Pydantic schema validation |
 | Frontend | React 19, TypeScript, Vite, Web Audio API, Web Speech API, Iconify |
 | AI Providers | Xiaomi MiMo ASR, Xiaomi MiMo-v2.5-Pro, Xiaomi MiMo TTS, Qwen3-ASR local fallback, OpenAI-compatible image APIs |
-| Quality | GitHub Actions, Vitest coverage, Docker Compose validation |
+| Quality | GitHub Actions, pytest-cov, Vitest coverage, Ruff, mypy, pre-commit, Docker Compose validation |
 
 ### Quick Start
 
@@ -264,17 +264,31 @@ Never put real secrets in README, issues, pull requests, commit messages, or log
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend\tests -q
 .\.venv\Scripts\python.exe -m pytest backend\tests --cov=app --cov-report=term-missing --cov-fail-under=85
+.\.venv\Scripts\python.exe -m ruff check backend\app backend\tests
+.\.venv\Scripts\python.exe -m ruff format --check backend\app backend\tests
+.\.venv\Scripts\python.exe -m mypy
+.\.venv\Scripts\pre-commit.exe run --all-files
 npm run test:coverage --prefix frontend
+npm run test:e2e --prefix frontend
 npm run build --prefix frontend
 git diff --check
+```
+
+Real-provider evaluation harnesses:
+
+```powershell
+.\.venv\Scripts\python.exe backend\evaluate_asr_samples.py docs\evaluation\asr-samples.example.json --output reports\asr-xiaomi.json
+.\.venv\Scripts\python.exe backend\evaluate_image_provider.py docs\evaluation\image-provider-samples.example.json --output reports\image-provider.json
 ```
 
 CI runs on `push`, `pull_request`, and manual dispatch:
 
 - Python dependency installation
+- Ruff, Ruff format, gradual mypy, and pre-commit
 - Backend compileall
 - Backend tests with 85% coverage gate
 - Frontend Vitest coverage
+- Playwright voice-only e2e can be run locally
 - Frontend production build
 - Docker Compose config validation
 - Docker backup image build
@@ -305,6 +319,8 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 │   │   ├── image_generation.py
 │   │   ├── main.py
 │   │   └── repositories.py
+│   ├── evaluate_asr_samples.py
+│   ├── evaluate_image_provider.py
 │   ├── local_asr_qwen3.py
 │   ├── requirements.txt
 │   └── tests
@@ -335,6 +351,7 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 - [Gap Analysis](docs/status/voice-drawing-gap-analysis.md)
 - [Complex Command Evaluation](docs/evaluation/command-evaluation.md)
 - [ASR Benchmarking](docs/evaluation/asr-benchmark.md)
+- [Image Provider Benchmarking](docs/evaluation/image-provider-benchmark.md)
 - [Local Qwen3-ASR](docs/local-asr-qwen3.md)
 - [Docker Deployment](docs/docker-deploy.md)
 
@@ -355,4 +372,3 @@ Before opening a pull request, read:
 - [.github/ISSUE_TEMPLATE/bug_report.md](.github/ISSUE_TEMPLATE/bug_report.md)
 
 PR descriptions should include scope, motivation, key files, checks run, results, known risks, screenshots or recordings for UI changes, and follow-up work.
-

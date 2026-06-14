@@ -24,6 +24,7 @@ files = [
   "backend/app/agent/graph.py",
   "backend/app/agent/validator.py",
   "backend/app/asr_evaluation.py",
+  "backend/app/image_evaluation.py",
   "backend/app/metrics.py",
   "backend/app/render_strategy.py",
 ]

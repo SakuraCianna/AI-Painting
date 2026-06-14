@@ -38,6 +38,7 @@
 - 前端覆盖率检查
 - 前端构建
 - 组装发布 zip 产物
+- 发布包包含 ASR 样本评测脚本和图片 Provider 评测脚本, 便于离线复现实验
 - 上传 GitHub Actions artifact
 - 当 push 的是 `v*` tag 时自动创建 GitHub Release
 

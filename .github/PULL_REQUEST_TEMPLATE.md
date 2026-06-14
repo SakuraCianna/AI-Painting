@@ -18,6 +18,13 @@
 ## 验证结果
 
 - [ ] `python -m pytest backend/tests -q`
+- [ ] `python -m pytest backend/tests --cov=app --cov-report=term-missing --cov-fail-under=85`
+- [ ] `python -m ruff check backend/app backend/tests`
+- [ ] `python -m ruff format --check backend/app backend/tests`
+- [ ] `python -m mypy`
+- [ ] `pre-commit run --all-files`
+- [ ] `npm run test:coverage --prefix frontend`
+- [ ] `npm run test:e2e --prefix frontend`
 - [ ] `npm run build --prefix frontend`
 - [ ] 已验证语音识别、绘图执行或相关 UI 行为
 - [ ] 不适用，原因：

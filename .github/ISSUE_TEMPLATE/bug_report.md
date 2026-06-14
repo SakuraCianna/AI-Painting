@@ -27,9 +27,10 @@ assignees: ""
 - 浏览器：
 - Python 版本：
 - Node.js 版本：
-- 后端端口：8080
-- 前端端口：5173
+- 后端端口：8084
+- 前端端口：3001
 - ASR Provider：小米 MiMo / 本地 ASR / Web Speech API
+- 图像 Provider：占位 / GPT-image-2 中转站 / OpenAI 官方备用 / 未涉及
 
 ## 日志或截图
 

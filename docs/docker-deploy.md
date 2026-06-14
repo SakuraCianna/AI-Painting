@@ -16,6 +16,8 @@
 - `ai-painting-backend-data`: 保存 `backend/data/ai_painting.sqlite3`
 - 后端容器使用非 root 用户运行, 降低容器逃逸或误写系统路径的风险
 
+注意: 本地开发脚本的后端宿主机端口固定为 `8084`, Docker 容器内部仍使用 `8080`, 由 Compose 负责映射。
+
 ## 3. 启动命令
 
 在源码仓库根目录执行。当前 GitHub Release zip 是轻量运行包, 不包含完整前端源码, 不作为 Docker 构建上下文。
