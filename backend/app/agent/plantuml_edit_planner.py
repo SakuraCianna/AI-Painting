@@ -7,7 +7,23 @@ from ..command_parser import COLOR_MAP, chinese_number_to_int
 from ..schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
 
 
-PLANTUML_EDIT_KEYWORDS = ("改成", "改为", "换成", "变成", "增加", "新增", "添加", "删除", "移除", "去掉", "删掉", "开始")
+PLANTUML_EDIT_KEYWORDS = (
+    "改成",
+    "改为",
+    "换成",
+    "变成",
+    "增加",
+    "新增",
+    "添加",
+    "删除",
+    "移除",
+    "去掉",
+    "删掉",
+    "开始",
+    "连接到",
+    "连到",
+    "指向",
+)
 DIAGRAM_TAGS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("er图", "er 图", "实体关系图", "实体关系"), "er"),
     (("甘特图", "排期图", "项目排期", "进度计划"), "gantt"),
@@ -19,6 +35,7 @@ DIAGRAM_TAGS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("流程图",), "activity"),
 )
 RENAME_WORDS = ("改成", "改为", "换成", "变成")
+RECONNECT_WORDS = ("改连接到", "改连到", "改指向", "连接到", "连到", "指向")
 ADD_WORDS = ("增加", "新增", "添加")
 DELETE_WORDS = ("删除", "移除", "去掉", "删掉")
 
@@ -71,6 +88,10 @@ def _operation_payload_for_text(text: str) -> dict[str, Any] | None:
     update_gantt_task_payload = _update_gantt_task_payload(text, diagram_type, looks_like_gantt_task_update=looks_like_gantt_task_update)
     if update_gantt_task_payload:
         return {"target": target, **update_gantt_task_payload}
+
+    reconnect_relation_payload = _reconnect_relation_payload(text)
+    if reconnect_relation_payload:
+        return {"target": target, **reconnect_relation_payload}
 
     update_relation_payload = _update_relation_payload(text)
     if update_relation_payload:
@@ -229,7 +250,9 @@ def _strip_relation_cardinality(text: str) -> str:
 
 
 def _relation_endpoints_from_text(text: str) -> tuple[str, str] | None:
-    cleaned = re.sub(r"(之间的|之间|间的|间)$", "", text.strip(" 的地得，,。；;:：、 "))
+    cleaned = text.strip(" 的地得，,。；;:：、 ")
+    cleaned = re.split(r"(?:之间的|之间|间的|间)", cleaned, maxsplit=1)[0]
+    cleaned = re.sub(r"(之间的|之间|间的|间)$", "", cleaned.strip(" 的地得，,。；;:：、 "))
     match = re.search(r"(.+?)(?:和|与|及)(.+)$", cleaned)
     if match is None:
         return None
@@ -238,6 +261,65 @@ def _relation_endpoints_from_text(text: str) -> tuple[str, str] | None:
     if not source or not target:
         return None
     return source, target
+
+
+def _relation_label_from_reconnect_text(text: str) -> str | None:
+    cleaned = _strip_relation_cardinality(text)
+    between_match = re.search(r"(?:之间的|之间|间的|间)(.+)$", cleaned)
+    if between_match:
+        label = between_match.group(1)
+    else:
+        endpoints = _relation_endpoints_from_text(cleaned)
+        if not endpoints:
+            return None
+        label = cleaned.replace(endpoints[0], "", 1).replace(endpoints[1], "", 1)
+    label = re.sub(r"^(的|是|为)", "", label.strip(" 的地得，,。；;:：、 "))
+    label = re.sub(r"(关系|关联)$", "", label).strip(" 的地得，,。；;:：、 ")
+    return _clean_fragment(label) if label else None
+
+
+def _latest_relation_change_marker(text: str) -> tuple[int, str] | None:
+    words = RENAME_WORDS + RECONNECT_WORDS
+    matches = [(text.rfind(word), word) for word in words if word in text]
+    return sorted(matches)[-1] if matches else None
+
+
+def _reconnect_relation_payload(text: str) -> dict[str, Any] | None:
+    if "关系" not in text and "关联" not in text:
+        return None
+    marker = _latest_relation_change_marker(text)
+    if marker is None:
+        return None
+    position, word = marker
+    relation_text = _clean_fragment(text[:position])
+    old_endpoints = _relation_endpoints_from_text(relation_text)
+    if old_endpoints is None:
+        return None
+    new_text = _clean_fragment(text[position + len(word) :])
+    if not new_text:
+        return None
+
+    payload: dict[str, Any] = {
+        "action": "reconnect_relation",
+        "relation_text": relation_text,
+        "source_entity": old_endpoints[0],
+        "target_entity": old_endpoints[1],
+    }
+    new_endpoints = _relation_endpoints_from_text(new_text)
+    if new_endpoints:
+        payload["new_source_entity"], payload["new_target_entity"] = new_endpoints
+    elif word in RECONNECT_WORDS:
+        payload["new_target_entity"] = new_text
+    else:
+        return None
+
+    cardinality = _relation_cardinality_for_text(new_text)
+    new_label = _relation_label_from_reconnect_text(new_text)
+    if new_label:
+        payload["new_label"] = new_label
+    if cardinality:
+        payload["cardinality"] = cardinality
+    return payload
 
 
 def _update_relation_payload(text: str) -> dict[str, Any] | None:
@@ -351,4 +433,6 @@ def _action_title(payload: dict[str, Any]) -> str:
         return f"删除关系 {payload.get('relation_text')}"
     if action == "update_relation":
         return f"修改关系 {payload.get('relation_text')}"
+    if action == "reconnect_relation":
+        return f"重连关系 {payload.get('relation_text')}"
     return "修改 PlantUML 图表"
