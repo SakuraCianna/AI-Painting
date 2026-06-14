@@ -584,6 +584,55 @@ def test_voice_edit_plantuml_gantt_deletes_task_and_rewires_milestone(client: Te
     assert "[上线里程碑] happens at [开发]'s end" in source
 
 
+def test_voice_edit_plantuml_gantt_updates_task_duration(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把甘特图里的开发任务时长改成八天"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["operations"][0]["payload"]["action"] == "update_gantt_task"
+    assert body["plan"]["operations"][0]["payload"]["duration_days"] == 8
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert "[开发] lasts 8 days" in source
+    assert "[测试] starts at [开发]'s end" in source
+
+
+def test_voice_edit_plantuml_gantt_updates_task_start_dependency(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "让测试任务从设计任务结束后开始"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["operations"][0]["payload"]["action"] == "update_gantt_task"
+    assert body["plan"]["operations"][0]["payload"]["task_name"] == "测试"
+    assert body["plan"]["operations"][0]["payload"]["starts_after"] == "设计"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert "[测试] starts at [设计]'s end" in source
+    assert "[测试] starts at [开发]'s end" not in source
+
+
 def test_voice_edit_plantuml_swimlane_deletes_lane_and_step(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
