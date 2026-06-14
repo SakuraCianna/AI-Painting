@@ -185,29 +185,29 @@
     "id": "agent-voice-flowchart",
     "text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["text", "rect", "text", "rect", "text", "arrow", "rect", "text", "arrow", "rect", "text", "arrow"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "agent-system-architecture",
     "text": "画一个AI绘图系统架构图，包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["rect", "text", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line", "line"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "agent-er-diagram",
     "text": "画一个用户订单ER图，包含用户、订单、商品和支付",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["rect", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "line", "text", "line", "text", "line", "text"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "agent-custom-er-diagram",
     "text": "画一个图书馆借阅ER图，实体包括读者、图书、借阅记录、馆员，关系包括读者借阅图书、馆员管理图书",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["rect", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "rect", "text", "text", "line", "text", "line", "text", "line", "text"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "agent-sales-infographic",
@@ -234,22 +234,22 @@
     "id": "agent-org-chart",
     "text": "画一个产品团队组织结构图，包括负责人、产品组、设计组、研发组和执行角色",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["text", "rect", "text", "line", "line", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "agent-custom-org-chart",
     "text": "画一个产品团队组织结构图，包括负责人、产品经理、设计负责人、研发负责人、用户研究员、交互设计师、前端工程师、后端工程师",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["text", "rect", "text", "line", "line", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "agent-gantt-chart",
     "text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["text", "text", "rect", "line", "text", "text", "text", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "line", "circle", "text", "rect", "text"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "portrait-image-generation",
@@ -328,22 +328,22 @@
     "id": "programmatic-swimlane-agent-template",
     "text": "画一个泳道图，包含销售、运营和交付",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "programmatic-custom-swimlane-agent-template",
     "text": "画一个泳道图，泳道包括产品、设计、研发、测试",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "programmatic-custom-swimlane-steps-agent-template",
     "text": "画一个泳道图，泳道包括产品、设计、研发、测试，节点包括需求评审、原型设计、开发联调、验收发布",
     "tier": "agent",
-    "expected_operation_types": ["add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object", "add_object"],
-    "expected_object_types": ["rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "rect", "text", "line", "line", "line", "line"]
+    "expected_operation_types": ["add_object"],
+    "expected_object_types": ["plantuml"]
   },
   {
     "id": "replace-window-shape",

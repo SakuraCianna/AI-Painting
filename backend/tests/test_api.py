@@ -285,16 +285,17 @@ def test_agent_flowchart_command_executes_diagram_scene(client: TestClient, monk
     assert response.status_code == 200
     body = response.json()
     assert body["plan"]["planner_source"] == "agent"
-    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "diagram_scene"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "plantuml_activity_scene"
     objects = body["artwork"]["objects"]
-    assert len(objects) == 12
-    object_types = [obj["type"] for obj in objects]
-    assert object_types.count("rect") == 4
-    assert object_types.count("text") == 5
-    assert object_types.count("arrow") == 3
-    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
-    assert "diagram.node" in semantic_tags
-    assert "diagram.connector" in semantic_tags
+    assert len(objects) == 1
+    plantuml_object = objects[0]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "activity"
+    assert "@startuml" in plantuml_object["geometry"]["source"]
+    assert plantuml_object["geometry"]["src"].startswith("data:image/svg+xml;base64,")
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.activity" in semantic_tags
+    assert "flowchart" in semantic_tags
 
 
 def test_agent_infographic_command_executes_graphic_design_scene(client: TestClient, monkeypatch) -> None:
@@ -392,18 +393,18 @@ def test_agent_org_chart_command_executes_hierarchy_scene(client: TestClient, mo
     assert response.status_code == 200
     body = response.json()
     assert body["plan"]["planner_source"] == "agent"
-    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "org_chart_scene"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "plantuml_org_scene"
     objects = body["artwork"]["objects"]
-    assert len(objects) == 20
-    object_types = [obj["type"] for obj in objects]
-    assert object_types.count("rect") == 8
-    assert object_types.count("text") == 9
-    assert object_types.count("line") == 3
-    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
-    assert "org_chart.node" in semantic_tags
-    assert "org_chart.connector" in semantic_tags
-    assert "org_chart.department" in semantic_tags
-    assert "org_chart.role" in semantic_tags
+    assert len(objects) == 1
+    plantuml_object = objects[0]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "org"
+    assert "@startwbs" in plantuml_object["geometry"]["source"]
+    assert "负责人" in plantuml_object["geometry"]["source"]
+    assert "产品组" in plantuml_object["geometry"]["source"]
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.org" in semantic_tags
+    assert "org_chart" in semantic_tags
 
 
 def test_agent_gantt_chart_command_executes_timeline_scene(client: TestClient, monkeypatch) -> None:
@@ -419,19 +420,17 @@ def test_agent_gantt_chart_command_executes_timeline_scene(client: TestClient, m
     assert response.status_code == 200
     body = response.json()
     assert body["plan"]["planner_source"] == "agent"
-    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "gantt_chart_scene"
+    assert body["plan"]["scene_plan"]["steps"][0]["target"]["domain"] == "plantuml_gantt_scene"
     objects = body["artwork"]["objects"]
-    assert len(objects) == 20
-    object_types = [obj["type"] for obj in objects]
-    assert object_types.count("rect") == 6
-    assert object_types.count("text") == 11
-    assert object_types.count("line") == 2
-    assert object_types.count("circle") == 1
-    semantic_tags = [tag for item in objects for tag in item["semantic_tags"]]
-    assert "gantt_chart.timeline" in semantic_tags
-    assert "gantt_chart.task_bar" in semantic_tags
-    assert "gantt_chart.milestone" in semantic_tags
-    assert "gantt_chart.legend" in semantic_tags
+    assert len(objects) == 1
+    plantuml_object = objects[0]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "gantt"
+    assert "@startgantt" in plantuml_object["geometry"]["source"]
+    assert "上线里程碑" in plantuml_object["geometry"]["source"]
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.gantt" in semantic_tags
+    assert "gantt_chart" in semantic_tags
 
 
 def test_undo_and_redo(client: TestClient) -> None:
