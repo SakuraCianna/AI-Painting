@@ -56,10 +56,7 @@ def test_plantuml_renderer_uses_local_jar_when_configured(monkeypatch, tmp_path)
 
     class Completed:
         returncode = 0
-        stdout = (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="320px" height="160px" '
-            'preserveAspectRatio="none"><text>ok</text></svg>'
-        )
+        stdout = '<svg xmlns="http://www.w3.org/2000/svg" width="320px" height="160px" preserveAspectRatio="none"><text>ok</text></svg>'
         stderr = ""
 
     def fake_run(*args, **kwargs):  # noqa: ANN001, ANN002, ANN003

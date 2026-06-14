@@ -180,7 +180,7 @@ def _add_swimlane(source: str, lane_name: str, step_name: str) -> str:
 
 def _named_aliases(source: str) -> dict[str, str]:
     aliases: dict[str, str] = {}
-    for match in re.finditer(r'\b(?:entity|component|database)\s+"([^"]+)"\s+as\s+([A-Za-z0-9_]+)', source):
+    for match in re.finditer(r'\b(?:entity|component|database|queue)\s+"([^"]+)"\s+as\s+([A-Za-z0-9_]+)', source):
         display_name = match.group(1).split("\\n", 1)[0].strip()
         aliases[display_name] = match.group(2)
     return aliases

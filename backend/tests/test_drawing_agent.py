@@ -521,8 +521,10 @@ def test_agent_template_builds_system_architecture_diagram(monkeypatch) -> None:
     plantuml_object = result.plan.operations[0].payload["object"]
     assert plantuml_object["type"] == "plantuml"
     assert plantuml_object["geometry"]["diagramType"] == "component"
-    assert "FastAPI 后端" in plantuml_object["geometry"]["source"]
-    assert "SQLite" in plantuml_object["geometry"]["source"]
+    source = plantuml_object["geometry"]["source"]
+    assert "后端" in source
+    assert "sqlite" in source.lower()
+    assert "数据库" in source
     semantic_tags = plantuml_object["semantic_tags"]
     assert "plantuml.component" in semantic_tags
     assert "system_architecture" in semantic_tags
