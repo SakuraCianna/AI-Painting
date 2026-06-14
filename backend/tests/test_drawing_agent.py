@@ -205,9 +205,17 @@ def test_agent_open_composition_builds_mixed_scene_without_mimo(monkeypatch) -> 
     assert result.plan.scene_plan is not None
     assert result.plan.scene_plan.intent == "compose_open_scene"
     assert result.plan.scene_plan.expected_object_count is not None
-    assert result.plan.scene_plan.expected_object_count >= 8
-    semantic_tags = {tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]}
+    assert result.plan.scene_plan.expected_object_count >= 10
+    objects = [operation.payload["object"] for operation in result.plan.operations]
+    semantic_tags = {tag for obj in objects for tag in obj["semantic_tags"]}
     assert {"scene.grass", "sun", "tree", "path", "bench"}.issubset(semantic_tags)
+    assert any(obj["name"] == "太阳光芒" and obj["type"] == "star" for obj in objects)
+    grass = next(obj for obj in objects if obj["name"] == "草地")
+    path = next(obj for obj in objects if obj["name"] == "弯曲小路")
+    assert grass["type"] == "path"
+    assert path["type"] == "path"
+    assert "commands" in grass["geometry"]
+    assert "commands" in path["geometry"]
     assert result.plan.requires_confirmation is False
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
@@ -381,16 +389,17 @@ def test_agent_template_builds_voice_flowchart(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "diagram_scene"
-    assert result.plan.scene_plan.expected_object_count == 12
-    assert len(result.plan.operations) == 12
-    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
-    assert object_types.count("rect") == 4
-    assert object_types.count("text") == 5
-    assert object_types.count("arrow") == 3
-    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
-    assert "diagram.node" in semantic_tags
-    assert "diagram.connector" in semantic_tags
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_activity_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "activity"
+    assert "@startuml" in plantuml_object["geometry"]["source"]
+    assert "用户语音" in plantuml_object["geometry"]["source"]
+    assert plantuml_object["geometry"]["src"].startswith("data:image/svg+xml;base64,")
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.activity" in semantic_tags
     assert "flowchart" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
@@ -500,20 +509,17 @@ def test_agent_template_builds_system_architecture_diagram(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "system_architecture_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
-    assert len(result.plan.operations) == 20
-    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
-    assert object_types.count("rect") == 7
-    assert object_types.count("text") == 8
-    assert object_types.count("line") == 5
-    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
-    assert "system_architecture.client" in semantic_tags
-    assert "system_architecture.backend" in semantic_tags
-    assert "system_architecture.asr" in semantic_tags
-    assert "system_architecture.agent" in semantic_tags
-    assert "system_architecture.database" in semantic_tags
-    assert "system_architecture.image_provider" in semantic_tags
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_component_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "component"
+    assert "FastAPI 后端" in plantuml_object["geometry"]["source"]
+    assert "SQLite" in plantuml_object["geometry"]["source"]
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.component" in semantic_tags
+    assert "system_architecture" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
 
@@ -528,23 +534,46 @@ def test_agent_template_builds_er_diagram(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "er_diagram_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
-    assert len(result.plan.operations) == 20
-    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
-    assert object_types.count("rect") == 5
-    assert object_types.count("text") == 12
-    assert object_types.count("line") == 3
-    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
-    assert "er_diagram.entity" in semantic_tags
-    assert "er_diagram.attribute" in semantic_tags
-    assert "er_diagram.relationship" in semantic_tags
-    assert "er_diagram.entity.user" in semantic_tags
-    assert "er_diagram.entity.order" in semantic_tags
-    assert "er_diagram.entity.product" in semantic_tags
-    assert "er_diagram.entity.payment" in semantic_tags
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_er_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "er"
+    assert 'entity "用户"' in plantuml_object["geometry"]["source"]
+    assert 'entity "订单"' in plantuml_object["geometry"]["source"]
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.er" in semantic_tags
+    assert "er_diagram" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
+
+
+def test_agent_template_builds_sequence_and_class_plantuml_diagrams(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    sequence_result = asyncio.run(main.build_command_plan_with_metrics("画一个语音绘图调用时序图"))
+    class_result = asyncio.run(main.build_command_plan_with_metrics("画一个绘图 Agent UML 类图"))
+
+    sequence_object = sequence_result.plan.operations[0].payload["object"]
+    class_object = class_result.plan.operations[0].payload["object"]
+
+    assert sequence_result.plan.scene_plan is not None
+    assert sequence_result.plan.scene_plan.steps[0].target["domain"] == "plantuml_sequence_scene"
+    assert sequence_object["type"] == "plantuml"
+    assert sequence_object["geometry"]["diagramType"] == "sequence"
+    assert "participant DrawingAgent" in sequence_object["geometry"]["source"]
+    assert "sequence_diagram" in sequence_object["semantic_tags"]
+
+    assert class_result.plan.scene_plan is not None
+    assert class_result.plan.scene_plan.steps[0].target["domain"] == "plantuml_class_scene"
+    assert class_object["type"] == "plantuml"
+    assert class_object["geometry"]["diagramType"] == "class"
+    assert "class DrawingAgent" in class_object["geometry"]["source"]
+    assert "uml_class" in class_object["semantic_tags"]
 
 
 def test_agent_template_extracts_custom_er_entities_and_relationships(monkeypatch) -> None:
@@ -557,20 +586,21 @@ def test_agent_template_extracts_custom_er_entities_and_relationships(monkeypatc
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "er_diagram_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_er_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
 
     objects = [operation.payload["object"] for operation in result.plan.operations]
-    labels = [obj["geometry"]["content"] for obj in objects if obj["type"] == "text" and "content" in obj["geometry"]]
-    assert {"读者", "图书", "借阅记录", "馆员"}.issubset(labels)
+    source = objects[0]["geometry"]["source"]
+    assert 'entity "读者"' in source
+    assert 'entity "图书"' in source
+    assert 'entity "借阅记录"' in source
+    assert 'entity "馆员"' in source
     assert "读者借阅图书" in result.plan.explanation
     assert "馆员管理图书" in result.plan.explanation
 
-    semantic_tags = [tag for obj in objects for tag in obj["semantic_tags"]]
-    assert "er_diagram.entity.reader" in semantic_tags
-    assert "er_diagram.entity.book" in semantic_tags
-    assert "er_diagram.entity.loan" in semantic_tags
-    assert "er_diagram.entity.librarian" in semantic_tags
+    semantic_tags = objects[0]["semantic_tags"]
+    assert "plantuml.er" in semantic_tags
+    assert "er_diagram" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
 
@@ -585,18 +615,20 @@ def test_agent_template_builds_org_chart(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "org_chart_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
-    assert len(result.plan.operations) == 20
-    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
-    assert object_types.count("rect") == 8
-    assert object_types.count("text") == 9
-    assert object_types.count("line") == 3
-    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
-    assert "org_chart.node" in semantic_tags
-    assert "org_chart.connector" in semantic_tags
-    assert "org_chart.department" in semantic_tags
-    assert "org_chart.role" in semantic_tags
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_org_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "org"
+    assert "@startwbs" in source
+    assert "负责人" in source
+    assert "产品组" in source
+    assert "研发组" in source
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.org" in semantic_tags
+    assert "org_chart" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
 
@@ -615,16 +647,13 @@ def test_agent_template_extracts_custom_org_chart_names(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "org_chart_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
-    objects = [operation.payload["object"] for operation in result.plan.operations]
-    labels = [
-        obj["geometry"]["content"]
-        for obj in objects
-        if obj["type"] == "text"
-        and ("org_chart.lead" in obj["semantic_tags"] or "org_chart.department" in obj["semantic_tags"] or "org_chart.role" in obj["semantic_tags"])
-    ]
-    assert labels == [
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_org_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "org"
+    for label in [
         "负责人",
         "产品经理",
         "设计负责人",
@@ -633,7 +662,8 @@ def test_agent_template_extracts_custom_org_chart_names(monkeypatch) -> None:
         "交互设计师",
         "前端工程师",
         "后端工程师",
-    ]
+    ]:
+        assert label in source
     assert "产品经理" in result.plan.explanation
     assert "后端工程师" in result.plan.explanation
 
@@ -648,19 +678,19 @@ def test_agent_template_builds_gantt_chart(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "gantt_chart_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
-    assert len(result.plan.operations) == 20
-    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
-    assert object_types.count("rect") == 6
-    assert object_types.count("text") == 11
-    assert object_types.count("line") == 2
-    assert object_types.count("circle") == 1
-    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
-    assert "gantt_chart.timeline" in semantic_tags
-    assert "gantt_chart.task_bar" in semantic_tags
-    assert "gantt_chart.milestone" in semantic_tags
-    assert "gantt_chart.legend" in semantic_tags
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_gantt_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "gantt"
+    assert "@startgantt" in source
+    for task_name in ["需求", "设计", "开发", "测试", "上线里程碑"]:
+        assert task_name in source
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.gantt" in semantic_tags
+    assert "gantt_chart" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
 
@@ -675,18 +705,20 @@ def test_agent_template_builds_swimlane_diagram(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "swimlane_diagram_scene"
-    assert result.plan.scene_plan.expected_object_count == 18
-    assert len(result.plan.operations) == 18
-    object_types = [operation.payload["object"]["type"] for operation in result.plan.operations]
-    assert object_types.count("rect") == 7
-    assert object_types.count("text") == 7
-    assert object_types.count("line") == 4
-    semantic_tags = [tag for operation in result.plan.operations for tag in operation.payload["object"]["semantic_tags"]]
-    assert "swimlane_diagram.lane" in semantic_tags
-    assert "swimlane_diagram.lane_label" in semantic_tags
-    assert "swimlane_diagram.step" in semantic_tags
-    assert "swimlane_diagram.connector" in semantic_tags
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_swimlane_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["type"] == "plantuml"
+    assert plantuml_object["geometry"]["diagramType"] == "swimlane"
+    assert "@startuml" in source
+    assert "|销售|" in source
+    assert "|运营|" in source
+    assert "|交付|" in source
+    semantic_tags = plantuml_object["semantic_tags"]
+    assert "plantuml.swimlane" in semantic_tags
+    assert "swimlane_diagram" in semantic_tags
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
 
@@ -701,18 +733,13 @@ def test_agent_template_extracts_custom_swimlane_names(monkeypatch) -> None:
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "swimlane_diagram_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
-    assert len(result.plan.operations) == 20
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_swimlane_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
+    assert len(result.plan.operations) == 1
 
-    objects = [operation.payload["object"] for operation in result.plan.operations]
-    lane_labels = [obj["geometry"]["content"] for obj in objects if "swimlane_diagram.lane_label" in obj["semantic_tags"]]
-    assert lane_labels == ["产品", "设计", "研发", "测试"]
-
-    object_types = [obj["type"] for obj in objects]
-    assert object_types.count("rect") == 8
-    assert object_types.count("text") == 8
-    assert object_types.count("line") == 4
+    source = result.plan.operations[0].payload["object"]["geometry"]["source"]
+    for lane_name in ["产品", "设计", "研发", "测试"]:
+        assert f"|{lane_name}|" in source
 
 
 def test_agent_template_extracts_custom_swimlane_step_names(monkeypatch) -> None:
@@ -725,12 +752,12 @@ def test_agent_template_extracts_custom_swimlane_step_names(monkeypatch) -> None
 
     assert result.plan.planner_source == "agent"
     assert result.plan.scene_plan is not None
-    assert result.plan.scene_plan.steps[0].target["domain"] == "swimlane_diagram_scene"
-    assert result.plan.scene_plan.expected_object_count == 20
+    assert result.plan.scene_plan.steps[0].target["domain"] == "plantuml_swimlane_scene"
+    assert result.plan.scene_plan.expected_object_count == 1
 
-    objects = [operation.payload["object"] for operation in result.plan.operations]
-    step_labels = [obj["geometry"]["content"] for obj in objects if "swimlane_diagram.step_label" in obj["semantic_tags"]]
-    assert step_labels == ["需求评审", "原型设计", "开发联调", "验收发布"]
+    source = result.plan.operations[0].payload["object"]["geometry"]["source"]
+    for step_name in ["需求评审", "原型设计", "开发联调", "验收发布"]:
+        assert step_name in source
     assert "需求评审" in result.plan.explanation
     assert "验收发布" in result.plan.explanation
 

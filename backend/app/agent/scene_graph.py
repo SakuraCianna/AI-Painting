@@ -18,6 +18,7 @@ AgentObjectType = Literal[
     "path",
     "bezier",
     "image",
+    "plantuml",
 ]
 
 

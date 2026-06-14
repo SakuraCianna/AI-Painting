@@ -103,7 +103,7 @@ def classify_render_strategy(text: str) -> RenderStrategy:
     if generative_matches:
         return RenderStrategy("generative_image", "艺术风格和复杂视觉表现更适合生图模型", generative_matches)
     if programmatic_matches:
-        return RenderStrategy("programmatic", "结构精确类图形需要程序渲染和可编辑对象", programmatic_matches)
+        return RenderStrategy("programmatic", "结构精确类图形需要 PlantUML 或程序渲染和可编辑对象", programmatic_matches)
 
     if any(keyword in normalized for keyword in IMAGE_ACTION_KEYWORDS) and any(keyword in normalized for keyword in ("插画", "视觉图", "概念图")):
         return RenderStrategy("generative_image", "开放式视觉素材更适合生图模型", ())

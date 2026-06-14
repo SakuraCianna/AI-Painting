@@ -28,7 +28,7 @@ ALLOWED_OPERATION_TYPES = {
     "undo",
     "redo",
 }
-ALLOWED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier", "image"}
+ALLOWED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier", "image", "plantuml"}
 
 
 class SceneGraphCompileError(ValueError):
@@ -44,7 +44,7 @@ def _to_drawing_object(scene_object: AgentSceneObject, index: int) -> dict[str, 
         raise SceneGraphCompileError(f"不支持的对象类型: {scene_object.type}")
     tags = list(scene_object.semantic_tags)
     shape_tag = _shape_tag(scene_object.type)
-    if shape_tag not in tags and scene_object.type != "image":
+    if shape_tag not in tags and scene_object.type not in {"image", "plantuml"}:
         tags.append(shape_tag)
     return {
         "type": scene_object.type,

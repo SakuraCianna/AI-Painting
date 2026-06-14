@@ -66,6 +66,18 @@ describe("CanvasStage", () => {
       }),
       drawingObject({ id: "image-1", type: "image", geometry: { src: "data:image/png;base64,abc", x: 10, y: 330, width: 120, height: 90 } }),
       drawingObject({
+        id: "plantuml-1",
+        type: "plantuml",
+        geometry: {
+          src: "data:image/svg+xml;base64,PHN2Zy8+",
+          source: "@startuml\nA --> B\n@enduml",
+          x: 150,
+          y: 330,
+          width: 180,
+          height: 120,
+        },
+      }),
+      drawingObject({
         id: "text-1",
         type: "text",
         geometry: { content: "语音标题", x: 520, y: 360, fontSize: "32" },
@@ -82,10 +94,11 @@ describe("CanvasStage", () => {
     expect(container.querySelectorAll("polygon")).toHaveLength(3);
     expect(container.querySelectorAll("line")).toHaveLength(2);
     expect(container.querySelectorAll("path")).toHaveLength(3);
-    expect(container.querySelectorAll("image")).toHaveLength(1);
+    expect(container.querySelectorAll("image")).toHaveLength(2);
     expect(getByText("语音标题")).toHaveAttribute("fill", "#111827");
     expect(container.querySelector("line[marker-end]")).toHaveAttribute("marker-end", "url(#arrow-head)");
     expect(container.querySelector("image")).toHaveAttribute("preserveAspectRatio", "xMidYMid slice");
+    expect(container.querySelector('image[data-object-id="plantuml-1"]')).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
   });
 
   it("orders objects by canvas layer and z index with runtime metadata", () => {

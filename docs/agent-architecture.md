@@ -27,6 +27,7 @@ Render Strategy Router
 ↓
 Drawing Agent Planner
 ├─ Intent / Domain Routing
+├─ PlantUML Diagram Builder
 ├─ SceneGraph v2 生成
 ├─ SceneGraph Repair
 ├─ SceneGraph Validation
@@ -37,7 +38,7 @@ CommandPlan
 ↓
 drawing_engine
 ↓
-SVG 画布 / 图片对象 / 导出 / TTS 反馈
+SVG 画布 / PlantUML 图层 / 图片对象 / 导出 / TTS 反馈
 ```
 
 ## 3. 为什么不是直接让模型输出底层操作
@@ -61,10 +62,12 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/validator.py`: SceneGraph repair 与约束校验
 - `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 classify、build、repair、validate、repair_with_model、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
+- `backend/app/agent/plantuml_builder.py`: PlantUML 专业图表模板, 当前覆盖 ER 图、系统架构图、流程图、时序图、UML 类图、组织结构图、甘特图和泳道图
+- `backend/app/plantuml_renderer.py`: PlantUML 渲染适配器, 支持本地 jar、显式配置的 PlantUML Server 和安全 SVG 源码预览兜底
 - `backend/app/agent/edit_planner.py`: 语义编辑计划器, 将“把沙发改成绿色并向右移动一点”“把屋顶下面的门改成绿色”“把靠近门的那棵树改成黄色”“把卡片里和标题同一行的按钮改成绿色”拆成 `set_style_many`、`move_many` 等受控操作
 - `backend/app/repositories.py`: 对象查询 DSL 执行层, 支持排序选择、相对位置、靠近关系、遮挡关系、包含关系、同一行/同一列、层级前后、关系链组合、颜色温度、小物件筛选和组级扩展
 - `backend/app/agent/model_client.py`: MiMo SceneGraph 生成与模型修复客户端
-- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地模板、语义编辑模板、流程图模板、系统架构图模板、自定义实体和关系的 ER 图模板、自定义泳道和节点的泳道图模板、信息图模板、海报模板、UI 草图模板、自定义角色组织结构图模板、甘特图模板和 Graph 调度
+- `backend/app/agent/planner.py`: Drawing Agent Planner, 负责启用条件、本地场景模板、PlantUML 专业图表路由、语义编辑模板、信息图模板、海报模板、UI 草图模板和 Graph 调度
 - `backend/app/render_strategy.py`: 渲染策略分类器, 区分程序生成、生图模型和图生图精修
 - `backend/app/image_generation.py`: 图片生成和图生图精修 Provider 适配层, 会把 `source_prompt`、`target_subject`、`target_region` 和 `adjustment` 写入精修结果元数据
 - `backend/app/image_evaluation.py`: 图片 Provider 评测汇总和 readiness gate, 记录文生图/图生图成功率、延迟、Provider 分布和尺寸分布
@@ -90,7 +93,7 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 后续会继续扩展:
 
 1. 更细粒度的领域路由
-2. Mermaid / PlantUML 结构图执行器
+2. 继续扩展 Mermaid / PlantUML 结构图执行器的参数化编辑能力
 3. 海报、信息图和 UI 草图工具执行器
 4. `ask_confirmation` 条件分支
 5. `execute_tools` 工具路由
@@ -98,8 +101,9 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 6. 输出速度策略
 
 - 简单命令继续走规则解析, 不调用模型
-- 结构精确类图形优先走程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图, 其中“把右边那个人的眼睛调亮”这类图片内主体追改会作为图生图目标元数据处理
-- 已知复杂模板先用本地 Agent 模板, 例如客厅场景、语音绘图流程图、系统架构图、用户订单 ER 图、图书馆借阅自定义 ER 图、自定义泳道和节点的泳道图、销售增长信息图、新品发布海报、产品 UI 草图、自定义角色的产品团队组织结构图和项目排期甘特图
+- 结构精确类图形优先走 PlantUML 或程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图, 其中“把右边那个人的眼睛调亮”这类图片内主体追改会作为图生图目标元数据处理
+- 已知复杂模板先用本地 Agent 模板, 例如客厅场景、PlantUML 语音绘图流程图、PlantUML 系统架构图、PlantUML 用户订单 ER 图、PlantUML 图书馆借阅自定义 ER 图、PlantUML 自定义泳道图、PlantUML 产品团队组织结构图、PlantUML 项目排期甘特图、销售增长信息图、新品发布海报和产品 UI 草图
+- PlantUML 图表优先本地 jar 渲染, 其次使用显式配置的 PlantUML Server, 都未配置时生成安全 SVG 源码预览, 避免阻断主流程
 - 已知语义编辑先用本地 Agent 编辑计划, 例如改沙发颜色并移动、改流程图节点颜色并加粗箭头、编辑屋顶下面的门、靠近门的树、挡住标题的图片、卡片里的文字、卡片里和标题同一行的按钮或暖色小物件
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo
 - 模型输出校验失败时, Graph 会先尝试一次模型修复, 再进入编译
@@ -120,8 +124,8 @@ SVG 画布 / 图片对象 / 导出 / TTS 反馈
 ## 8. 下一阶段
 
 - 用真实 ASR transcript 和图片 Provider 样本持续回归 100 条复杂语音评测集, 不再只看规则文本样本
-- 扩展领域工具: 室内、人物、泳道图、看板图、UML、Mermaid / PlantUML 和海报版式
-- 将当前本地流程图模板升级为 Mermaid / PlantUML 结构图执行器
+- 扩展领域工具: 室内、人物、看板图、Mermaid / PlantUML 和海报版式
+- 扩展 PlantUML 支持范围到更多可参数化 UML 关系和语音源码级编辑
 - 强化模型驱动的 SceneGraph repair 节点, 让模型修复只在 schema 校验失败时触发
 - 完善编组编辑, 例如取消编组、组内排序、组级局部重绘和命名历史
 - 扩展更细的语义关系选择, 例如组内相邻对象、最近对象、路径附近对象和跨领域关系模板

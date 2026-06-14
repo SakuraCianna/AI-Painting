@@ -1,13 +1,15 @@
 export type DrawingGeometryValue =
   | number
   | string
+  | boolean
+  | null
   | Array<Record<string, number | string>>
   | Record<string, number | string>
   | undefined;
 
 export interface DrawingObject {
   id: string;
-  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text" | "polygon" | "path" | "bezier" | "image";
+  type: "rect" | "circle" | "ellipse" | "triangle" | "line" | "arrow" | "star" | "text" | "polygon" | "path" | "bezier" | "image" | "plantuml";
   name?: string | null;
   layer_id: string;
   group_id?: string | null;

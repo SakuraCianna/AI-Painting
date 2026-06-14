@@ -83,6 +83,16 @@ function pathData(value: unknown, fallback: string): string {
     .join(" ");
 }
 
+function plantUmlHref(object: DrawingObject): string {
+  if (typeof object.geometry.src === "string" && object.geometry.src.trim() !== "") {
+    return object.geometry.src;
+  }
+  if (typeof object.geometry.svg === "string" && object.geometry.svg.trim() !== "") {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(object.geometry.svg)}`;
+  }
+  return "";
+}
+
 function renderObject(object: DrawingObject) {
   const fill = object.style.fill ?? "transparent";
   const stroke = object.style.stroke ?? "#111827";
@@ -212,6 +222,22 @@ function renderObject(object: DrawingObject) {
         height={numeric(object.geometry.height, 512)}
         opacity={opacity}
         preserveAspectRatio={String(object.geometry.preserveAspectRatio ?? "xMidYMid slice")}
+        {...objectAttrs}
+      />
+    );
+  }
+
+  if (object.type === "plantuml") {
+    return (
+      <image
+        key={object.id}
+        href={plantUmlHref(object)}
+        x={numeric(object.geometry.x, 48)}
+        y={numeric(object.geometry.y, 48)}
+        width={numeric(object.geometry.width, 928)}
+        height={numeric(object.geometry.height, 672)}
+        opacity={opacity}
+        preserveAspectRatio={String(object.geometry.preserveAspectRatio ?? "xMidYMid meet")}
         {...objectAttrs}
       />
     );

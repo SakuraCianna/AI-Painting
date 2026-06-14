@@ -45,9 +45,10 @@ AI Painting follows one central constraint:
 
 > Users must create, edit, confirm, undo, redo, and export drawings through voice commands only.
 
-The product design is therefore **vector-first, generative-enhanced**:
+The product design is therefore **diagram-DSL first, vector-first, generative-enhanced**:
 
-- For precision-oriented outputs, such as flowcharts, swimlane diagrams, Gantt charts, org charts, houses, and simple scenes, AI Painting uses programmatic SVG rendering so text remains readable, relations stay stable, and objects remain editable.
+- For professional diagrams, such as ER diagrams, system architecture diagrams, flowcharts, sequence diagrams, UML class diagrams, org charts, Gantt charts, and swimlane diagrams, AI Painting generates PlantUML source and renders it as an SVG layer while keeping the source for future voice edits.
+- For vector scenes, such as houses, trees, sun, grass, and simple outdoor compositions, AI Painting uses programmatic SVG rendering so objects remain editable.
 - For art-oriented outputs, such as ink painting, anime characters, realistic illustration, sci-fi scenes, and commercial visuals, it can call GPT-image-2 or another OpenAI-compatible image provider.
 - For follow-up edits such as "refine my image", "make the right person's eyes brighter", or "make it brighter again", it uses image-to-image refinement with the source image, source prompt, target subject, target region, and adjustment metadata.
 
@@ -55,6 +56,7 @@ The product design is therefore **vector-first, generative-enhanced**:
 
 - **Voice-first creation**: recording and voice feedback are the primary controls. A mouse-based drawing toolbar is intentionally absent.
 - **Structured planning**: every command becomes a `CommandPlan` or `SceneGraph v2` before it mutates the canvas.
+- **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs.
 - **Editable objects**: SVG objects carry geometry, styles, semantic tags, grouping, and layer metadata.
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.
@@ -75,7 +77,8 @@ The product design is therefore **vector-first, generative-enhanced**:
 | Advanced selection | Supported | "Change the door below the roof to green" |
 | Grouped undo | Supported | Undo one full voice plan at a time |
 | Clear confirmation | Supported | "Clear canvas" -> "Confirm clear" |
-| Agent templates | First version supported | Living room, flowchart, system architecture diagram, custom ER diagram, custom swimlane diagram, infographic, poster, UI wireframe, custom org chart, Gantt chart |
+| Agent templates | First version supported | Living room, PlantUML professional diagrams, infographic, poster, UI wireframe, open outdoor scenes |
+| PlantUML diagrams | First version supported | ER diagrams, system architecture diagrams, flowcharts, sequence diagrams, UML class diagrams, org charts, Gantt charts, swimlane diagrams |
 | Text-to-image | Provider pipeline supported | "Generate an anime character" |
 | Image-to-image | Provider pipeline supported | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点" |
 | Voice export | Supported | "Export PNG", "导出 SVG", "导出项目 JSON" |
@@ -91,6 +94,8 @@ Draw a cozy cabin with two trees on the left, a curved road on the right, and th
 Draw a voice drawing flowchart from user voice to ASR, then to the planner, then to canvas execution
 画一个AI绘图系统架构图, 包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务
 画一个用户订单ER图, 包含用户、订单、商品和支付
+画一个语音绘图调用时序图
+画一个绘图 Agent UML 类图
 画一个图书馆借阅ER图, 实体包括读者、图书、借阅记录、馆员, 关系包括读者借阅图书、馆员管理图书
 画一个产品团队组织结构图, 包括负责人、产品经理、设计负责人、研发负责人、用户研究员、交互设计师、前端工程师、后端工程师
 画一个泳道图, 包含销售、运营和交付
@@ -139,7 +144,7 @@ flowchart TD
 
 | Intent | Default Path | Why |
 | --- | --- | --- |
-| Flowcharts, swimlane diagrams, system architecture diagrams, UML, ER diagrams, Gantt charts, org charts | Programmatic rendering | Text must stay readable, relation lines must stay stable, and objects must remain editable |
+| ER diagrams, system architecture diagrams, flowcharts, sequence diagrams, UML class diagrams, swimlane diagrams, Gantt charts, org charts | PlantUML -> SVG layer | Text must stay readable, relation lines must stay stable, and the source must remain editable |
 | Houses, trees, sun, grass, simple scene compositions | Programmatic rendering | The object structure is explicit and works well with SVG semantic tags |
 | Ink painting, anime, realistic illustration, sci-fi scenes | Image generation | Visual style, consistency, and detail matter more than object-level editing |
 | Refinement, enrichment, style transfer, local repainting | Image-to-image | Existing composition should be preserved while specific areas are improved |
@@ -165,7 +170,7 @@ flowchart TD
 | Layer | Stack |
 | --- | --- |
 | Backend | Python 3.12.10, FastAPI, SQLite, pytest, pytest-cov |
-| Agent | LangGraph, SceneGraph v2, Pydantic schema validation |
+| Agent | LangGraph, SceneGraph v2, PlantUML, Pydantic schema validation |
 | Frontend | React 19, TypeScript, Vite, Web Audio API, Web Speech API, Iconify |
 | AI Providers | Xiaomi MiMo ASR, Xiaomi MiMo-v2.5-Pro, Xiaomi MiMo TTS, Qwen3-ASR local fallback, OpenAI-compatible image APIs |
 | Quality | GitHub Actions, pytest-cov, Vitest coverage, Ruff, mypy, pre-commit, Docker Compose validation |
@@ -255,8 +260,16 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 | `AI_PAINTING_IMAGE_EDIT_MODEL` | Image edit model | `gpt-image-2` |
 | `AI_PAINTING_OPENAI_API_KEY` | Official OpenAI fallback API key | empty |
 | `AI_PAINTING_OPENAI_BASE_URL` | Official OpenAI fallback base URL | `https://api.openai.com/v1` |
+| `AI_PAINTING_PLANTUML_JAR` | Local PlantUML jar path, preferred when configured | empty |
+| `AI_PAINTING_PLANTUML_SERVER_URL` | PlantUML Server URL, empty means no external upload | empty |
+| `AI_PAINTING_PLANTUML_SECURITY_PROFILE` | PlantUML security profile | `SANDBOX` |
+| `AI_PAINTING_PLANTUML_TIMEOUT_SECONDS` | PlantUML render timeout in seconds | `8` |
+| `AI_PAINTING_PLANTUML_MAX_SOURCE_CHARS` | Maximum PlantUML source length | `12000` |
+| `AI_PAINTING_JAVA_BIN` | Java command path | `java` |
 
 The OpenAI-compatible generation and edit request size is decided at runtime: blank-canvas generation uses the current canvas size, while image refinement keeps the source image dimensions. Fixed proxy size variables are no longer recommended.
+
+PlantUML rendering first tries `AI_PAINTING_PLANTUML_JAR`, then an explicitly configured `AI_PAINTING_PLANTUML_SERVER_URL`. If neither is configured, the backend creates a safe SVG source preview layer instead of failing the voice command.
 
 Never put real secrets in README, issues, pull requests, commit messages, or logs.
 
