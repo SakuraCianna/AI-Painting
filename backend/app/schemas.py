@@ -134,6 +134,8 @@ class CommandExecutionMetrics(BaseModel):
     agent_attempted: bool = False
     agent_succeeded: bool = False
     fallback_used: bool = False
+    fallback_reason: str | None = None
+    fallback_error_type: str | None = None
     planner_source: str | None = None
 
 
@@ -155,6 +157,7 @@ class LatencyMetricsSummary(BaseModel):
     needs_confirmation_count: int = 0
     canceled_count: int = 0
     planner_sources: dict[str, int] = Field(default_factory=dict)
+    fallback_reasons: dict[str, int] = Field(default_factory=dict)
     metrics: dict[str, LatencyMetricStats] = Field(default_factory=dict)
     latest_created_at: str | None = None
 

@@ -116,6 +116,8 @@ export interface CommandExecutionMetrics {
   agent_attempted: boolean;
   agent_succeeded: boolean;
   fallback_used: boolean;
+  fallback_reason?: string | null;
+  fallback_error_type?: string | null;
   planner_source?: string | null;
 }
 

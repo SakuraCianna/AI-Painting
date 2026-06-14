@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -49,6 +50,8 @@ from .tts import TtsProviderError, synthesize_with_xiaomi
 
 
 load_env_file()
+
+logger = logging.getLogger(__name__)
 
 
 def _read_csv_env(name: str, default: str) -> list[str]:
@@ -326,6 +329,8 @@ def _build_rules_fallback_command(
     *,
     started_at: float,
     agent_started_at: float,
+    fallback_reason: str,
+    exc: Exception,
 ) -> PlannedCommand:
     agent_finished_at = perf_counter()
     plan = _with_plan_metadata(rule_plan, "rules_fallback")
@@ -333,7 +338,17 @@ def _build_rules_fallback_command(
     metrics.llm_planner_ms = metrics.agent_planner_ms
     metrics.planner_total_ms = round((agent_finished_at - started_at) * 1000, 2)
     metrics.fallback_used = True
+    metrics.fallback_reason = fallback_reason
+    metrics.fallback_error_type = type(exc).__name__
     metrics.planner_source = plan.planner_source
+    logger.warning(
+        "Drawing Agent fallback to rules",
+        extra={
+            "fallback_reason": fallback_reason,
+            "fallback_error_type": metrics.fallback_error_type,
+            "planner_source": plan.planner_source,
+        },
+    )
     return PlannedCommand(plan, metrics)
 
 
@@ -342,12 +357,23 @@ def _build_rules_routing_fallback_command(
     metrics: CommandExecutionMetrics,
     *,
     started_at: float,
+    exc: Exception,
 ) -> PlannedCommand:
     finished_at = perf_counter()
     plan = _with_plan_metadata(rule_plan, "rules_fallback")
     metrics.planner_total_ms = round((finished_at - started_at) * 1000, 2)
     metrics.fallback_used = True
+    metrics.fallback_reason = "agent_routing_error"
+    metrics.fallback_error_type = type(exc).__name__
     metrics.planner_source = plan.planner_source
+    logger.warning(
+        "Drawing Agent routing fallback to rules",
+        extra={
+            "fallback_reason": metrics.fallback_reason,
+            "fallback_error_type": metrics.fallback_error_type,
+            "planner_source": plan.planner_source,
+        },
+    )
     return PlannedCommand(plan, metrics)
 
 
@@ -362,8 +388,8 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
     )
     try:
         use_agent = should_use_drawing_agent(text, rule_plan)
-    except Exception:
-        return _build_rules_routing_fallback_command(rule_plan, metrics, started_at=started_at)
+    except Exception as exc:
+        return _build_rules_routing_fallback_command(rule_plan, metrics, started_at=started_at, exc=exc)
     if not use_agent:
         metrics.planner_total_ms = round((rule_finished_at - started_at) * 1000, 2)
         return PlannedCommand(rule_plan, metrics)
@@ -381,10 +407,24 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
         metrics.agent_succeeded = True
         metrics.planner_source = plan.planner_source
         return PlannedCommand(plan, metrics)
-    except DrawingAgentError:
-        return _build_rules_fallback_command(rule_plan, metrics, started_at=started_at, agent_started_at=agent_started_at)
-    except Exception:
-        return _build_rules_fallback_command(rule_plan, metrics, started_at=started_at, agent_started_at=agent_started_at)
+    except DrawingAgentError as exc:
+        return _build_rules_fallback_command(
+            rule_plan,
+            metrics,
+            started_at=started_at,
+            agent_started_at=agent_started_at,
+            fallback_reason="agent_planner_error",
+            exc=exc,
+        )
+    except Exception as exc:
+        return _build_rules_fallback_command(
+            rule_plan,
+            metrics,
+            started_at=started_at,
+            agent_started_at=agent_started_at,
+            fallback_reason="agent_unexpected_error",
+            exc=exc,
+        )
 
 
 def _is_confirmation_text(text: str) -> bool:

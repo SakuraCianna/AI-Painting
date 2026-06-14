@@ -55,6 +55,12 @@ const PLANNER_SOURCE_LABELS: Record<string, string> = {
   rules_fallback: "规则兜底"
 };
 
+const FALLBACK_REASON_LABELS: Record<string, string> = {
+  agent_routing_error: "Agent 路由异常",
+  agent_planner_error: "Agent 规划异常",
+  agent_unexpected_error: "Agent 未知异常"
+};
+
 type ExportFormat = "png" | "svg" | "json";
 
 function getOperationLabel(operationType: string): string {
@@ -66,6 +72,24 @@ function getPlannerSourceLabel(source: string | undefined): string {
     return "本地解析";
   }
   return PLANNER_SOURCE_LABELS[source] ?? source;
+}
+
+function getFallbackReasonLabel(metrics: CommandExecutionMetrics): string {
+  const reason = metrics.fallback_reason ? (FALLBACK_REASON_LABELS[metrics.fallback_reason] ?? metrics.fallback_reason) : "Agent 规划失败";
+  return metrics.fallback_error_type ? `${reason}: ${metrics.fallback_error_type}` : reason;
+}
+
+function getPlannerHealthNote(metrics: CommandExecutionMetrics | null): string {
+  if (!metrics) {
+    return "等待一次完整语音指令";
+  }
+  if (metrics.fallback_used) {
+    return `${getFallbackReasonLabel(metrics)}，已使用规则兜底`;
+  }
+  if (metrics.agent_succeeded || metrics.llm_succeeded) {
+    return "Drawing Agent 已命中";
+  }
+  return "规则解析已命中";
 }
 
 function getPlanSummary(plan: CommandPlan | null): string {
@@ -400,15 +424,7 @@ function WorkspaceApp() {
               <strong>{formatLatency(endToEndLatency)}</strong>
             </span>
           </div>
-          <p className="metrics-note">
-            {latestCommandMetrics?.fallback_used
-              ? "Drawing Agent 规划失败，已使用规则兜底"
-              : latestCommandMetrics?.agent_succeeded || latestCommandMetrics?.llm_succeeded
-                ? "Drawing Agent 已命中"
-                : latestCommandMetrics
-                  ? "规则解析已命中"
-                  : "等待一次完整语音指令"}
-          </p>
+          <p className="metrics-note">{getPlannerHealthNote(latestCommandMetrics)}</p>
         </div>
 
         <div className="timeline">
