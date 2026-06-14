@@ -10,6 +10,8 @@
 
 [简体中文](README.md) | [English](README_EN.md)
 
+[Demo 视频: AI Painting B 站实机演示](https://www.bilibili.com/video/BV1JBJP6aEET/?share_source=copy_web&vd_source=a97374934ef1913b58445a9122b1bd98)
+
 AI Painting 是一个只能通过语音完成创作的绘图工作台。它把用户语音转成可验证、可撤销、可继续编辑的绘图计划, 再由程序化渲染或图像模型完成画面生成。
 
 项目目标不是普通文生图 Demo, 而是一套可长期扩展的绘图 Agent:

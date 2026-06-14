@@ -11,6 +11,8 @@
 
 [简体中文](README.md) | [English](README_EN.md)
 
+[Demo video on Bilibili: AI Painting walkthrough](https://www.bilibili.com/video/BV1JBJP6aEET/?share_source=copy_web&vd_source=a97374934ef1913b58445a9122b1bd98)
+
 ---
 
 AI Painting is a **voice-only drawing workspace**. It does not expose mouse dragging, keyboard shortcuts, or manual shape tools as the drawing interface. Instead, it turns voice commands into validated, undoable, and continuously editable drawing plans.
