@@ -1,11 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Artwork, AsrTranscriptionMetrics, CommandExecutionResponse, CommandPlan, LatencyMetricsSummary } from "./types";
+import type { Artwork, AsrTranscriptionMetrics, CommandExecutionResponse, CommandPlan } from "./types";
 
 const apiMocks = vi.hoisted(() => ({
   createArtwork: vi.fn(),
-  fetchLatencyMetrics: vi.fn(),
   submitVoiceCommand: vi.fn(),
   synthesizeSpeech: vi.fn(),
 }));
@@ -99,23 +98,6 @@ function makeMetrics() {
   };
 }
 
-function makeLatencySummary(): LatencyMetricsSummary {
-  return {
-    artwork_id: "artwork-1",
-    limit: 50,
-    sample_count: 2,
-    success_count: 2,
-    failed_count: 0,
-    needs_confirmation_count: 0,
-    canceled_count: 0,
-    planner_sources: { rules: 2 },
-    metrics: {
-      total_ms: { count: 2, average_ms: 10, p50_ms: 8, p75_ms: 12, p95_ms: 20, max_ms: 20 },
-    },
-    latest_created_at: "2026-06-13T00:00:00Z",
-  };
-}
-
 describe("App", () => {
   let audioPlay: ReturnType<typeof vi.fn>;
   let randomId = 0;
@@ -136,7 +118,6 @@ describe("App", () => {
       lastAsrMetrics: null,
     };
     apiMocks.createArtwork.mockResolvedValue(makeArtwork());
-    apiMocks.fetchLatencyMetrics.mockResolvedValue(makeLatencySummary());
     apiMocks.submitVoiceCommand.mockReset();
     apiMocks.synthesizeSpeech.mockResolvedValue({ audio_data_url: "data:audio/wav;base64,AAAA" });
     exportMocks.exportArtworkJson.mockReset();
@@ -174,7 +155,6 @@ describe("App", () => {
 
     expect(voiceRuntime.start).toHaveBeenCalledTimes(1);
     expect(apiMocks.createArtwork).toHaveBeenCalledTimes(1);
-    expect(apiMocks.fetchLatencyMetrics).not.toHaveBeenCalled();
   });
 
   it("shows only the four current latency metrics in the console", async () => {
@@ -230,7 +210,6 @@ describe("App", () => {
     expect(screen.getByText("1 个对象")).toBeInTheDocument();
     expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
     expect(audioPlay).toHaveBeenCalledTimes(1);
-    expect(apiMocks.fetchLatencyMetrics).not.toHaveBeenCalled();
   });
 
   it("completes a voice-only acceptance workflow without toolbar export clicks", async () => {

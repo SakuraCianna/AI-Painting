@@ -3,7 +3,6 @@ import type {
   AsrProvidersResponse,
   AsrTranscriptionResponse,
   CommandExecutionResponse,
-  LatencyMetricsSummary,
   TtsSynthesisResponse
 } from "./types";
 
@@ -71,11 +70,6 @@ export function synthesizeSpeech(text: string): Promise<TtsSynthesisResponse> {
     method: "POST",
     body: JSON.stringify({ text })
   });
-}
-
-export function fetchLatencyMetrics(artworkId?: string): Promise<LatencyMetricsSummary> {
-  const query = artworkId ? `?artwork_id=${encodeURIComponent(artworkId)}` : "";
-  return requestJson<LatencyMetricsSummary>(`/api/metrics/latency${query}`);
 }
 
 export function undoArtwork(artworkId: string): Promise<{ message: string; artwork: Artwork }> {

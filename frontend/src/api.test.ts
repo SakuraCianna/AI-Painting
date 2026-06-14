@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createArtwork,
   fetchArtwork,
-  fetchLatencyMetrics,
   redoArtwork,
   submitVoiceCommand,
   synthesizeSpeech,
@@ -73,7 +72,6 @@ describe("api", () => {
     await fetchArtwork("artwork-1");
     await transcribeAudio("data:audio/wav;base64,abc", "zh");
     await synthesizeSpeech("已完成");
-    await fetchLatencyMetrics("artwork-1");
     await undoArtwork("artwork-1");
     await redoArtwork("artwork-1");
 
@@ -81,7 +79,6 @@ describe("api", () => {
       "http://127.0.0.1:8084/api/artworks/artwork-1",
       "http://127.0.0.1:8084/api/asr/transcribe",
       "http://127.0.0.1:8084/api/tts/synthesize",
-      "http://127.0.0.1:8084/api/metrics/latency?artwork_id=artwork-1",
       "http://127.0.0.1:8084/api/artworks/artwork-1/undo",
       "http://127.0.0.1:8084/api/artworks/artwork-1/redo",
     ]);
