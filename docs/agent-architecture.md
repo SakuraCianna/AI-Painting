@@ -63,6 +63,8 @@ SVG 画布 / PlantUML 图层 / 图片对象 / 导出 / TTS 反馈
 - `backend/app/agent/graph.py`: LangGraph 节点编排, 包含 classify、build、repair、validate、repair_with_model、compile
 - `backend/app/agent/compiler.py`: SceneGraph 到 `CommandPlan` 的编译器
 - `backend/app/agent/plantuml_builder.py`: PlantUML 专业图表模板, 当前覆盖 ER 图、系统架构图、流程图、时序图、UML 类图、组织结构图、甘特图和泳道图
+- `backend/app/agent/plantuml_edit_planner.py`: PlantUML 源码级语音编辑计划器, 当前支持节点改名、追加甘特任务、追加泳道和新增 ER 关系
+- `backend/app/plantuml_editor.py`: PlantUML 源码编辑执行器, 修改源码后重新渲染 SVG data URL 并保留撤销恢复快照
 - `backend/app/plantuml_renderer.py`: PlantUML 渲染适配器, 支持本地 jar、显式配置的 PlantUML Server 和安全 SVG 源码预览兜底
 - `backend/app/agent/edit_planner.py`: 语义编辑计划器, 将“把沙发改成绿色并向右移动一点”“把屋顶下面的门改成绿色”“把靠近门的那棵树改成黄色”“把卡片里和标题同一行的按钮改成绿色”拆成 `set_style_many`、`move_many` 等受控操作
 - `backend/app/repositories.py`: 对象查询 DSL 执行层, 支持排序选择、相对位置、靠近关系、遮挡关系、包含关系、同一行/同一列、层级前后、关系链组合、颜色温度、小物件筛选和组级扩展
@@ -103,6 +105,7 @@ SVG 画布 / PlantUML 图层 / 图片对象 / 导出 / TTS 反馈
 - 简单命令继续走规则解析, 不调用模型
 - 结构精确类图形优先走 PlantUML 或程序生成, 艺术表现类图形优先走生图模型, 精修类指令优先走图生图, 其中“把右边那个人的眼睛调亮”这类图片内主体追改会作为图生图目标元数据处理
 - 已知复杂模板先用本地 Agent 模板, 例如客厅场景、PlantUML 语音绘图流程图、PlantUML 系统架构图、PlantUML 用户订单 ER 图、PlantUML 图书馆借阅自定义 ER 图、PlantUML 自定义泳道图、PlantUML 产品团队组织结构图、PlantUML 项目排期甘特图、销售增长信息图、新品发布海报和产品 UI 草图
+- 已知 PlantUML 编辑先用本地源码编辑计划, 例如把流程图节点改名、给甘特图追加任务、给泳道图追加泳道、给 ER 图新增关系
 - PlantUML 图表优先本地 jar 渲染, 其次使用显式配置的 PlantUML Server, 都未配置时生成安全 SVG 源码预览, 避免阻断主流程
 - 已知语义编辑先用本地 Agent 编辑计划, 例如改沙发颜色并移动、改流程图节点颜色并加粗箭头、编辑屋顶下面的门、靠近门的树、挡住标题的图片、卡片里的文字、卡片里和标题同一行的按钮或暖色小物件
 - 只有规则无法稳定拆解且启用 Agent 时才调用 MiMo
@@ -123,9 +126,9 @@ SVG 画布 / PlantUML 图层 / 图片对象 / 导出 / TTS 反馈
 
 ## 8. 下一阶段
 
-- 用真实 ASR transcript 和图片 Provider 样本持续回归 100 条复杂语音评测集, 不再只看规则文本样本
+- 用真实 ASR transcript 和图片 Provider 样本持续回归 104 条复杂语音评测集, 不再只看规则文本样本
 - 扩展领域工具: 室内、人物、看板图、Mermaid / PlantUML 和海报版式
-- 扩展 PlantUML 支持范围到更多可参数化 UML 关系和语音源码级编辑
+- 扩展 PlantUML 支持范围到更多可参数化 UML 关系、删除/移动节点和更细的关系基数编辑
 - 强化模型驱动的 SceneGraph repair 节点, 让模型修复只在 schema 校验失败时触发
 - 完善编组编辑, 例如取消编组、组内排序、组级局部重绘和命名历史
 - 扩展更细的语义关系选择, 例如组内相邻对象、最近对象、路径附近对象和跨领域关系模板

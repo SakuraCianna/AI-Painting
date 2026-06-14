@@ -37,6 +37,7 @@ const OPERATION_LABELS: Record<string, string> = {
   scale_many: "批量缩放",
   replace_shape: "替换形状",
   replace_shape_many: "批量替换形状",
+  edit_plantuml: "修改图表源码",
   generate_image_asset: "生成图片",
   polish_image_asset: "精修图片",
   delete_object: "删除对象",

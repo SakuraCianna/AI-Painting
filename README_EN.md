@@ -57,6 +57,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 - **Voice-first creation**: recording and voice feedback are the primary controls. A mouse-based drawing toolbar is intentionally absent.
 - **Structured planning**: every command becomes a `CommandPlan` or `SceneGraph v2` before it mutates the canvas.
 - **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs.
+- **PlantUML source editing**: voice commands can rename diagram nodes, append Gantt tasks, append swimlanes, and add ER relationships.
 - **Editable objects**: SVG objects carry geometry, styles, semantic tags, grouping, and layer metadata.
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.
@@ -79,6 +80,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 | Clear confirmation | Supported | "Clear canvas" -> "Confirm clear" |
 | Agent templates | First version supported | Living room, PlantUML professional diagrams, infographic, poster, UI wireframe, open outdoor scenes |
 | PlantUML diagrams | First version supported | ER diagrams, system architecture diagrams, flowcharts, sequence diagrams, UML class diagrams, org charts, Gantt charts, swimlane diagrams |
+| PlantUML edits | First version supported | Rename a flowchart node, add a Gantt task, add a swimlane, add an ER relationship |
 | Text-to-image | Provider pipeline supported | "Generate an anime character" |
 | Image-to-image | Provider pipeline supported | "把右边那个人的眼睛调亮", then "继续把他的头发柔和一点" |
 | Voice export | Supported | "Export PNG", "导出 SVG", "导出项目 JSON" |
@@ -101,6 +103,10 @@ Draw a voice drawing flowchart from user voice to ASR, then to the planner, then
 画一个泳道图, 包含销售、运营和交付
 画一个泳道图, 泳道包括产品、设计、研发、测试
 画一个泳道图, 泳道包括产品、设计、研发、测试, 节点包括需求评审、原型设计、开发联调、验收发布
+把流程图里的ASR识别节点改成语音识别
+给甘特图增加评审任务
+给泳道图增加法务泳道
+给ER图增加用户收藏商品关系
 Draw a product iteration Gantt chart with requirements, design, development, testing, and launch milestones
 Change the second tree on the left to yellow
 Change the button inside the card and on the same row as the title to green

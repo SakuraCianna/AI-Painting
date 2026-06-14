@@ -5,6 +5,7 @@ import math
 import sqlite3
 from typing import Any
 
+from .plantuml_editor import edit_plantuml_geometry
 from .repositories import (
     add_object,
     clear_redo_stack,
@@ -38,6 +39,7 @@ SUPPORTED_OPERATION_TYPES = {
     "scale_many",
     "replace_shape",
     "replace_shape_many",
+    "edit_plantuml",
     "delete_object",
     "clear_canvas",
     "save_artwork",
@@ -147,6 +149,20 @@ def _target_object_id(connection: sqlite3.Connection, artwork_id: str, target: d
 def _target_object(connection: sqlite3.Connection, artwork_id: str, target: dict[str, Any] | None):
     object_id = _target_object_id(connection, artwork_id, target)
     return next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
+
+
+def _target_plantuml_object(connection: sqlite3.Connection, artwork_id: str, target: dict[str, Any] | None):
+    if target and target.get("object_id"):
+        current = _target_object(connection, artwork_id, target)
+    else:
+        selector = target or {"selector": "latest", "type": "plantuml"}
+        targets = [obj for obj in find_objects(connection, artwork_id, selector) if obj.type == "plantuml"]
+        if not targets:
+            raise KeyError("No matching PlantUML drawing object exists")
+        current = targets[-1]
+    if current.type != "plantuml":
+        raise ValueError("Target object is not a PlantUML diagram")
+    return current
 
 
 def _move_geometry(geometry: dict[str, Any], dx: int, dy: int) -> dict[str, Any]:
@@ -464,6 +480,13 @@ def apply_operation(
         for obj in targets:
             _replace_object_shape(connection, artwork_id, obj.id, new_type, commit=commit)
         message = f"已替换 {len(targets)} 个对象形状"
+    elif operation_type == "edit_plantuml":
+        current = _target_plantuml_object(connection, artwork_id, payload.get("target"))
+        next_geometry = edit_plantuml_geometry(current.geometry, payload)
+        inverse_payload = {"target": {"object_id": current.id}, "geometry": current.geometry}
+        payload["target"] = {"object_id": current.id}
+        update_object(connection, artwork_id, current.id, geometry=next_geometry, replace_geometry=True, commit=commit)
+        message = "已更新 PlantUML 图表"
     elif operation_type == "delete_object":
         object_id = _target_object_id(connection, artwork_id, payload.get("target"))
         removed = delete_object(connection, artwork_id, object_id, commit=commit)
@@ -606,6 +629,15 @@ def _undo_operation_row(connection: sqlite3.Connection, artwork_id: str, row: sq
     elif operation_type == "replace_shape_many":
         for item in inverse_payload["items"]:
             update_object(connection, artwork_id, item["object_id"], object_type=item["shape"], geometry=item["geometry"], replace_geometry=True, commit=commit)
+    elif operation_type == "edit_plantuml":
+        update_object(
+            connection,
+            artwork_id,
+            inverse_payload["target"]["object_id"],
+            geometry=inverse_payload["geometry"],
+            replace_geometry=True,
+            commit=commit,
+        )
     elif operation_type == "delete_object":
         add_object(connection, artwork_id, inverse_payload["object"], commit=commit)
     elif operation_type == "clear_canvas":

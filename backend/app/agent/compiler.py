@@ -19,6 +19,7 @@ ALLOWED_OPERATION_TYPES = {
     "scale_many",
     "replace_shape",
     "replace_shape_many",
+    "edit_plantuml",
     "generate_image_asset",
     "polish_image_asset",
     "delete_object",

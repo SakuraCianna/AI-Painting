@@ -346,6 +346,30 @@
     "expected_object_types": ["plantuml"]
   },
   {
+    "id": "agent-edit-plantuml-flowchart-node",
+    "text": "把流程图里的ASR识别节点改成语音识别",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
+    "id": "agent-edit-plantuml-gantt-task",
+    "text": "给甘特图增加评审任务",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
+    "id": "agent-edit-plantuml-swimlane",
+    "text": "给泳道图增加法务泳道",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
+    "id": "agent-edit-plantuml-er-relation",
+    "text": "给ER图增加用户收藏商品关系",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
     "id": "replace-window-shape",
     "text": "把窗户改成圆形",
     "tier": "rules",
