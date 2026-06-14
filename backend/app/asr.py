@@ -14,7 +14,13 @@ from typing import Any
 
 import httpx
 
-from .schemas import AsrProviderAttempt, AsrProvidersResponse, AsrTranscriptionMetrics, AsrTranscriptionResponse
+from .schemas import (
+    AsrProviderAttempt,
+    AsrProviderCapability,
+    AsrProvidersResponse,
+    AsrTranscriptionMetrics,
+    AsrTranscriptionResponse,
+)
 
 
 XIAOMI_ASR_URL = "https://api.xiaomimimo.com/v1/chat/completions"
@@ -33,6 +39,7 @@ PROVIDER_LABELS = {
     "local": "本地 ASR",
     WEB_SPEECH_PROVIDER: "Web Speech API",
 }
+CLIENT_SEGMENT_SILENCE_MS = 1500
 
 
 class AsrProviderError(RuntimeError):
@@ -78,7 +85,8 @@ def provider_label(provider: str) -> str:
 
 
 def normalize_asr_language(language: str | None) -> str:
-    normalized = (language or os.getenv("AI_PAINTING_ASR_LANGUAGE", "zh")).strip()
+    configured_language = language if language is not None else os.getenv("AI_PAINTING_ASR_LANGUAGE")
+    normalized = (configured_language or "zh").strip()
     if not LANGUAGE_PATTERN.fullmatch(normalized):
         raise ValueError("ASR 语种只能包含字母、数字、下划线或连字符")
     return normalized
@@ -97,11 +105,42 @@ def is_provider_configured(provider: str) -> bool:
     return False
 
 
+def provider_capability(provider: str) -> AsrProviderCapability:
+    if provider == WEB_SPEECH_PROVIDER:
+        return AsrProviderCapability(
+            mode="browser_interim",
+            streaming_supported=True,
+            interim_results_supported=True,
+            segment_submission=False,
+            silence_stop_ms=None,
+            description="浏览器 SpeechRecognition 兜底路径, 可显示 interim 文本",
+        )
+    if provider == "local":
+        return AsrProviderCapability(
+            mode="segment",
+            streaming_supported=False,
+            interim_results_supported=False,
+            segment_submission=True,
+            silence_stop_ms=CLIENT_SEGMENT_SILENCE_MS,
+            description="前端静音截停后把整段音频提交到本地 ASR",
+        )
+    return AsrProviderCapability(
+        mode="segment",
+        streaming_supported=False,
+        interim_results_supported=False,
+        segment_submission=True,
+        silence_stop_ms=CLIENT_SEGMENT_SILENCE_MS,
+        description="前端静音截停后把整段音频提交到小米 MiMo ASR",
+    )
+
+
 def get_asr_provider_status() -> AsrProvidersResponse:
     configured = [provider for provider in get_asr_provider_chain() if is_provider_configured(provider)]
+    capability_providers = configured + [WEB_SPEECH_PROVIDER]
     return AsrProvidersResponse(
         providers=configured,
-        provider_labels={provider: provider_label(provider) for provider in configured + [WEB_SPEECH_PROVIDER]},
+        provider_labels={provider: provider_label(provider) for provider in capability_providers},
+        provider_capabilities={provider: provider_capability(provider) for provider in capability_providers},
         primary_provider=configured[0] if configured else None,
         fallback_provider=WEB_SPEECH_PROVIDER,
     )

@@ -94,9 +94,19 @@ class AsrTranscriptionMetrics(BaseModel):
     fallback_count: int = 0
 
 
+class AsrProviderCapability(BaseModel):
+    mode: str
+    streaming_supported: bool = False
+    interim_results_supported: bool = False
+    segment_submission: bool = True
+    silence_stop_ms: int | None = None
+    description: str = ""
+
+
 class AsrProvidersResponse(BaseModel):
     providers: list[str] = Field(default_factory=list)
     provider_labels: dict[str, str] = Field(default_factory=dict)
+    provider_capabilities: dict[str, AsrProviderCapability] = Field(default_factory=dict)
     primary_provider: str | None = None
     fallback_provider: str = "web_speech"
 

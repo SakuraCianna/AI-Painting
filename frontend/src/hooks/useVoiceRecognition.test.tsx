@@ -79,6 +79,24 @@ describe("useVoiceRecognition", () => {
     vi.mocked(fetchAsrProviders).mockResolvedValue({
       providers: ["xiaomi"],
       provider_labels: { xiaomi: "小米 MiMo ASR", web_speech: "Web Speech API" },
+      provider_capabilities: {
+        xiaomi: {
+          mode: "segment",
+          streaming_supported: false,
+          interim_results_supported: false,
+          segment_submission: true,
+          silence_stop_ms: 1500,
+          description: "静音截停后整段上传转写",
+        },
+        web_speech: {
+          mode: "browser_interim",
+          streaming_supported: true,
+          interim_results_supported: true,
+          segment_submission: false,
+          silence_stop_ms: null,
+          description: "浏览器实时 interim 文本",
+        },
+      },
       primary_provider: "xiaomi",
       fallback_provider: "web_speech",
     });
@@ -87,6 +105,9 @@ describe("useVoiceRecognition", () => {
     const { result } = renderHook(() => useVoiceRecognition({ onFinalTranscript }));
 
     await waitFor(() => expect(result.current.providerLabel).toBe("小米 MiMo ASR"));
+    await waitFor(() => expect(result.current.providerCapability?.mode).toBe("segment"));
+    expect(result.current.providerCapability?.streaming_supported).toBe(false);
+    expect(result.current.providerCapability?.silence_stop_ms).toBe(1500);
     expect(result.current.isSupported).toBe(true);
   });
 

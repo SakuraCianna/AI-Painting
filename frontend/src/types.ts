@@ -79,8 +79,18 @@ export interface CommandExecutionResponse {
 export interface AsrProvidersResponse {
   providers: string[];
   provider_labels: Record<string, string>;
+  provider_capabilities?: Record<string, AsrProviderCapability>;
   primary_provider?: string | null;
   fallback_provider: string;
+}
+
+export interface AsrProviderCapability {
+  mode: string;
+  streaming_supported: boolean;
+  interim_results_supported: boolean;
+  segment_submission: boolean;
+  silence_stop_ms?: number | null;
+  description: string;
 }
 
 export interface AsrTranscriptionResponse {
