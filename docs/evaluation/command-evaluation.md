@@ -1,6 +1,6 @@
 # 复杂命令评测集
 
-> 状态: 已建立 108 条中文语音指令 reference seed, 尚未内置真实 ASR Provider 采集结果
+> 状态: 已建立 110 条中文语音指令 reference seed, 尚未内置真实 ASR Provider 采集结果
 
 ## 文件
 
@@ -20,7 +20,7 @@ docs\evaluation\complex_voice_command_asr_transcripts.json
 
 后端测试会校验:
 
-- 命令评测集数量固定为 108 条
+- 命令评测集数量固定为 110 条
 - `rules`、`agent` 和 `planner_expected` 三类用例都存在
 - 用例 ID 不重复
 - ASR 转写伴随文件覆盖全部命令用例

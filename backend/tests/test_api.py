@@ -625,6 +625,56 @@ def test_voice_edit_plantuml_er_updates_relationship_cardinality_and_label(clien
     assert "entity_1 ||--o{ entity_2 : 创建" not in source
 
 
+def test_voice_edit_plantuml_er_updates_relationship_by_endpoints(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个用户订单ER图，包含用户、订单、商品和支付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把ER图里用户和订单之间的关系改成一对一的下单关系"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["operations"][0]["payload"]["source_entity"] == "用户"
+    assert body["plan"]["operations"][0]["payload"]["target_entity"] == "订单"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert "entity_1 ||--|| entity_2 : 下单" in source
+    assert "entity_1 ||--o{ entity_2 : 创建" not in source
+
+
+def test_voice_edit_plantuml_er_deletes_relationship_by_endpoints(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个用户订单ER图，包含用户、订单、商品和支付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "删除ER图里用户和商品之间的关系"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["operations"][0]["payload"]["source_entity"] == "用户"
+    assert body["plan"]["operations"][0]["payload"]["target_entity"] == "商品"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert "entity_1 ||--o{ entity_3 : 浏览" not in source
+    assert "entity_1 ||--o{ entity_2 : 创建" in source
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})
