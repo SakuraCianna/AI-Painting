@@ -46,6 +46,17 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
             str(payload.get("source_entity") or ""),
             str(payload.get("target_entity") or ""),
         )
+    elif action == "reconnect_relation":
+        next_source = _reconnect_relation(
+            source,
+            str(payload.get("relation_text") or ""),
+            str(payload.get("source_entity") or ""),
+            str(payload.get("target_entity") or ""),
+            str(payload.get("new_source_entity") or ""),
+            str(payload.get("new_target_entity") or ""),
+            str(payload.get("new_label") or ""),
+            str(payload.get("cardinality") or ""),
+        )
     elif action == "update_relation":
         next_source = _update_relation(
             source,
@@ -175,17 +186,19 @@ def _named_aliases(source: str) -> dict[str, str]:
     return aliases
 
 
+def _alias_for_entity(source: str, entity: str) -> str:
+    aliases = _named_aliases(source)
+    label = _safe_label(entity)
+    matched = next((alias for name, alias in aliases.items() if _label_matches(name, label)), None)
+    if matched is None:
+        raise PlantUMLEditError(f"没有找到 PlantUML 关系端点: {label}")
+    return matched
+
+
 def _aliases_for_entities(source: str, source_entity: str, target_entity: str) -> tuple[str, str] | None:
     if not source_entity.strip() or not target_entity.strip():
         return None
-    aliases = _named_aliases(source)
-    source_label = _safe_label(source_entity)
-    target_label = _safe_label(target_entity)
-    matched_source = next((alias for name, alias in aliases.items() if _label_matches(name, source_label)), None)
-    matched_target = next((alias for name, alias in aliases.items() if _label_matches(name, target_label)), None)
-    if matched_source is None or matched_target is None:
-        raise PlantUMLEditError(f"没有找到 PlantUML 关系端点: {source_label} / {target_label}")
-    return matched_source, matched_target
+    return _alias_for_entity(source, source_entity), _alias_for_entity(source, target_entity)
 
 
 def _relation_from_text(source: str, relation_text: str) -> tuple[str, str, str]:
@@ -370,7 +383,7 @@ def _delete_swimlane(source: str, lane_name: str) -> str:
 def _relation_line_pattern() -> re.Pattern[str]:
     return re.compile(
         r"^\s*(?P<source>[A-Za-z0-9_]+)\s+"
-        r"(?P<operator>[|}{o*]+--[|}{o*]+)\s+"
+        r"(?P<operator>[|}{o*<>-]+)\s+"
         r"(?P<target>[A-Za-z0-9_]+)\s*:\s*"
         r"(?P<label>.+?)\s*$"
     )
@@ -437,6 +450,42 @@ def _update_relation(
         next_operator = operator or match.group("operator")
         next_label = label or match.group("label")
         output.append(f"{match.group('source')} {next_operator} {match.group('target')} : {next_label}")
+        updated = True
+    if not updated:
+        raise PlantUMLEditError(f"没有找到 PlantUML 关系: {relation}")
+    return "\n".join(output)
+
+
+def _reconnect_relation(
+    source: str,
+    relation_text: str,
+    source_entity: str,
+    target_entity: str,
+    new_source_entity: str,
+    new_target_entity: str,
+    new_label: str,
+    cardinality: str,
+) -> str:
+    relation = _safe_label(relation_text, max_length=80)
+    endpoint_aliases = _aliases_for_entities(source, source_entity, target_entity)
+    next_source_alias = _alias_for_entity(source, new_source_entity) if new_source_entity.strip() else None
+    next_target_alias = _alias_for_entity(source, new_target_entity) if new_target_entity.strip() else None
+    label = _safe_label(new_label, max_length=30) if new_label.strip() else None
+    operator = _relation_operator_for_cardinality(cardinality)
+    pattern = _relation_line_pattern()
+    output: list[str] = []
+    updated = False
+    for line in source.splitlines():
+        match = pattern.match(line)
+        if not match or not _relation_matches(match, relation, endpoint_aliases):
+            output.append(line)
+            continue
+        output.append(
+            f"{next_source_alias or match.group('source')} "
+            f"{operator or match.group('operator')} "
+            f"{next_target_alias or match.group('target')} : "
+            f"{label or match.group('label')}"
+        )
         updated = True
     if not updated:
         raise PlantUMLEditError(f"没有找到 PlantUML 关系: {relation}")

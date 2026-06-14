@@ -701,6 +701,35 @@ def test_voice_edit_plantuml_er_updates_relationship_by_endpoints(client: TestCl
     assert "entity_1 ||--o{ entity_2 : 创建" not in source
 
 
+def test_voice_edit_plantuml_er_reconnects_relationship_to_new_endpoint(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个用户订单ER图，包含用户、订单、商品和支付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把ER图里用户和订单之间的关系改成用户和支付之间的支付关系"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    payload = body["plan"]["operations"][0]["payload"]
+    assert payload["action"] == "reconnect_relation"
+    assert payload["source_entity"] == "用户"
+    assert payload["target_entity"] == "订单"
+    assert payload["new_source_entity"] == "用户"
+    assert payload["new_target_entity"] == "支付"
+    assert payload["new_label"] == "支付"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert "entity_1 ||--o{ entity_4 : 支付" in source
+    assert "entity_1 ||--o{ entity_2 : 创建" not in source
+
+
 def test_voice_edit_plantuml_er_deletes_relationship_by_endpoints(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
