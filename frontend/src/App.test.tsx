@@ -174,7 +174,7 @@ describe("App", () => {
 
     expect(voiceRuntime.start).toHaveBeenCalledTimes(1);
     expect(apiMocks.createArtwork).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(apiMocks.fetchLatencyMetrics).toHaveBeenCalledWith("artwork-1"));
+    expect(apiMocks.fetchLatencyMetrics).not.toHaveBeenCalled();
   });
 
   it("shows only the four current latency metrics in the console", async () => {
@@ -230,6 +230,7 @@ describe("App", () => {
     expect(screen.getByText("1 个对象")).toBeInTheDocument();
     expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
     expect(audioPlay).toHaveBeenCalledTimes(1);
+    expect(apiMocks.fetchLatencyMetrics).not.toHaveBeenCalled();
   });
 
   it("completes a voice-only acceptance workflow without toolbar export clicks", async () => {
