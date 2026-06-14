@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.database import _ensure_columns, connect_db, init_db
+from app.database import _ensure_columns, connect_db, get_sqlite_cache_size_kib, init_db
 
 
 def test_init_db_migrates_old_drawing_object_metadata_columns(tmp_path: Path) -> None:
@@ -67,3 +67,30 @@ def test_ensure_columns_rejects_unapproved_table_names(tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="不允许"):
             _ensure_columns(connection, "drawing_objects); DROP TABLE operations; --", {})
         assert connection.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'operations'").fetchone()
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        (None, 8192),
+        ("", 8192),
+        ("invalid", 8192),
+        ("64", 1024),
+        ("4096", 4096),
+        ("999999", 65536),
+    ],
+)
+def test_sqlite_cache_size_kib_uses_safe_bounds(monkeypatch: pytest.MonkeyPatch, raw_value: str | None, expected: int) -> None:
+    if raw_value is None:
+        monkeypatch.delenv("AI_PAINTING_SQLITE_CACHE_SIZE_KIB", raising=False)
+    else:
+        monkeypatch.setenv("AI_PAINTING_SQLITE_CACHE_SIZE_KIB", raw_value)
+
+    assert get_sqlite_cache_size_kib() == expected
+
+
+def test_connect_db_applies_sqlite_cache_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_SQLITE_CACHE_SIZE_KIB", "4096")
+
+    with connect_db(str(tmp_path / "cache.sqlite3")) as connection:
+        assert connection.execute("PRAGMA cache_size").fetchone()[0] == -4096

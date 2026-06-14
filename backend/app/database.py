@@ -25,10 +25,24 @@ ALLOWED_MIGRATION_COLUMNS: dict[str, dict[str, str]] = {
 }
 
 SQLITE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+DEFAULT_SQLITE_CACHE_SIZE_KIB = 8192
+MIN_SQLITE_CACHE_SIZE_KIB = 1024
+MAX_SQLITE_CACHE_SIZE_KIB = 65536
 
 
 def get_database_path() -> str:
     return os.environ.get("AI_PAINTING_DB", str(Path("backend") / "data" / "ai_painting.sqlite3"))
+
+
+def get_sqlite_cache_size_kib() -> int:
+    raw_value = os.environ.get("AI_PAINTING_SQLITE_CACHE_SIZE_KIB")
+    if raw_value is None or raw_value.strip() == "":
+        return DEFAULT_SQLITE_CACHE_SIZE_KIB
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_SQLITE_CACHE_SIZE_KIB
+    return max(MIN_SQLITE_CACHE_SIZE_KIB, min(parsed, MAX_SQLITE_CACHE_SIZE_KIB))
 
 
 def connect_db(path: str | None = None) -> sqlite3.Connection:
@@ -37,6 +51,7 @@ def connect_db(path: str | None = None) -> sqlite3.Connection:
     connection = sqlite3.connect(db_path, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute(f"PRAGMA cache_size = {-get_sqlite_cache_size_kib()}")
     return connection
 
 
