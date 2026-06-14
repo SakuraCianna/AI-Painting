@@ -14,6 +14,9 @@ import httpx
 
 
 PLANTUML_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+DEFAULT_BUNDLED_PLANTUML_JAR = Path(__file__).resolve().parents[1] / "tools" / "plantuml.jar"
+DEFAULT_PLANTUML_FONT_NAME = "Microsoft YaHei" if os.name == "nt" else "Noto Sans CJK SC"
+PRESERVE_ASPECT_RATIO = "xMidYMid meet"
 BLOCKED_DIRECTIVE_PATTERN = re.compile(r"^\s*!(?:include|includeurl|includesub|import)\b", re.IGNORECASE | re.MULTILINE)
 START_TO_END_MARKERS = {
     "@startuml": "@enduml",
@@ -29,6 +32,8 @@ class PlantUMLRenderResult:
     svg: str
     data_url: str
     mode: str
+    width: float = 1024.0
+    height: float = 768.0
     error: str | None = None
 
 
@@ -38,9 +43,10 @@ class PlantUMLRenderError(ValueError):
 
 def render_plantuml_source(source: str) -> PlantUMLRenderResult:
     clean_source = validate_plantuml_source(source)
+    render_source = _with_default_font(clean_source)
     return _render_plantuml_cached(
-        clean_source,
-        os.getenv("AI_PAINTING_PLANTUML_JAR", "").strip(),
+        render_source,
+        _resolve_plantuml_jar_path(),
         os.getenv("AI_PAINTING_PLANTUML_SERVER_URL", "").strip(),
         os.getenv("AI_PAINTING_PLANTUML_SECURITY_PROFILE", "SANDBOX").strip() or "SANDBOX",
         os.getenv("AI_PAINTING_JAVA_BIN", "java").strip() or "java",
@@ -79,6 +85,15 @@ def _validate_single_plantuml_block(source: str) -> None:
         raise PlantUMLRenderError("PlantUML 源码只能包含一个完整图表块")
 
 
+def _resolve_plantuml_jar_path() -> str:
+    configured_path = os.getenv("AI_PAINTING_PLANTUML_JAR", "").strip()
+    if configured_path:
+        return configured_path
+    if DEFAULT_BUNDLED_PLANTUML_JAR.is_file():
+        return str(DEFAULT_BUNDLED_PLANTUML_JAR)
+    return ""
+
+
 @lru_cache(maxsize=64)
 def _render_plantuml_cached(
     source: str,
@@ -88,16 +103,21 @@ def _render_plantuml_cached(
     java_bin: str,
     timeout_seconds: float,
 ) -> PlantUMLRenderResult:
+    jar_error: PlantUMLRenderError | None = None
     if jar_path:
         try:
             return _render_with_local_jar(source, jar_path, security_profile, java_bin, timeout_seconds)
         except PlantUMLRenderError as exc:
-            return _fallback_svg(source, "fallback_local_svg", str(exc))
+            jar_error = exc
     if server_url:
         try:
             return _render_with_server(source, server_url, timeout_seconds)
         except PlantUMLRenderError as exc:
+            if jar_error is not None:
+                return _fallback_svg(source, "fallback_local_svg", f"PlantUML jar 和 server 均渲染失败: {jar_error}; {exc}")
             return _fallback_svg(source, "fallback_local_svg", str(exc))
+    if jar_error is not None:
+        return _fallback_svg(source, "fallback_local_svg", str(jar_error))
     return _fallback_svg(source, "fallback_local_svg", "未配置 PlantUML jar 或 server, 已显示源码预览")
 
 
@@ -107,21 +127,35 @@ def _render_with_local_jar(source: str, jar_path: str, security_profile: str, ja
         raise PlantUMLRenderError("PlantUML jar 文件不存在")
     env = os.environ.copy()
     env["PLANTUML_SECURITY_PROFILE"] = security_profile
-    completed = subprocess.run(
-        [java_bin, f"-DPLANTUML_SECURITY_PROFILE={security_profile}", "-jar", str(resolved_jar), "-tsvg", "-pipe"],
-        input=source,
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds,
-        env=env,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            [
+                java_bin,
+                f"-DPLANTUML_SECURITY_PROFILE={security_profile}",
+                "-jar",
+                str(resolved_jar),
+                "-charset",
+                "UTF-8",
+                "-tsvg",
+                "-pipe",
+            ],
+            input=source,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            timeout=timeout_seconds,
+            env=env,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError, TimeoutError) as exc:
+        raise PlantUMLRenderError(f"PlantUML jar 渲染失败: {exc}") from exc
     if completed.returncode != 0:
         message = completed.stderr.strip() or completed.stdout.strip() or "PlantUML jar 渲染失败"
         raise PlantUMLRenderError(message[:400])
-    svg = completed.stdout.strip()
+    svg = _normalize_svg(completed.stdout.strip())
     _ensure_svg(svg)
-    return PlantUMLRenderResult(svg=svg, data_url=_svg_data_url(svg), mode="local_jar")
+    width, height = _svg_dimensions(svg)
+    return PlantUMLRenderResult(svg=svg, data_url=_svg_data_url(svg), mode="local_jar", width=width, height=height)
 
 
 def _render_with_server(source: str, server_url: str, timeout_seconds: float) -> PlantUMLRenderResult:
@@ -132,14 +166,78 @@ def _render_with_server(source: str, server_url: str, timeout_seconds: float) ->
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise PlantUMLRenderError(f"PlantUML server 渲染失败: {exc}") from exc
-    svg = response.text.strip()
+    svg = _normalize_svg(response.text.strip())
     _ensure_svg(svg)
-    return PlantUMLRenderResult(svg=svg, data_url=_svg_data_url(svg), mode="server")
+    width, height = _svg_dimensions(svg)
+    return PlantUMLRenderResult(svg=svg, data_url=_svg_data_url(svg), mode="server", width=width, height=height)
 
 
 def _ensure_svg(svg: str) -> None:
     if "<svg" not in svg[:300].lower() or "</svg>" not in svg[-300:].lower():
         raise PlantUMLRenderError("PlantUML 返回内容不是 SVG")
+
+
+def _normalize_svg(svg: str) -> str:
+    if re.search(r'<svg\b[^>]*\bpreserveAspectRatio="', svg, re.IGNORECASE):
+        return re.sub(
+            r'(<svg\b[^>]*\bpreserveAspectRatio=")[^"]*(")',
+            lambda match: f"{match.group(1)}{PRESERVE_ASPECT_RATIO}{match.group(2)}",
+            svg,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    return re.sub(
+        r"<svg\b",
+        f'<svg preserveAspectRatio="{PRESERVE_ASPECT_RATIO}"',
+        svg,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+
+def _svg_dimensions(svg: str) -> tuple[float, float]:
+    width = _parse_svg_length(_find_svg_attr(svg, "width"))
+    height = _parse_svg_length(_find_svg_attr(svg, "height"))
+    if width and height:
+        return width, height
+    view_box = _find_svg_attr(svg, "viewBox")
+    if view_box:
+        parts = view_box.replace(",", " ").split()
+        if len(parts) == 4:
+            try:
+                return max(float(parts[2]), 1.0), max(float(parts[3]), 1.0)
+            except ValueError:
+                pass
+    return 1024.0, 768.0
+
+
+def _find_svg_attr(svg: str, attr_name: str) -> str | None:
+    match = re.search(rf'\b{re.escape(attr_name)}="([^"]+)"', svg[:500], re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _parse_svg_length(value: str | None) -> float | None:
+    if not value:
+        return None
+    match = re.match(r"^\s*([0-9]+(?:\.[0-9]+)?)", value)
+    if not match:
+        return None
+    try:
+        return max(float(match.group(1)), 1.0)
+    except ValueError:
+        return None
+
+
+def _with_default_font(source: str) -> str:
+    if re.search(r"^\s*skinparam\s+defaultFontName\b", source, re.IGNORECASE | re.MULTILINE):
+        return source
+    font_name = os.getenv("AI_PAINTING_PLANTUML_FONT_NAME", DEFAULT_PLANTUML_FONT_NAME).strip()
+    if not font_name:
+        return source
+    lines = source.splitlines()
+    if not lines:
+        return source
+    return "\n".join([lines[0], f"skinparam defaultFontName {font_name}", *lines[1:]])
 
 
 def _fallback_svg(source: str, mode: str, error: str) -> PlantUMLRenderResult:

@@ -268,8 +268,9 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 | `AI_PAINTING_IMAGE_EDIT_MODEL` | Image edit model | `gpt-image-2` |
 | `AI_PAINTING_OPENAI_API_KEY` | Official OpenAI fallback API key | empty |
 | `AI_PAINTING_OPENAI_BASE_URL` | Official OpenAI fallback base URL | `https://api.openai.com/v1` |
-| `AI_PAINTING_PLANTUML_JAR` | Local PlantUML jar path, preferred when configured | empty |
-| `AI_PAINTING_PLANTUML_SERVER_URL` | PlantUML Server URL, empty means no external upload | empty |
+| `AI_PAINTING_PLANTUML_JAR` | Local PlantUML jar path, empty means the backend tries `backend/tools/plantuml.jar` | empty |
+| `AI_PAINTING_PLANTUML_SERVER_URL` | PlantUML Server URL, Docker Compose defaults to the internal `plantuml-server` fallback | empty |
+| `AI_PAINTING_PLANTUML_SERVER_PORT` | Docker PlantUML Server host port | `8090` |
 | `AI_PAINTING_PLANTUML_SECURITY_PROFILE` | PlantUML security profile | `SANDBOX` |
 | `AI_PAINTING_PLANTUML_TIMEOUT_SECONDS` | PlantUML render timeout in seconds | `8` |
 | `AI_PAINTING_PLANTUML_MAX_SOURCE_CHARS` | Maximum PlantUML source length | `12000` |
@@ -277,7 +278,7 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 
 The OpenAI-compatible generation and edit request size is decided at runtime: blank-canvas generation uses the current canvas size, while image refinement keeps the source image dimensions. Fixed proxy size variables are no longer recommended.
 
-PlantUML rendering first tries `AI_PAINTING_PLANTUML_JAR`, then an explicitly configured `AI_PAINTING_PLANTUML_SERVER_URL`. If neither is configured, the backend creates a safe SVG source preview layer instead of failing the voice command.
+PlantUML rendering first tries `AI_PAINTING_PLANTUML_JAR`. If it is not explicitly configured, the backend automatically tries `backend/tools/plantuml.jar`. If jar rendering fails, the backend then tries `AI_PAINTING_PLANTUML_SERVER_URL`. Docker Compose starts a fallback `plantuml-server` service and points the backend to `http://plantuml-server:8080` by default. If both jar and server rendering are unavailable, the backend creates a safe SVG source preview layer instead of failing the voice command.
 
 Never put real secrets in README, issues, pull requests, commit messages, or logs.
 
@@ -345,6 +346,7 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 │   ├── evaluate_image_provider.py
 │   ├── local_asr_qwen3.py
 │   ├── requirements.txt
+│   ├── tools/plantuml.jar
 │   └── tests
 ├── frontend
 │   ├── src

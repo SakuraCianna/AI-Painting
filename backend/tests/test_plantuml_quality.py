@@ -11,10 +11,14 @@ from app.plantuml_renderer import validate_plantuml_source
 def _install_fake_plantuml_server(monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.delenv("AI_PAINTING_PLANTUML_JAR", raising=False)
     monkeypatch.setenv("AI_PAINTING_PLANTUML_SERVER_URL", "https://plantuml.example.test")
+    monkeypatch.setattr(plantuml_renderer, "DEFAULT_BUNDLED_PLANTUML_JAR", plantuml_renderer.DEFAULT_BUNDLED_PLANTUML_JAR.with_name("missing.jar"))
     plantuml_renderer._render_plantuml_cached.cache_clear()
 
     class Response:
-        text = '<svg xmlns="http://www.w3.org/2000/svg"><text>plantuml-ok</text></svg>'
+        text = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="240px" height="480px" '
+            'preserveAspectRatio="none"><text>plantuml-ok</text></svg>'
+        )
 
         def raise_for_status(self) -> None:
             return None
@@ -57,6 +61,7 @@ def _assert_rendered_plantuml_geometry(geometry: dict[str, object], expected_typ
     svg = _decode_svg(str(geometry["src"]))
     assert "<svg" in svg
     assert "plantuml-ok" in svg
+    assert 'preserveAspectRatio="xMidYMid meet"' in svg
 
 
 def _plantuml_geometry_for(text: str) -> dict[str, object]:
@@ -73,7 +78,7 @@ def test_all_supported_plantuml_templates_render_through_server(monkeypatch) -> 
     cases = [
         ("画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行", "activity"),
         ("画一个AI绘图系统架构图，包含前端、后端、ASR服务、Agent规划器、SQLite数据库和图像生成服务", "component"),
-        ("画一个用户订单er图，包含用户、订单、商品和支付", "er"),
+        ("画一个用户订单ER图，包含用户、订单、商品和支付", "er"),
         ("画一个产品团队组织结构图，包括负责人、产品组、设计组、研发组和执行角色", "org"),
         ("画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑", "gantt"),
         ("画一个泳道图，泳道包括产品、设计、研发、测试，节点包括需求评审、原型设计、开发联调、验收发布", "swimlane"),
@@ -84,6 +89,19 @@ def test_all_supported_plantuml_templates_render_through_server(monkeypatch) -> 
     for text, expected_type in cases:
         geometry = _plantuml_geometry_for(text)
         _assert_rendered_plantuml_geometry(geometry, expected_type)
+
+
+def test_plantuml_geometry_preserves_rendered_svg_aspect_ratio(monkeypatch) -> None:  # noqa: ANN001
+    _install_fake_plantuml_server(monkeypatch)
+
+    geometry = _plantuml_geometry_for("画一个用户订单ER图，包含用户、订单、商品和支付")
+
+    assert geometry["intrinsicWidth"] == 240
+    assert geometry["intrinsicHeight"] == 480
+    assert geometry["height"] == 672
+    assert geometry["width"] == 336
+    assert geometry["x"] == 344
+    assert geometry["y"] == 48
 
 
 def test_plantuml_edits_keep_sources_renderable(monkeypatch) -> None:  # noqa: ANN001

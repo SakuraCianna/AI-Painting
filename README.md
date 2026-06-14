@@ -187,8 +187,10 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 | `AI_PAINTING_IMAGE_EDIT_MODEL` | 图生图模型 | `gpt-image-2` |
 | `AI_PAINTING_OPENAI_API_KEY` | OpenAI 官方备用 API Key | 空 |
 | `AI_PAINTING_OPENAI_BASE_URL` | OpenAI 官方备用 Base URL | `https://api.openai.com/v1` |
-| `AI_PAINTING_PLANTUML_JAR` | PlantUML 本地 jar 路径, 配置后优先本地渲染 | 空 |
-| `AI_PAINTING_PLANTUML_SERVER_URL` | PlantUML Server 地址, 为空时不会上传源码到外部服务 | 空 |
+| `AI_PAINTING_PLANTUML_JAR` | PlantUML 本地 jar 路径, 为空时自动尝试 `backend/tools/plantuml.jar` | 空 |
+| `AI_PAINTING_PLANTUML_SERVER_URL` | PlantUML Server 地址, Docker Compose 默认使用内部 `plantuml-server` 服务作为备用 | 空 |
+| `AI_PAINTING_PLANTUML_FONT_NAME` | PlantUML 中文字体名称, Windows 默认 `Microsoft YaHei`, Docker 建议 `Noto Sans CJK SC` | 空 |
+| `AI_PAINTING_PLANTUML_SERVER_PORT` | Docker PlantUML Server 映射端口 | `8090` |
 | `AI_PAINTING_PLANTUML_SECURITY_PROFILE` | PlantUML 安全模式 | `SANDBOX` |
 | `AI_PAINTING_PLANTUML_TIMEOUT_SECONDS` | PlantUML 渲染超时时间, 单位秒 | `8` |
 | `AI_PAINTING_PLANTUML_MAX_SOURCE_CHARS` | PlantUML 最大源码长度 | `12000` |
@@ -196,7 +198,7 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 
 文字转图片和图生图精修的中转站请求尺寸由后端运行时决定: 空白画布生成图片时使用当前画布尺寸, 基于已有图片精修时沿用源图片尺寸。旧的固定尺寸变量不再建议配置。
 
-PlantUML 图表会优先使用 `AI_PAINTING_PLANTUML_JAR` 本地渲染, 其次使用显式配置的 `AI_PAINTING_PLANTUML_SERVER_URL`。两者都为空时, 后端会生成安全的 SVG 源码预览图层, 不会阻断语音绘图流程。
+PlantUML 图表会优先使用 `AI_PAINTING_PLANTUML_JAR` 本地渲染；如果没有显式配置, 后端会自动尝试 `backend/tools/plantuml.jar`。本地 jar 使用 UTF-8 管道输入并自动注入中文字体, SVG 会归一化为等比展示, 避免中文乱码和画面拉伸。jar 渲染失败后会继续尝试 `AI_PAINTING_PLANTUML_SERVER_URL`。Docker Compose 会启动备用 `plantuml-server` 服务, 后端默认通过 `http://plantuml-server:8080` 调用。jar 和 server 都不可用时, 后端会生成安全的 SVG 源码预览图层, 不会阻断语音绘图流程。
 
 完整变量说明见 [.env.example](.env.example)。
 
@@ -243,6 +245,7 @@ CI 会在 `push`、`pull_request` 和手动触发时运行 Ruff、渐进式 mypy
 │   ├── local_asr_qwen3.py
 │   ├── requirements-dev.txt
 │   ├── requirements.txt
+│   ├── tools/plantuml.jar
 │   └── tests
 ├── frontend
 │   ├── src
