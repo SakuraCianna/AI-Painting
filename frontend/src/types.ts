@@ -88,6 +88,8 @@ export interface AsrProviderCapability {
   mode: string;
   streaming_supported: boolean;
   interim_results_supported: boolean;
+  websocket_transport_supported?: boolean;
+  partial_transcript_supported?: boolean;
   segment_submission: boolean;
   silence_stop_ms?: number | null;
   description: string;

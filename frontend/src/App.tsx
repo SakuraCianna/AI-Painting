@@ -125,6 +125,9 @@ function getAsrModeText(capability: AsrProviderCapability | null | undefined): s
   if (capability.interim_results_supported) {
     return "实时 interim";
   }
+  if (capability.websocket_transport_supported) {
+    return "流式上传 · 整段识别";
+  }
   if (capability.segment_submission) {
     return capability.silence_stop_ms ? `整段转写 · 静音 ${(capability.silence_stop_ms / 1000).toFixed(1)}s` : "整段转写";
   }

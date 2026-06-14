@@ -64,7 +64,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.
 - **Grouped undo**: multi-step voice plans can be undone and redone as a single semantic action.
-- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR currently submits a full audio segment after silence detection; only the Web Speech API fallback exposes browser interim text, while backend streaming transcription remains on the roadmap. The provider status endpoint returns capability metadata, and the console shows whether the active path is segment transcription or browser interim transcription.
+- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR now supports WebSocket audio streaming transport and returns the final transcript after silence detection; the Web Speech API fallback exposes browser interim text. The provider status endpoint returns capability metadata, and the console shows whether the active path is streaming upload with final recognition or browser interim transcription.
 - **Image generation and refinement**: text-to-image and image-to-image providers are abstracted behind configurable provider adapters.
 - **Latency observability**: ASR, rule parsing, agent planning, execution, and end-to-end latency are logged.
 - **CI coverage**: GitHub Actions runs backend tests, frontend tests, frontend builds, Docker validation, and API smoke checks.
@@ -170,6 +170,7 @@ flowchart TD
 | `POST /api/artworks/{artwork_id}/redo` | Redo |
 | `GET /api/asr/providers` | Inspect ASR provider status and capability metadata |
 | `POST /api/asr/transcribe` | Backend ASR transcription |
+| `WS /api/asr/stream` | Stream PCM16 audio frames to backend ASR and receive final transcript events |
 | `POST /api/tts/synthesize` | TTS voice feedback |
 | `GET /api/metrics/latency` | Latency metrics |
 
@@ -383,7 +384,7 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 
 - The project is in post-MVP productization, not a fully validated commercial product.
 - Xiaomi ASR, local Qwen3-ASR, real microphone input, and GPT-image-2 output quality still need more real-world evaluation.
-- Backend ASR is still segment-based rather than WebSocket or incremental streaming transcription.
+- Backend ASR supports WebSocket audio streaming transport, but Xiaomi and local providers still return a final transcript after silence detection rather than provider-level partial transcripts.
 - Local image refinement currently relies on textual target descriptions and previous image metadata. Visual segmentation, mask editing, and automatic target detection are not implemented yet.
 - SVG is the main editing layer. Pixel brushes, filters, large canvases, and high-frequency animations still need Canvas / OffscreenCanvas enhancement.
 - Browser microphone permissions, autoplay behavior, and downloads depend on browser security policies.

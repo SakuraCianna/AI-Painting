@@ -98,6 +98,8 @@ class AsrProviderCapability(BaseModel):
     mode: str
     streaming_supported: bool = False
     interim_results_supported: bool = False
+    websocket_transport_supported: bool = False
+    partial_transcript_supported: bool = False
     segment_submission: bool = True
     silence_stop_ms: int | None = None
     description: str = ""

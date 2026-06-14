@@ -7,6 +7,7 @@ import type {
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8084";
+const ASR_STREAM_URL = `${API_BASE_URL.replace(/^http/, "ws")}/api/asr/stream`;
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -53,6 +54,10 @@ export function submitVoiceCommand(artworkId: string, text: string, canvasImageD
 
 export function fetchAsrProviders(): Promise<AsrProvidersResponse> {
   return requestJson<AsrProvidersResponse>("/api/asr/providers");
+}
+
+export function createAsrStreamSocket(): WebSocket {
+  return new WebSocket(ASR_STREAM_URL);
 }
 
 export function transcribeAudio(audioDataUrl: string, language = "zh"): Promise<AsrTranscriptionResponse> {

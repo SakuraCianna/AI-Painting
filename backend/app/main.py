@@ -7,11 +7,12 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from time import perf_counter
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlite3 import Connection
 
 from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_audio_data_url
+from .asr_stream import StreamingAsrProtocolError, StreamingAsrSession
 from .command_parser import normalize_text, parse_command
 from .config import load_env_file
 from .database import get_db, init_db
@@ -487,6 +488,115 @@ async def api_transcribe_audio(request: AsrTranscriptionRequest) -> AsrTranscrip
                 "attempts": [attempt.model_dump() for attempt in exc.attempts],
             },
         ) from exc
+
+
+@app.websocket("/api/asr/stream")
+async def api_stream_asr(websocket: WebSocket) -> None:
+    await websocket.accept()
+    session = StreamingAsrSession()
+    await websocket.send_json(
+        {
+            "type": "ready",
+            "transport": "websocket",
+            "partial_transcript_supported": False,
+            "message": "ASR 流式上传已准备",
+        }
+    )
+    try:
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            text_message = message.get("text")
+            bytes_message = message.get("bytes")
+            if bytes_message is not None:
+                try:
+                    session.append_pcm16(bytes_message)
+                except StreamingAsrProtocolError as exc:
+                    await websocket.send_json({"type": "error", "code": exc.code, "message": str(exc)})
+                    continue
+                await websocket.send_json({"type": "audio_received", "audio_bytes": session.received_bytes})
+                continue
+            if text_message is None:
+                await websocket.send_json({"type": "error", "code": "unsupported_frame", "message": "不支持的 ASR 流式消息"})
+                continue
+            await _handle_asr_stream_text_message(websocket, session, text_message)
+    except WebSocketDisconnect:
+        return
+
+
+async def _handle_asr_stream_text_message(websocket: WebSocket, session: StreamingAsrSession, text_message: str) -> None:
+    try:
+        payload = json.loads(text_message)
+    except json.JSONDecodeError:
+        await websocket.send_json({"type": "error", "code": "invalid_json", "message": "ASR 流式消息必须是 JSON"})
+        return
+    if not isinstance(payload, dict):
+        await websocket.send_json({"type": "error", "code": "invalid_message", "message": "ASR 流式消息必须是对象"})
+        return
+    event_type = payload.get("type")
+    if event_type == "start":
+        try:
+            sample_rate = payload.get("sample_rate")
+            session.configure(
+                language=str(payload.get("language") or "zh"),
+                sample_rate=sample_rate if isinstance(sample_rate, int) else None,
+            )
+            session.clear()
+        except StreamingAsrProtocolError as exc:
+            await websocket.send_json({"type": "error", "code": exc.code, "message": str(exc)})
+            return
+        except ValueError as exc:
+            await websocket.send_json({"type": "error", "code": "invalid_language", "message": str(exc)})
+            return
+        await websocket.send_json({"type": "started", "language": session.language, "sample_rate": session.sample_rate})
+        return
+    if event_type == "finalize":
+        await _finalize_asr_stream(websocket, session)
+        return
+    if event_type == "cancel":
+        session.clear()
+        await websocket.send_json({"type": "canceled"})
+        return
+    if event_type == "ping":
+        await websocket.send_json({"type": "pong"})
+        return
+    await websocket.send_json({"type": "error", "code": "unknown_event", "message": "未知 ASR 流式事件"})
+
+
+async def _finalize_asr_stream(websocket: WebSocket, session: StreamingAsrSession) -> None:
+    try:
+        audio_data_url = session.to_wav_data_url()
+    except StreamingAsrProtocolError as exc:
+        await websocket.send_json({"type": "error", "code": exc.code, "message": str(exc)})
+        return
+    await websocket.send_json({"type": "recognizing", "audio_bytes": session.received_bytes})
+    try:
+        response = await transcribe_audio_data_url(audio_data_url, session.language)
+    except ValueError as exc:
+        await websocket.send_json({"type": "error", "code": "invalid_audio", "message": str(exc)})
+        return
+    except AsrProvidersUnavailable as exc:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "code": "providers_unavailable",
+                "message": "后端 ASR 不可用, 请使用 Web Speech API 兜底",
+                "attempts": [attempt.model_dump() for attempt in exc.attempts],
+            }
+        )
+        return
+    await websocket.send_json(
+        {
+            "type": "final",
+            "text": response.text,
+            "provider": response.provider,
+            "provider_label": response.provider_label,
+            "attempts": [attempt.model_dump() for attempt in response.attempts],
+            "metrics": response.metrics.model_dump(),
+        }
+    )
+    session.clear()
 
 
 @app.post("/api/tts/synthesize", response_model=TtsSynthesisResponse)

@@ -32,6 +32,8 @@ const voiceRuntime = vi.hoisted(() => ({
       mode: "segment",
       streaming_supported: false,
       interim_results_supported: false,
+      websocket_transport_supported: true,
+      partial_transcript_supported: false,
       segment_submission: true,
       silence_stop_ms: 1500,
       description: "静音截停后整段上传转写",
@@ -128,6 +130,8 @@ describe("App", () => {
         mode: "segment",
         streaming_supported: false,
         interim_results_supported: false,
+        websocket_transport_supported: true,
+        partial_transcript_supported: false,
         segment_submission: true,
         silence_stop_ms: 1500,
         description: "静音截停后整段上传转写",
@@ -167,7 +171,7 @@ describe("App", () => {
     expect(await screen.findByText("语音画布已准备")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始监听" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "导出 PNG" })).toBeEnabled();
-    expect(screen.getByText("整段转写 · 静音 1.5s")).toBeInTheDocument();
+    expect(screen.getByText("流式上传 · 整段识别")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "开始监听" }));
 
