@@ -8,17 +8,14 @@ from app.plantuml_editor import edit_plantuml_geometry
 from app.plantuml_renderer import validate_plantuml_source
 
 
-def _install_fake_plantuml_server(monkeypatch) -> None:  # noqa: ANN001
+def _install_fake_plantuml_server(monkeypatch, *, width: int = 240, height: int = 480) -> None:  # noqa: ANN001
     monkeypatch.delenv("AI_PAINTING_PLANTUML_JAR", raising=False)
     monkeypatch.setenv("AI_PAINTING_PLANTUML_SERVER_URL", "https://plantuml.example.test")
     monkeypatch.setattr(plantuml_renderer, "DEFAULT_BUNDLED_PLANTUML_JAR", plantuml_renderer.DEFAULT_BUNDLED_PLANTUML_JAR.with_name("missing.jar"))
     plantuml_renderer._render_plantuml_cached.cache_clear()
 
     class Response:
-        text = (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="240px" height="480px" '
-            'preserveAspectRatio="none"><text>plantuml-ok</text></svg>'
-        )
+        text = f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}px" height="{height}px" preserveAspectRatio="none"><text>plantuml-ok</text></svg>'
 
         def raise_for_status(self) -> None:
             return None
@@ -64,6 +61,12 @@ def _assert_rendered_plantuml_geometry(geometry: dict[str, object], expected_typ
     assert 'preserveAspectRatio="xMidYMid meet"' in svg
 
 
+def _assert_compact_plantuml_style(source: str) -> None:
+    assert "skinparam defaultFontSize 12" in source
+    assert "skinparam titleFontSize 16" in source
+    assert "skinparam ArrowFontSize 11" in source
+
+
 def _plantuml_geometry_for(text: str) -> dict[str, object]:
     graph = build_plantuml_scene_graph(text)
     assert graph is not None
@@ -98,10 +101,52 @@ def test_plantuml_geometry_preserves_rendered_svg_aspect_ratio(monkeypatch) -> N
 
     assert geometry["intrinsicWidth"] == 240
     assert geometry["intrinsicHeight"] == 480
-    assert geometry["height"] == 672
-    assert geometry["width"] == 336
-    assert geometry["x"] == 344
-    assert geometry["y"] == 48
+    assert geometry["height"] == 480
+    assert geometry["width"] == 240
+    assert geometry["x"] == 392
+    assert geometry["y"] == 144
+    assert geometry["displayScale"] == 1
+
+
+def test_plantuml_geometry_scales_down_large_diagrams(monkeypatch) -> None:  # noqa: ANN001
+    _install_fake_plantuml_server(monkeypatch, width=2400, height=1200)
+
+    geometry = _plantuml_geometry_for("画一个复杂系统架构图，包含网关、用户服务、订单服务、支付服务、库存服务、消息队列和数据库")
+
+    assert geometry["intrinsicWidth"] == 2400
+    assert geometry["intrinsicHeight"] == 1200
+    assert geometry["width"] == 928
+    assert geometry["height"] == 464
+    assert geometry["x"] == 48
+    assert geometry["y"] == 152
+    assert geometry["displayScale"] == 0.39
+    assert geometry["isDownscaled"] is True
+
+
+def test_plantuml_templates_use_compact_professional_style(monkeypatch) -> None:  # noqa: ANN001
+    _install_fake_plantuml_server(monkeypatch)
+
+    er_geometry = _plantuml_geometry_for("画一个图书馆借阅ER图，实体包括读者、图书、借阅记录、馆员")
+    component_geometry = _plantuml_geometry_for("画一个复杂系统架构图，包含前端、网关、订单服务、支付服务、数据库")
+
+    _assert_compact_plantuml_style(str(er_geometry["source"]))
+    _assert_compact_plantuml_style(str(component_geometry["source"]))
+    assert "skinparam classFontSize 12" in str(er_geometry["source"])
+    assert "skinparam componentFontSize 12" in str(component_geometry["source"])
+
+
+def test_component_diagram_uses_user_provided_modules(monkeypatch) -> None:  # noqa: ANN001
+    _install_fake_plantuml_server(monkeypatch)
+
+    geometry = _plantuml_geometry_for("画一个复杂系统架构图，包含前端、网关、用户服务、订单服务、支付服务、消息队列、数据库和监控系统")
+    source = str(geometry["source"])
+
+    for module_name in ("前端", "网关", "用户服务", "订单服务", "支付服务", "消息队列", "数据库", "监控系统"):
+        assert module_name in source
+    assert "前端 --> 网关" not in source
+    assert 'component "前端"' in source
+    assert 'queue "消息队列"' in source
+    assert 'database "数据库"' in source
 
 
 def test_plantuml_edits_keep_sources_renderable(monkeypatch) -> None:  # noqa: ANN001

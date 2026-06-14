@@ -58,13 +58,13 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 
 - **Voice-first creation**: recording and voice feedback are the primary controls. A mouse-based drawing toolbar is intentionally absent.
 - **Structured planning**: every command becomes a `CommandPlan` or `SceneGraph v2` before it mutates the canvas.
-- **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs.
+- **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs. System architecture diagrams extract user-provided modules, and PlantUML layers use compact typography without upscaling small diagrams.
 - **PlantUML source editing**: voice commands can rename or delete diagram nodes, append or delete Gantt tasks, append or delete swimlanes, and add, delete, or rewrite ER relationships by label or entity endpoints.
 - **Editable objects**: SVG objects carry geometry, styles, semantic tags, grouping, and layer metadata.
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.
 - **Grouped undo**: multi-step voice plans can be undone and redone as a single semantic action.
-- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options.
+- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR currently submits a full audio segment after silence detection; only the Web Speech API fallback exposes browser interim text, while backend streaming transcription remains on the roadmap.
 - **Image generation and refinement**: text-to-image and image-to-image providers are abstracted behind configurable provider adapters.
 - **Latency observability**: ASR, rule parsing, agent planning, execution, and end-to-end latency are logged.
 - **CI coverage**: GitHub Actions runs backend tests, frontend tests, frontend builds, Docker validation, and API smoke checks.
@@ -278,7 +278,7 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 
 The OpenAI-compatible generation and edit request size is decided at runtime: blank-canvas generation uses the current canvas size, while image refinement keeps the source image dimensions. Fixed proxy size variables are no longer recommended.
 
-PlantUML rendering first tries `AI_PAINTING_PLANTUML_JAR`. If it is not explicitly configured, the backend automatically tries `backend/tools/plantuml.jar`. If jar rendering fails, the backend then tries `AI_PAINTING_PLANTUML_SERVER_URL`. Docker Compose starts a fallback `plantuml-server` service and points the backend to `http://plantuml-server:8080` by default. If both jar and server rendering are unavailable, the backend creates a safe SVG source preview layer instead of failing the voice command.
+PlantUML rendering first tries `AI_PAINTING_PLANTUML_JAR`. If it is not explicitly configured, the backend automatically tries `backend/tools/plantuml.jar`. Local jar rendering uses UTF-8 input, default CJK font injection, compact template typography, and aspect-preserving SVG output. Small diagrams are not forced to upscale, while oversized diagrams are scaled down to fit the canvas. If jar rendering fails, the backend then tries `AI_PAINTING_PLANTUML_SERVER_URL`. Docker Compose starts a fallback `plantuml-server` service and points the backend to `http://plantuml-server:8080` by default. If both jar and server rendering are unavailable, the backend creates a safe SVG source preview layer instead of failing the voice command.
 
 Never put real secrets in README, issues, pull requests, commit messages, or logs.
 
@@ -383,6 +383,7 @@ See [docs/docker-deploy.md](docs/docker-deploy.md).
 
 - The project is in post-MVP productization, not a fully validated commercial product.
 - Xiaomi ASR, local Qwen3-ASR, real microphone input, and GPT-image-2 output quality still need more real-world evaluation.
+- Backend ASR is still segment-based rather than WebSocket or incremental streaming transcription.
 - Local image refinement currently relies on textual target descriptions and previous image metadata. Visual segmentation, mask editing, and automatic target detection are not implemented yet.
 - SVG is the main editing layer. Pixel brushes, filters, large canvases, and high-frequency animations still need Canvas / OffscreenCanvas enhancement.
 - Browser microphone permissions, autoplay behavior, and downloads depend on browser security policies.

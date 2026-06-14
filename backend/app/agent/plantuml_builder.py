@@ -34,6 +34,15 @@ ORG_CHART_DEFAULT_MIDDLE_ROLES = ("产品组", "设计组", "研发组")
 ORG_CHART_DEFAULT_BOTTOM_ROLES = ("用户研究", "交互设计", "前端开发", "后端开发")
 ORG_CHART_IGNORED_ROLE_NAMES = {"执行角色", "角色", "岗位", "成员", "团队", "部门", "职能小组"}
 GANTT_DEFAULT_TASKS = ("需求梳理", "原型设计", "开发联调", "测试上线")
+COMPONENT_DEFAULT_MODULES = ("前端工作台", "FastAPI 后端", "ASR 服务", "Drawing Agent", "SQLite 数据库", "图像生成服务")
+COMPACT_PLANTUML_STYLE_LINES = (
+    "skinparam shadowing false",
+    "skinparam roundcorner 10",
+    "skinparam backgroundColor transparent",
+    "skinparam defaultFontSize 12",
+    "skinparam titleFontSize 16",
+    "skinparam ArrowFontSize 11",
+)
 
 
 def build_plantuml_scene_graph(text: str) -> AgentSceneGraph | None:
@@ -63,7 +72,7 @@ def build_plantuml_scene_graph(text: str) -> AgentSceneGraph | None:
 
 def _plantuml_object(*, title: str, diagram_type: str, source: str, summary: str, tags: list[str]) -> AgentSceneObject:
     result = render_plantuml_source(source)
-    x, y, width, height = _fit_plantuml_box(result.width, result.height)
+    x, y, width, height, display_scale = _fit_plantuml_box(result.width, result.height)
     return AgentSceneObject(
         object_id=f"plantuml-{diagram_type}",
         type="plantuml",
@@ -76,6 +85,8 @@ def _plantuml_object(*, title: str, diagram_type: str, source: str, summary: str
             "y": y,
             "width": width,
             "height": height,
+            "displayScale": display_scale,
+            "isDownscaled": display_scale < 1,
             "intrinsicWidth": result.width,
             "intrinsicHeight": result.height,
             "title": title,
@@ -102,15 +113,19 @@ def _fit_plantuml_box(
     top: float = 48,
     max_width: float = 928,
     max_height: float = 672,
-) -> tuple[float, float, float, float]:
+) -> tuple[float, float, float, float, float]:
     if intrinsic_width <= 0 or intrinsic_height <= 0:
-        return left, top, max_width, max_height
-    scale = min(max_width / intrinsic_width, max_height / intrinsic_height)
+        return left, top, max_width, max_height, 1.0
+    scale = min(max_width / intrinsic_width, max_height / intrinsic_height, 1.0)
     width = intrinsic_width * scale
     height = intrinsic_height * scale
     x = left + (max_width - width) / 2
     y = top + (max_height - height) / 2
-    return round(x, 2), round(y, 2), round(width, 2), round(height, 2)
+    return round(x, 2), round(y, 2), round(width, 2), round(height, 2), round(scale, 2)
+
+
+def _compact_plantuml_style_lines(*extra_lines: str) -> list[str]:
+    return [*COMPACT_PLANTUML_STYLE_LINES, *extra_lines]
 
 
 def _plantuml_graph(*, title: str, diagram_type: str, source: str, summary: str, tags: list[str]) -> AgentSceneGraph:
@@ -278,6 +293,24 @@ def _extract_gantt_task_names(text: str) -> list[str]:
     return cleaned[:4] or list(GANTT_DEFAULT_TASKS)
 
 
+def _extract_component_names(text: str) -> list[str]:
+    match = re.search(r"(?:包含|包括|有)([^。；;]+)", text)
+    if match is None:
+        return list(COMPONENT_DEFAULT_MODULES)
+    names = [name for name in _split_short_chinese_list(match.group(1), max_items=10) if name not in {"模块", "组件", "系统", "服务", "架构"}]
+    return names if len(names) >= 3 else list(COMPONENT_DEFAULT_MODULES)
+
+
+def _component_declaration(name: str, alias: str, index: int) -> str:
+    palette = ("#E8F0FE", "#E6F4EA", "#FEF7E0", "#FCE8E6", "#F1F3F4")
+    color = palette[index % len(palette)]
+    if any(keyword in name.lower() for keyword in ("db", "sql", "sqlite", "mysql", "postgres", "redis")) or "数据库" in name:
+        return f'database "{name}" as {alias} {color}'
+    if any(keyword in name.lower() for keyword in ("mq", "kafka", "rabbitmq")) or "队列" in name or "消息" in name:
+        return f'queue "{name}" as {alias} {color}'
+    return f'component "{name}" as {alias} {color}'
+
+
 def _plantuml_er_graph(text: str) -> AgentSceneGraph:
     title = _extract_title(text, ("er图", "er 图", "实体关系图"), "实体关系图")
     entity_names = _extract_er_entity_names(text)
@@ -286,12 +319,17 @@ def _plantuml_er_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startuml",
         "' AI Painting generated PlantUML ER diagram",
-        "skinparam linetype ortho",
-        "skinparam shadowing false",
-        "skinparam roundcorner 12",
+        *_compact_plantuml_style_lines(
+            "skinparam linetype ortho",
+            "skinparam classFontSize 12",
+            "skinparam classAttributeFontSize 11",
+            "skinparam classBackgroundColor #F8FAFC",
+            "skinparam classBorderColor #5F6368",
+            "skinparam classFontColor #202124",
+        ),
         "skinparam entity {",
         "  BackgroundColor #F8FAFC",
-        "  BorderColor #1A73E8",
+        "  BorderColor #5F6368",
         "  FontColor #202124",
         "}",
         f"title {title}",
@@ -320,6 +358,7 @@ def _plantuml_org_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startwbs",
         "' AI Painting generated PlantUML organization chart",
+        *_compact_plantuml_style_lines(),
         f"title {title}",
         f"* {title}",
         f"** {top_role}",
@@ -349,6 +388,7 @@ def _plantuml_gantt_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startgantt",
         "' AI Painting generated PlantUML Gantt chart",
+        *_compact_plantuml_style_lines(),
         f"title {title}",
         "printscale weekly",
         "project starts 2026-01-01",
@@ -381,8 +421,11 @@ def _plantuml_swimlane_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startuml",
         "' AI Painting generated PlantUML swimlane activity diagram",
-        "skinparam shadowing false",
-        "skinparam roundcorner 16",
+        *_compact_plantuml_style_lines(
+            "skinparam activityFontSize 12",
+            "skinparam ActivityBackgroundColor #E8F0FE",
+            "skinparam ActivityBorderColor #5F6368",
+        ),
         f"title {title}",
         "start",
     ]
@@ -398,28 +441,32 @@ def _plantuml_swimlane_graph(text: str) -> AgentSceneGraph:
 
 def _plantuml_component_graph(text: str) -> AgentSceneGraph:
     title = "AI 绘图系统架构" if "ai" in text or "绘图" in text else "系统架构图"
+    module_names = _extract_component_names(text)
+    aliases = [_safe_alias(name, index) for index, name in enumerate(module_names)]
+    declaration_lines = [_component_declaration(name, aliases[index], index) for index, name in enumerate(module_names)]
+    relation_lines: list[str] = []
+    if len(aliases) >= 2:
+        relation_lines.append(f"{aliases[0]} --> {aliases[1]} : 入口请求")
+        hub = aliases[1]
+        for index, alias in enumerate(aliases[2:], start=2):
+            label = "写入" if "数据库" in module_names[index] else "投递" if "队列" in module_names[index] or "消息" in module_names[index] else "调用"
+            relation_lines.append(f"{hub} --> {alias} : {label}")
     lines = [
         "@startuml",
         "' AI Painting generated PlantUML component diagram",
-        "skinparam shadowing false",
-        "skinparam roundcorner 16",
-        "skinparam componentStyle rectangle",
+        *_compact_plantuml_style_lines(
+            "skinparam componentStyle rectangle",
+            "skinparam componentFontSize 12",
+            "skinparam databaseFontSize 12",
+            "skinparam componentBorderColor #5F6368",
+            "skinparam databaseBorderColor #5F6368",
+        ),
         f"title {title}",
-        'component "前端工作台\\nReact + Vite" as Frontend #E8F0FE',
-        'component "FastAPI 后端" as Backend #E6F4EA',
-        'component "ASR 服务\\n小米 / 本地 Qwen3" as ASR #FEF7E0',
-        'component "Drawing Agent\\nPlanner + Executor" as Agent #E8F0FE',
-        'database "SQLite\\n作品与历史" as DB #F1F3F4',
-        'component "图像生成服务\\nGPT-image-2" as ImageProvider #FCE8E6',
-        "Frontend --> Backend : 语音指令 / 画布状态",
-        "Backend --> ASR : 音频转写",
-        "Backend --> Agent : 规划绘图任务",
-        "Agent --> DB : 读写作品与操作历史",
-        "Agent --> ImageProvider : 艺术图生成或精修",
-        "Agent --> Backend : 结构化绘图计划",
+        *declaration_lines,
+        *relation_lines,
         "@enduml",
     ]
-    summary = "使用 PlantUML 绘制系统架构图, 展示前端、后端、ASR、Agent、数据库和图像生成服务"
+    summary = f"使用 PlantUML 绘制系统架构图, 展示{'、'.join(module_names)}"
     return _plantuml_graph(title=title, diagram_type="component", source="\n".join(lines), summary=summary, tags=["system_architecture"])
 
 
@@ -430,10 +477,11 @@ def _plantuml_activity_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startuml",
         "' AI Painting generated PlantUML activity diagram",
-        "skinparam shadowing false",
-        "skinparam roundcorner 18",
-        "skinparam ActivityBackgroundColor #E8F0FE",
-        "skinparam ActivityBorderColor #1A73E8",
+        *_compact_plantuml_style_lines(
+            "skinparam activityFontSize 12",
+            "skinparam ActivityBackgroundColor #E8F0FE",
+            "skinparam ActivityBorderColor #5F6368",
+        ),
         "title 语音绘图流程图",
         "start",
     ]
@@ -446,6 +494,10 @@ def _plantuml_activity_graph(text: str) -> AgentSceneGraph:
 def _plantuml_sequence_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startuml",
+        *_compact_plantuml_style_lines(
+            "skinparam sequenceParticipantFontSize 12",
+            "skinparam sequenceMessageFontSize 11",
+        ),
         "title 语音绘图调用时序图",
         "actor 用户",
         "participant 前端",
@@ -471,6 +523,12 @@ def _plantuml_sequence_graph(text: str) -> AgentSceneGraph:
 def _plantuml_class_graph(text: str) -> AgentSceneGraph:
     lines = [
         "@startuml",
+        *_compact_plantuml_style_lines(
+            "skinparam classFontSize 12",
+            "skinparam classAttributeFontSize 11",
+            "skinparam classBackgroundColor #F8FAFC",
+            "skinparam classBorderColor #5F6368",
+        ),
         "title 绘图 Agent 类图",
         "class Artwork {",
         "  +id",
