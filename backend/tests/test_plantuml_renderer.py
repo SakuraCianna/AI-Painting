@@ -23,6 +23,20 @@ def test_plantuml_source_validation_blocks_remote_includes() -> None:
         validate_plantuml_source("@startuml\n!includeurl https://example.test/style.puml\nA --> B\n@enduml")
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "@startuml\nA --> B\n@endwbs",
+        "@startuml\nA --> B\n@enduml\ntrailing text",
+        "@startuml\nA --> B\n@enduml\n@startuml\nC --> D\n@enduml",
+        "@startsalt\n{+\n  login\n}\n@endsalt",
+    ],
+)
+def test_plantuml_source_validation_requires_single_matching_supported_block(source: str) -> None:
+    with pytest.raises(PlantUMLRenderError):
+        validate_plantuml_source(source)
+
+
 def test_plantuml_source_validation_rejects_invalid_or_oversized_source(monkeypatch) -> None:
     with pytest.raises(PlantUMLRenderError):
         validate_plantuml_source("A --> B")
@@ -78,3 +92,31 @@ def test_plantuml_renderer_uses_server_when_configured(monkeypatch) -> None:
 
     assert result.mode == "server"
     assert "server" in result.svg
+
+
+def test_plantuml_renderer_caches_identical_server_source(monkeypatch) -> None:
+    monkeypatch.delenv("AI_PAINTING_PLANTUML_JAR", raising=False)
+    monkeypatch.setenv("AI_PAINTING_PLANTUML_SERVER_URL", "https://plantuml.example.test")
+    plantuml_renderer._render_plantuml_cached.cache_clear()
+    calls: list[str] = []
+
+    class Response:
+        text = '<svg xmlns="http://www.w3.org/2000/svg"><text>cached-server</text></svg>'
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_get(url: str, *, timeout: float) -> Response:
+        calls.append(url)
+        assert timeout == 8.0
+        return Response()
+
+    monkeypatch.setattr(plantuml_renderer.httpx, "get", fake_get)
+
+    source = "@startuml\nCached --> SVG\n@enduml"
+    first = render_plantuml_source(source)
+    second = render_plantuml_source(source)
+
+    assert first.mode == "server"
+    assert second.svg == first.svg
+    assert len(calls) == 1

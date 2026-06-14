@@ -15,6 +15,13 @@ import httpx
 
 PLANTUML_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
 BLOCKED_DIRECTIVE_PATTERN = re.compile(r"^\s*!(?:include|includeurl|includesub|import)\b", re.IGNORECASE | re.MULTILINE)
+START_TO_END_MARKERS = {
+    "@startuml": "@enduml",
+    "@startwbs": "@endwbs",
+    "@startgantt": "@endgantt",
+}
+START_MARKER_PATTERN = re.compile(r"^\s*@(startuml|startwbs|startgantt)\b", re.IGNORECASE | re.MULTILINE)
+END_MARKER_PATTERN = re.compile(r"^\s*@(enduml|endwbs|endgantt)\b", re.IGNORECASE | re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -46,11 +53,30 @@ def validate_plantuml_source(source: str) -> str:
     max_chars = _read_int_env("AI_PAINTING_PLANTUML_MAX_SOURCE_CHARS", 12_000)
     if len(clean_source) > max_chars:
         raise PlantUMLRenderError("PlantUML 源码过长")
-    if not clean_source.startswith("@start") or "@end" not in clean_source:
-        raise PlantUMLRenderError("PlantUML 源码必须包含 @start 和 @end")
     if BLOCKED_DIRECTIVE_PATTERN.search(clean_source):
         raise PlantUMLRenderError("PlantUML 源码不能使用 include 或 import 指令")
+    _validate_single_plantuml_block(clean_source)
     return clean_source
+
+
+def _validate_single_plantuml_block(source: str) -> None:
+    lines = source.splitlines()
+    if not lines:
+        raise PlantUMLRenderError("PlantUML 源码不能为空")
+
+    first_marker = lines[0].strip().split(maxsplit=1)[0].lower()
+    expected_end_marker = START_TO_END_MARKERS.get(first_marker)
+    if expected_end_marker is None:
+        raise PlantUMLRenderError("PlantUML 源码必须以 @startuml、@startwbs 或 @startgantt 开始")
+
+    last_marker = lines[-1].strip().split(maxsplit=1)[0].lower()
+    if last_marker != expected_end_marker:
+        raise PlantUMLRenderError(f"PlantUML 源码必须以对应的 {expected_end_marker} 结束")
+
+    start_count = len(START_MARKER_PATTERN.findall(source))
+    end_count = len(END_MARKER_PATTERN.findall(source))
+    if start_count != 1 or end_count != 1:
+        raise PlantUMLRenderError("PlantUML 源码只能包含一个完整图表块")
 
 
 @lru_cache(maxsize=64)
