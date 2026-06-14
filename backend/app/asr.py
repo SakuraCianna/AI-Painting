@@ -111,6 +111,8 @@ def provider_capability(provider: str) -> AsrProviderCapability:
             mode="browser_interim",
             streaming_supported=True,
             interim_results_supported=True,
+            websocket_transport_supported=False,
+            partial_transcript_supported=True,
             segment_submission=False,
             silence_stop_ms=None,
             description="浏览器 SpeechRecognition 兜底路径, 可显示 interim 文本",
@@ -120,17 +122,21 @@ def provider_capability(provider: str) -> AsrProviderCapability:
             mode="segment",
             streaming_supported=False,
             interim_results_supported=False,
+            websocket_transport_supported=True,
+            partial_transcript_supported=False,
             segment_submission=True,
             silence_stop_ms=CLIENT_SEGMENT_SILENCE_MS,
-            description="前端静音截停后把整段音频提交到本地 ASR",
+            description="前端通过 WebSocket 流式上传音频, 静音截停后提交到本地 ASR 整段识别",
         )
     return AsrProviderCapability(
         mode="segment",
         streaming_supported=False,
         interim_results_supported=False,
+        websocket_transport_supported=True,
+        partial_transcript_supported=False,
         segment_submission=True,
         silence_stop_ms=CLIENT_SEGMENT_SILENCE_MS,
-        description="前端静音截停后把整段音频提交到小米 MiMo ASR",
+        description="前端通过 WebSocket 流式上传音频, 静音截停后提交到小米 MiMo ASR 整段识别",
     )
 
 

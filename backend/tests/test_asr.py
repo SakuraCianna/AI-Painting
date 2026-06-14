@@ -95,11 +95,16 @@ def test_provider_status_prefers_xiaomi_then_local(monkeypatch) -> None:
     assert status.provider_capabilities["xiaomi"].streaming_supported is False
     assert status.provider_capabilities["xiaomi"].interim_results_supported is False
     assert status.provider_capabilities["xiaomi"].segment_submission is True
+    assert status.provider_capabilities["xiaomi"].websocket_transport_supported is True
+    assert status.provider_capabilities["xiaomi"].partial_transcript_supported is False
     assert status.provider_capabilities["xiaomi"].silence_stop_ms == 1500
     assert status.provider_capabilities["local"].mode == "segment"
+    assert status.provider_capabilities["local"].websocket_transport_supported is True
     assert status.provider_capabilities["web_speech"].mode == "browser_interim"
     assert status.provider_capabilities["web_speech"].streaming_supported is True
     assert status.provider_capabilities["web_speech"].interim_results_supported is True
+    assert status.provider_capabilities["web_speech"].websocket_transport_supported is False
+    assert status.provider_capabilities["web_speech"].partial_transcript_supported is True
     assert status.provider_capabilities["web_speech"].segment_submission is False
 
 

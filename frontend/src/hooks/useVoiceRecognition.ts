@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchAsrProviders, transcribeAudio } from "../api";
+import { createAsrStreamSocket, fetchAsrProviders, transcribeAudio } from "../api";
 import type { AsrProviderCapability, AsrTranscriptionMetrics } from "../types";
 
 interface SpeechRecognitionAlternativeLike {
@@ -67,6 +67,8 @@ const DEFAULT_WEB_SPEECH_CAPABILITY: AsrProviderCapability = {
   mode: "browser_interim",
   streaming_supported: true,
   interim_results_supported: true,
+  websocket_transport_supported: false,
+  partial_transcript_supported: true,
   segment_submission: false,
   silence_stop_ms: null,
   description: "浏览器 SpeechRecognition 兜底路径, 可显示 interim 文本",
@@ -76,6 +78,8 @@ const DEFAULT_BACKEND_CAPABILITY: AsrProviderCapability = {
   mode: "segment",
   streaming_supported: false,
   interim_results_supported: false,
+  websocket_transport_supported: false,
+  partial_transcript_supported: false,
   segment_submission: true,
   silence_stop_ms: SILENCE_MS,
   description: "前端静音截停后把整段音频提交到后端 ASR",
@@ -148,6 +152,18 @@ function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array {
   return new Uint8Array(buffer);
 }
 
+function encodePcm16(samples: Float32Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(samples.length * 2);
+  const view = new DataView(buffer);
+  let offset = 0;
+  for (const sample of samples) {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    offset += 2;
+  }
+  return buffer;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -172,6 +188,10 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   const providerRef = useRef<VoiceProvider>("none");
   const providerCapabilitiesRef = useRef<Record<string, AsrProviderCapability>>({});
   const isUploadingRef = useRef(false);
+  const streamSocketRef = useRef<WebSocket | null>(null);
+  const streamReadyRef = useRef(false);
+  const streamSentBytesRef = useRef(0);
+  const pendingStreamFinalizeRef = useRef<{ chunks: Float32Array[]; inputSampleRate: number } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -195,6 +215,17 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     onFinalTranscriptRef.current = onFinalTranscript;
   }, [onFinalTranscript]);
 
+  const closeAsrStream = useCallback(() => {
+    const socket = streamSocketRef.current;
+    streamSocketRef.current = null;
+    streamReadyRef.current = false;
+    streamSentBytesRef.current = 0;
+    pendingStreamFinalizeRef.current = null;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.close();
+    }
+  }, []);
+
   const stopBackendAudio = useCallback(() => {
     processorRef.current?.disconnect();
     processorRef.current = null;
@@ -209,7 +240,8 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     captureChunksRef.current = [];
     recordingRef.current = false;
     isUploadingRef.current = false;
-  }, []);
+    closeAsrStream();
+  }, [closeAsrStream]);
 
   const startWebSpeechFallback = useCallback(() => {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -282,7 +314,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     }
   }, []);
 
-  const finalizeBackendTranscript = useCallback(
+  const finalizeRestTranscript = useCallback(
     async (chunks: Float32Array[], inputSampleRate: number) => {
       if (isUploadingRef.current || chunks.length === 0) {
         return;
@@ -318,6 +350,126 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     [startWebSpeechFallback, stopBackendAudio]
   );
 
+  const handleAsrStreamFinal = useCallback((payload: Record<string, unknown>) => {
+    const text = typeof payload.text === "string" ? payload.text.trim() : "";
+    if (!text) {
+      setError("ASR 流式通道没有返回文本");
+      return;
+    }
+    const provider = typeof payload.provider === "string" ? payload.provider : "backend";
+    const providerLabelFromStream = typeof payload.provider_label === "string" ? payload.provider_label : providerLabel;
+    const metrics = payload.metrics && typeof payload.metrics === "object" ? (payload.metrics as AsrTranscriptionMetrics) : null;
+    pendingStreamFinalizeRef.current = null;
+    streamSentBytesRef.current = 0;
+    isUploadingRef.current = false;
+    setProviderLabel(providerLabelFromStream);
+    setProviderCapability(providerCapabilitiesRef.current[provider] ?? DEFAULT_BACKEND_CAPABILITY);
+    setLastAsrMetrics(metrics);
+    setLastFinalTranscript(text);
+    setInterimTranscript("");
+    onFinalTranscriptRef.current(text, metrics);
+  }, [providerLabel]);
+
+  const handleAsrStreamMessage = useCallback(
+    (event: MessageEvent) => {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(String(event.data));
+      } catch {
+        setError("ASR 流式通道返回了无法解析的消息");
+        return;
+      }
+      if (!payload || typeof payload !== "object") {
+        return;
+      }
+      const typedPayload = payload as Record<string, unknown>;
+      if (typedPayload.type === "final") {
+        handleAsrStreamFinal(typedPayload);
+        return;
+      }
+      if (typedPayload.type === "recognizing") {
+        setInterimTranscript("正在识别...");
+        return;
+      }
+      if (typedPayload.type === "error") {
+        const pending = pendingStreamFinalizeRef.current;
+        pendingStreamFinalizeRef.current = null;
+        streamSentBytesRef.current = 0;
+        const message = typeof typedPayload.message === "string" ? typedPayload.message : "ASR 流式通道失败";
+        setError(message);
+        if (pending) {
+          isUploadingRef.current = false;
+          void finalizeRestTranscript(pending.chunks, pending.inputSampleRate);
+        }
+      }
+    },
+    [finalizeRestTranscript, handleAsrStreamFinal]
+  );
+
+  const openAsrStream = useCallback(
+    (sampleRate: number) => {
+      try {
+        const socket = createAsrStreamSocket();
+        socket.binaryType = "arraybuffer";
+        socket.onopen = () => {
+          streamReadyRef.current = true;
+          socket.send(JSON.stringify({ type: "start", language: "zh", sample_rate: sampleRate }));
+        };
+        socket.onmessage = handleAsrStreamMessage;
+        socket.onerror = () => {
+          streamReadyRef.current = false;
+          setError("ASR 流式通道不可用, 将回退到整段提交");
+        };
+        socket.onclose = () => {
+          streamReadyRef.current = false;
+          if (streamSocketRef.current === socket) {
+            streamSocketRef.current = null;
+          }
+        };
+        streamSocketRef.current = socket;
+      } catch {
+        streamReadyRef.current = false;
+        streamSocketRef.current = null;
+      }
+    },
+    [handleAsrStreamMessage]
+  );
+
+  const finalizeBackendTranscript = useCallback(
+    async (chunks: Float32Array[], inputSampleRate: number) => {
+      const socket = streamSocketRef.current;
+      if (
+        socket &&
+        streamReadyRef.current &&
+        streamSentBytesRef.current > 0 &&
+        socket.readyState === WebSocket.OPEN &&
+        !isUploadingRef.current
+      ) {
+        isUploadingRef.current = true;
+        pendingStreamFinalizeRef.current = { chunks, inputSampleRate };
+        setInterimTranscript("正在识别...");
+        socket.send(JSON.stringify({ type: "finalize" }));
+        return;
+      }
+      await finalizeRestTranscript(chunks, inputSampleRate);
+    },
+    [finalizeRestTranscript]
+  );
+
+  const sendAsrStreamFrame = useCallback((input: Float32Array, sampleRate: number) => {
+    const socket = streamSocketRef.current;
+    if (!socket || !streamReadyRef.current || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    const samples = downsampleBuffer(input, sampleRate, TARGET_SAMPLE_RATE);
+    const pcm = encodePcm16(samples);
+    if (pcm.byteLength === 0) {
+      return;
+    }
+    socket.send(pcm);
+    streamSentBytesRef.current += pcm.byteLength;
+  }, []);
+
   const handleAudioFrame = useCallback(
     (input: Float32Array, sampleRate: number) => {
       if (providerRef.current !== "backend" || !shouldListenRef.current || isUploadingRef.current) {
@@ -345,6 +497,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       }
 
       captureChunksRef.current.push(new Float32Array(input));
+      sendAsrStreamFrame(input, sampleRate);
       const speechDuration = now - speechStartedAtRef.current;
       const silenceDuration = now - lastVoiceAtRef.current;
       const shouldFinalize = speechDuration > MIN_SPEECH_MS && silenceDuration > SILENCE_MS;
@@ -356,7 +509,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         void finalizeBackendTranscript(chunks, sampleRate);
       }
     },
-    [finalizeBackendTranscript]
+    [finalizeBackendTranscript, sendAsrStreamFrame]
   );
 
   const startBackendAudio = useCallback(
@@ -383,7 +536,11 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
           return;
         }
 
+        const capability = providerCapabilitiesRef.current[providerName] ?? DEFAULT_BACKEND_CAPABILITY;
         const audioContext = new AudioContextClass({ sampleRate: TARGET_SAMPLE_RATE });
+        if (capability.websocket_transport_supported && typeof WebSocket !== "undefined") {
+          openAsrStream(TARGET_SAMPLE_RATE);
+        }
         const source = audioContext.createMediaStreamSource(stream);
         const processor = audioContext.createScriptProcessor(2048, 1, 1);
         processor.onaudioprocess = (event) => {
@@ -401,7 +558,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         providerRef.current = "backend";
         setProvider("backend");
         setProviderLabel(label);
-        setProviderCapability(providerCapabilitiesRef.current[providerName] ?? DEFAULT_BACKEND_CAPABILITY);
+        setProviderCapability(capability);
         setIsSupported(true);
         setIsListening(true);
         setError(null);
@@ -411,7 +568,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         startWebSpeechFallback();
       }
     },
-    [handleAudioFrame, startWebSpeechFallback, stopBackendAudio]
+    [handleAudioFrame, openAsrStream, startWebSpeechFallback, stopBackendAudio]
   );
 
   const startPreferredRecognition = useCallback(async () => {
