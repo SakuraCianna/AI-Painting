@@ -370,6 +370,30 @@
     "expected_operation_types": ["edit_plantuml"]
   },
   {
+    "id": "agent-delete-plantuml-flowchart-node",
+    "text": "删除流程图里的意图分类节点",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
+    "id": "agent-delete-plantuml-gantt-task",
+    "text": "删除甘特图里的测试任务",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
+    "id": "agent-delete-plantuml-swimlane",
+    "text": "删除泳道图里的运营泳道",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
+    "id": "agent-update-plantuml-er-relation",
+    "text": "把ER图里的创建关系改成一对一的下单关系",
+    "tier": "agent",
+    "expected_operation_types": ["edit_plantuml"]
+  },
+  {
     "id": "replace-window-shape",
     "text": "把窗户改成圆形",
     "tier": "rules",

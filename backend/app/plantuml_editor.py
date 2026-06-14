@@ -26,6 +26,21 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
         next_source = _add_swimlane(source, str(payload.get("lane_name") or ""), str(payload.get("step_name") or ""))
     elif action == "add_relation":
         next_source = _add_relation(source, str(payload.get("relation_text") or ""))
+    elif action == "delete_node":
+        next_source = _delete_node(source, str(payload.get("node_text") or ""))
+    elif action == "delete_gantt_task":
+        next_source = _delete_gantt_task(source, str(payload.get("task_name") or ""))
+    elif action == "delete_swimlane":
+        next_source = _delete_swimlane(source, str(payload.get("lane_name") or ""))
+    elif action == "delete_relation":
+        next_source = _delete_relation(source, str(payload.get("relation_text") or ""))
+    elif action == "update_relation":
+        next_source = _update_relation(
+            source,
+            str(payload.get("relation_text") or ""),
+            str(payload.get("new_label") or ""),
+            str(payload.get("cardinality") or ""),
+        )
     else:
         raise PlantUMLEditError(f"不支持的 PlantUML 编辑动作: {action}")
 
@@ -59,6 +74,16 @@ def _flexible_text_pattern(value: str) -> re.Pattern[str]:
         raise PlantUMLEditError("需要提供要修改的原文本")
     parts = [re.escape(char) for char in compact]
     return re.compile(r"\s*".join(parts), re.IGNORECASE)
+
+
+def _compact_label(value: str) -> str:
+    return re.sub(r"\s+", "", value).casefold()
+
+
+def _label_matches(candidate: str, expected: str) -> bool:
+    compact_candidate = _compact_label(candidate)
+    compact_expected = _compact_label(expected)
+    return bool(compact_candidate and compact_expected and (compact_candidate == compact_expected or compact_expected in compact_candidate))
 
 
 def _rename_text(source: str, old_text: str, new_text: str) -> str:
@@ -158,3 +183,161 @@ def _add_relation(source: str, relation_text: str) -> str:
     if line in source:
         raise PlantUMLEditError(f"PlantUML 关系已存在: {label}")
     return _insert_before_line(source, r"@enduml", [line])
+
+
+def _delete_node(source: str, node_text: str) -> str:
+    node = _safe_label(node_text)
+    lines = source.splitlines()
+    removed = False
+    output: list[str] = []
+    skip_wbs_depth: int | None = None
+    for line in lines:
+        stripped = line.strip()
+        wbs_match = re.match(r"^(\*+)\s+(.+)$", stripped)
+        if skip_wbs_depth is not None:
+            if wbs_match and len(wbs_match.group(1)) > skip_wbs_depth:
+                continue
+            skip_wbs_depth = None
+        activity_match = re.match(r"^:(.+);\s*$", stripped)
+        if activity_match and _label_matches(activity_match.group(1), node):
+            removed = True
+            continue
+        if wbs_match and _label_matches(wbs_match.group(2), node):
+            removed = True
+            skip_wbs_depth = len(wbs_match.group(1))
+            continue
+        output.append(line)
+    if not removed:
+        raise PlantUMLEditError(f"没有找到 PlantUML 节点: {node}")
+    return "\n".join(output)
+
+
+def _gantt_task_names(source: str) -> list[str]:
+    return re.findall(r"^\s*\[([^\]]+)\]\s+lasts\s+\d+\s+days\s*$", source, re.MULTILINE)
+
+
+def _matching_task_name(source: str, task_name: str) -> str:
+    task = _safe_label(task_name, max_length=32)
+    for name in _gantt_task_names(source):
+        if _label_matches(name, task):
+            return name
+    raise PlantUMLEditError(f"没有找到 PlantUML 甘特任务: {task}")
+
+
+def _delete_gantt_task(source: str, task_name: str) -> str:
+    task = _matching_task_name(source, task_name)
+    sequence = _gantt_task_names(source)
+    task_index = sequence.index(task)
+    previous_task = sequence[task_index - 1] if task_index > 0 else None
+    next_task = sequence[task_index + 1] if task_index + 1 < len(sequence) else None
+    if previous_task is None and next_task is None:
+        raise PlantUMLEditError("甘特图至少需要保留一个任务")
+
+    output: list[str] = []
+    removed = False
+    for line in source.splitlines():
+        stripped = line.strip()
+        if re.match(rf"^\[{re.escape(task)}\]\s+", stripped):
+            removed = True
+            continue
+        if next_task:
+            next_start_pattern = rf"^\[{re.escape(next_task)}\]\s+starts at \[{re.escape(task)}\]'s end\s*$"
+            if re.match(next_start_pattern, stripped):
+                if previous_task:
+                    output.append(f"[{next_task}] starts at [{previous_task}]'s end")
+                continue
+        milestone_match = re.match(rf"^\[上线里程碑\]\s+happens at \[{re.escape(task)}\]'s end\s*$", stripped)
+        if milestone_match:
+            if previous_task:
+                output.append(f"[上线里程碑] happens at [{previous_task}]'s end")
+            elif next_task:
+                output.append(f"[上线里程碑] happens at [{next_task}]'s end")
+            continue
+        output.append(line)
+    if not removed:
+        raise PlantUMLEditError(f"没有找到 PlantUML 甘特任务: {task}")
+    return "\n".join(output)
+
+
+def _delete_swimlane(source: str, lane_name: str) -> str:
+    lane = _safe_label(lane_name, max_length=24)
+    lines = source.splitlines()
+    output: list[str] = []
+    removed = False
+    skipping_lane = False
+    for line in lines:
+        stripped = line.strip()
+        lane_match = re.match(r"^\|(.+)\|$", stripped)
+        if lane_match:
+            if _label_matches(lane_match.group(1), lane):
+                removed = True
+                skipping_lane = True
+                continue
+            skipping_lane = False
+        elif skipping_lane and (stripped.lower() in {"stop", "@enduml"} or stripped.startswith("|")):
+            skipping_lane = False
+        if skipping_lane:
+            continue
+        output.append(line)
+    if not removed:
+        raise PlantUMLEditError(f"没有找到 PlantUML 泳道: {lane}")
+    return "\n".join(output)
+
+
+def _relation_line_pattern() -> re.Pattern[str]:
+    return re.compile(
+        r"^\s*(?P<source>[A-Za-z0-9_]+)\s+"
+        r"(?P<operator>[|}{o*]+--[|}{o*]+)\s+"
+        r"(?P<target>[A-Za-z0-9_]+)\s*:\s*"
+        r"(?P<label>.+?)\s*$"
+    )
+
+
+def _relation_operator_for_cardinality(cardinality: str) -> str | None:
+    normalized = cardinality.strip().lower()
+    mapping = {
+        "one_to_one": "||--||",
+        "one_to_many": "||--o{",
+        "many_to_one": "}o--||",
+        "many_to_many": "}o--o{",
+    }
+    return mapping.get(normalized)
+
+
+def _delete_relation(source: str, relation_text: str) -> str:
+    relation = _safe_label(relation_text, max_length=80)
+    pattern = _relation_line_pattern()
+    output: list[str] = []
+    removed = False
+    for line in source.splitlines():
+        match = pattern.match(line)
+        if match and _label_matches(match.group("label"), relation):
+            removed = True
+            continue
+        output.append(line)
+    if not removed:
+        raise PlantUMLEditError(f"没有找到 PlantUML 关系: {relation}")
+    return "\n".join(output)
+
+
+def _update_relation(source: str, relation_text: str, new_label: str, cardinality: str) -> str:
+    relation = _safe_label(relation_text, max_length=80)
+    label = _safe_label(new_label, max_length=30) if new_label.strip() else None
+    operator = _relation_operator_for_cardinality(cardinality)
+    if label is None and operator is None:
+        raise PlantUMLEditError("修改关系需要提供新标签或新基数")
+    pattern = _relation_line_pattern()
+    output: list[str] = []
+    updated = False
+    for line in source.splitlines():
+        match = pattern.match(line)
+        if not match or not _label_matches(match.group("label"), relation):
+            output.append(line)
+            continue
+        next_operator = operator or match.group("operator")
+        next_label = label or match.group("label")
+        output.append(f"{match.group('source')} {next_operator} {match.group('target')} : {next_label}")
+        updated = True
+    if not updated:
+        raise PlantUMLEditError(f"没有找到 PlantUML 关系: {relation}")
+    return "\n".join(output)
