@@ -15,11 +15,23 @@ services:
       AI_PAINTING_MIMO_TTS_MODEL: ${AI_PAINTING_MIMO_TTS_MODEL:-mimo-v2-tts}
       AI_PAINTING_MIMO_TTS_VOICE: ${AI_PAINTING_MIMO_TTS_VOICE:-default_zh}
       AI_PAINTING_MIMO_TTS_STYLE: ${AI_PAINTING_MIMO_TTS_STYLE:-自然 清晰}
+      AI_PAINTING_PLANTUML_JAR: ${AI_PAINTING_PLANTUML_JAR:-/app/backend/tools/plantuml.jar}
+      AI_PAINTING_PLANTUML_SERVER_URL: ${AI_PAINTING_PLANTUML_SERVER_URL:-http://plantuml-server:8080}
+      AI_PAINTING_PLANTUML_FONT_NAME: ${AI_PAINTING_PLANTUML_FONT_NAME:-Noto Sans CJK SC}
+      AI_PAINTING_JAVA_BIN: ${AI_PAINTING_JAVA_BIN:-java}
       MIMO_API_KEY: ${MIMO_API_KEY:-}
+    depends_on:
+      - plantuml-server
     ports:
       - "${AI_PAINTING_BACKEND_PORT:-8084}:8080"
     volumes:
       - ai-painting-backend-data:/app/backend/data
+    restart: unless-stopped
+
+  plantuml-server:
+    image: plantuml/plantuml-server:jetty
+    ports:
+      - "${AI_PAINTING_PLANTUML_SERVER_PORT:-8090}:8080"
     restart: unless-stopped
 
   frontend:

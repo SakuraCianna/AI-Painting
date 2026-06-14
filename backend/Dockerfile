@@ -7,12 +7,16 @@ WORKDIR /app
 
 COPY backend/requirements.txt /app/backend/requirements.txt
 COPY backend/requirements-local-asr.txt /app/backend/requirements-local-asr.txt
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends default-jre-headless graphviz fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
 RUN python -m pip install --no-cache-dir -r /app/backend/requirements.txt
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/backend/data \
     && chown -R appuser:appuser /app
 
 COPY backend/app /app/backend/app
+COPY backend/tools /app/backend/tools
 COPY backend/local_asr_qwen3.py /app/backend/local_asr_qwen3.py
 USER appuser
 
