@@ -341,8 +341,10 @@ AI Painting 的长期目标不是做一个普通文生图工具, 而是做一款
 - 增加导出 SVG 和项目 JSON - 已完成第一版, 支持语音触发前端下载当前 SVG 画布和 artwork JSON
 - 数据库迁移 SQL 标识符白名单化 - 已完成第一版
 - 延迟指标 SQLite Row 缺失列兼容 - 已完成第一版
+- SQLite 连接页缓存配置 - 已完成第一版, 使用连接级 `PRAGMA cache_size` 减少热路径重复读页面成本
 - 前端 React Error Boundary - 已完成第一版
 - 画布 runtime 适配层 - 已完成第一版, 支持 SVG renderer 能力标记和 `layer_id` / `z_index` 稳定排序
+- 前端画布渲染缓存 - 已完成第一版, 使用 `React.memo` / `useMemo` 减少无关状态变化触发的 SVG 子树重建, 并移除未消费的延迟汇总请求
 - 引入 ruff/mypy/pre-commit - 已完成第一版, mypy 当前为渐进式门禁, pyright 和大文件拆分待完善
 - 调研画布底座迁移成本
 - 拆分 `planner.py`、`repositories.py` 和 `command_parser.py` 大文件

@@ -158,6 +158,7 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | 前端请求后端地址 | `http://127.0.0.1:8084` |
 | `AI_PAINTING_DB` | SQLite 数据库路径 | `backend\data\ai_painting.sqlite3` |
+| `AI_PAINTING_SQLITE_CACHE_SIZE_KIB` | SQLite 连接页缓存大小, 单位 KiB | `8192` |
 | `AI_PAINTING_CORS_ORIGINS` | 后端 CORS 允许来源 | `http://localhost:3001,http://127.0.0.1:3001` |
 | `MIMO_API_KEY` | 小米 MiMo API Key | 空 |
 | `AI_PAINTING_ASR_PROVIDERS` | 后端 ASR Provider 顺序 | `xiaomi,local` |

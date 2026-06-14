@@ -7,7 +7,7 @@ import pauseCircleRounded from "@iconify-icons/material-symbols/pause-circle-rou
 import radioButtonUnchecked from "@iconify-icons/material-symbols/radio-button-unchecked";
 import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createArtwork, fetchLatencyMetrics, submitVoiceCommand, synthesizeSpeech } from "./api";
+import { createArtwork, submitVoiceCommand, synthesizeSpeech } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
 import { AppErrorBoundary } from "./ErrorBoundary";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
@@ -163,14 +163,6 @@ function WorkspaceApp() {
       });
   }, []);
 
-  useEffect(() => {
-    if (!artwork) {
-      return;
-    }
-    fetchLatencyMetrics(artwork.id)
-      .catch(() => undefined);
-  }, [artwork?.id]);
-
   const playFeedback = useCallback(async (message: string) => {
     try {
       const speech = await synthesizeSpeech(message);
@@ -209,7 +201,6 @@ function WorkspaceApp() {
         if (response.artwork) {
           setArtwork(response.artwork);
         }
-        void fetchLatencyMetrics(artwork.id).catch(() => undefined);
         const exportFormat = getExportFormat(response.plan);
         if (exportFormat) {
           await runArtworkExport(exportFormat, response.artwork ?? artwork);

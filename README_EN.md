@@ -240,6 +240,7 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Frontend API base URL | `http://127.0.0.1:8084` |
 | `AI_PAINTING_DB` | SQLite database path | `backend\data\ai_painting.sqlite3` |
+| `AI_PAINTING_SQLITE_CACHE_SIZE_KIB` | SQLite connection page cache size in KiB | `8192` |
 | `AI_PAINTING_CORS_ORIGINS` | Allowed backend CORS origins | `http://localhost:3001,http://127.0.0.1:3001` |
 | `MIMO_API_KEY` | Xiaomi MiMo API key | empty |
 | `AI_PAINTING_ASR_PROVIDERS` | Backend ASR provider order | `xiaomi,local` |

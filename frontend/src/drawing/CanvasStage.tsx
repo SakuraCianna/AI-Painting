@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import type { Artwork, DrawingObject } from "../types";
 import { getOrderedCanvasObjects, SVG_CANVAS_RUNTIME } from "./canvasRuntime";
 
@@ -233,11 +234,12 @@ function renderObject(object: DrawingObject) {
   );
 }
 
-export function CanvasStage({ artwork }: CanvasStageProps) {
+export const CanvasStage = memo(function CanvasStage({ artwork }: CanvasStageProps) {
   const width = artwork?.width ?? 1024;
   const height = artwork?.height ?? 768;
   const background = artwork?.background ?? "#ffffff";
-  const orderedObjects = getOrderedCanvasObjects(artwork?.objects ?? []);
+  const orderedObjects = useMemo(() => getOrderedCanvasObjects(artwork?.objects ?? []), [artwork?.objects]);
+  const renderedObjects = useMemo(() => orderedObjects.map(renderObject), [orderedObjects]);
 
   return (
     <div className="canvas-shell" aria-label="语音绘图画布">
@@ -257,8 +259,8 @@ export function CanvasStage({ artwork }: CanvasStageProps) {
           </marker>
         </defs>
         <rect x="0" y="0" width={width} height={height} fill={background} />
-        {orderedObjects.map(renderObject)}
+        {renderedObjects}
       </svg>
     </div>
   );
-}
+});
