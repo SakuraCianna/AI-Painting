@@ -76,6 +76,8 @@ def test_build_command_plan_falls_back_when_agent_crashes(monkeypatch) -> None:
     assert result.plan.operations == []
     assert result.plan.planner_source == "rules_fallback"
     assert result.metrics.fallback_used is True
+    assert result.metrics.fallback_reason == "agent_unexpected_error"
+    assert result.metrics.fallback_error_type == "RuntimeError"
     assert result.metrics.agent_succeeded is False
     assert result.metrics.planner_source == "rules_fallback"
 
@@ -109,6 +111,8 @@ def test_agent_high_risk_plan_without_confirmation_falls_back(monkeypatch) -> No
     assert result.plan.operations[0].operation_type == "clear_canvas"
     assert result.plan.planner_source == "rules_fallback"
     assert result.metrics.fallback_used is True
+    assert result.metrics.fallback_reason == "agent_planner_error"
+    assert result.metrics.fallback_error_type == "DrawingAgentError"
     assert result.metrics.agent_succeeded is False
 
 
@@ -126,6 +130,8 @@ def test_build_command_plan_uses_rules_when_agent_routing_crashes(monkeypatch) -
     assert result.plan.operations[0].operation_type == "add_object"
     assert result.plan.planner_source == "rules_fallback"
     assert result.metrics.fallback_used is True
+    assert result.metrics.fallback_reason == "agent_routing_error"
+    assert result.metrics.fallback_error_type == "RuntimeError"
     assert result.metrics.agent_attempted is False
     assert result.metrics.agent_planner_ms is None
     assert result.metrics.planner_source == "rules_fallback"

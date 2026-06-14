@@ -58,6 +58,7 @@ def summarize_latency_rows(rows: Iterable[Mapping[str, Any]], *, artwork_id: str
     metric_values: dict[str, list[float]] = {key: [] for key in TRACKED_LATENCY_KEYS}
     statuses: Counter[str] = Counter()
     planner_sources: Counter[str] = Counter()
+    fallback_reasons: Counter[str] = Counter()
     latest_created_at: str | None = None
     sample_count = 0
 
@@ -71,6 +72,9 @@ def summarize_latency_rows(rows: Iterable[Mapping[str, Any]], *, artwork_id: str
         planner_source = latency.get("planner_source")
         if planner_source:
             planner_sources[str(planner_source)] += 1
+        fallback_reason = latency.get("fallback_reason")
+        if fallback_reason:
+            fallback_reasons[str(fallback_reason)] += 1
         for key in TRACKED_LATENCY_KEYS:
             value = latency.get(key)
             if isinstance(value, int | float):
@@ -85,6 +89,7 @@ def summarize_latency_rows(rows: Iterable[Mapping[str, Any]], *, artwork_id: str
         needs_confirmation_count=statuses["needs_confirmation"],
         canceled_count=statuses["canceled"],
         planner_sources=dict(sorted(planner_sources.items())),
+        fallback_reasons=dict(sorted(fallback_reasons.items())),
         metrics={key: summarize_values(values) for key, values in metric_values.items()},
         latest_created_at=latest_created_at,
     )

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Artwork, AsrTranscriptionMetrics, CommandExecutionResponse, CommandPlan } from "./types";
+import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandExecutionResponse, CommandPlan } from "./types";
 
 const apiMocks = vi.hoisted(() => ({
   createArtwork: vi.fn(),
@@ -81,7 +81,7 @@ function makePlan(overrides: Partial<CommandPlan> = {}): CommandPlan {
   };
 }
 
-function makeMetrics() {
+function makeMetrics(overrides: Partial<CommandExecutionMetrics> = {}): CommandExecutionMetrics {
   return {
     rule_parse_ms: 1,
     llm_planner_ms: null,
@@ -95,6 +95,7 @@ function makeMetrics() {
     agent_succeeded: false,
     fallback_used: false,
     planner_source: "rules",
+    ...overrides,
   };
 }
 
@@ -210,6 +211,28 @@ describe("App", () => {
     expect(screen.getByText("1 个对象")).toBeInTheDocument();
     expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
     expect(audioPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the structured Drawing Agent fallback reason in the metrics note", async () => {
+    apiMocks.submitVoiceCommand.mockResolvedValue({
+      message: "我还没有听懂这条绘图指令，可以换一种说法吗？",
+      plan: makePlan({ planner_source: "rules_fallback", operations: [] }),
+      artwork: makeArtwork(),
+      metrics: makeMetrics({
+        fallback_used: true,
+        fallback_reason: "agent_planner_error",
+        fallback_error_type: "DrawingAgentError",
+        planner_source: "rules_fallback",
+      }),
+    });
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("画一个复杂森林场景然后加层次", null);
+    });
+
+    expect(await screen.findByText("Agent 规划异常: DrawingAgentError，已使用规则兜底")).toBeInTheDocument();
   });
 
   it("completes a voice-only acceptance workflow without toolbar export clicks", async () => {

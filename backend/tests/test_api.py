@@ -68,6 +68,7 @@ def test_latency_metrics_api_summarizes_voice_command_logs(client: TestClient) -
                     "execute_ms": total_ms / 4,
                     "total_ms": total_ms,
                     "planner_source": "rules",
+                    **({"fallback_reason": "agent_planner_error"} if index == 3 else {}),
                 },
             )
 
@@ -80,6 +81,7 @@ def test_latency_metrics_api_summarizes_voice_command_logs(client: TestClient) -
     assert body["success_count"] == 3
     assert body["failed_count"] == 1
     assert body["planner_sources"] == {"rules": 4}
+    assert body["fallback_reasons"] == {"agent_planner_error": 1}
     assert body["metrics"]["total_ms"]["average_ms"] == 250
     assert body["metrics"]["total_ms"]["p50_ms"] == 200
     assert body["metrics"]["total_ms"]["p75_ms"] == 300
