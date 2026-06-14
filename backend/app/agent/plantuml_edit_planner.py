@@ -135,6 +135,18 @@ def _strip_relation_cardinality(text: str) -> str:
     return cleaned.strip(" 的地得，,。；;:：、 ")
 
 
+def _relation_endpoints_from_text(text: str) -> tuple[str, str] | None:
+    cleaned = re.sub(r"(之间的|之间|间的|间)$", "", text.strip(" 的地得，,。；;:：、 "))
+    match = re.search(r"(.+?)(?:和|与|及)(.+)$", cleaned)
+    if match is None:
+        return None
+    source = _clean_fragment(match.group(1))
+    target = _clean_fragment(match.group(2))
+    if not source or not target:
+        return None
+    return source, target
+
+
 def _update_relation_payload(text: str) -> dict[str, Any] | None:
     if "关系" not in text and "关联" not in text:
         return None
@@ -149,6 +161,9 @@ def _update_relation_payload(text: str) -> dict[str, Any] | None:
     cardinality = _relation_cardinality_for_text(new_text)
     new_label = _strip_relation_cardinality(new_text)
     payload: dict[str, Any] = {"action": "update_relation", "relation_text": relation_text}
+    endpoints = _relation_endpoints_from_text(relation_text)
+    if endpoints:
+        payload["source_entity"], payload["target_entity"] = endpoints
     if new_label:
         payload["new_label"] = new_label
     if cardinality:
@@ -197,7 +212,11 @@ def _delete_payload(text: str, diagram_type: str | None) -> dict[str, Any] | Non
     if not item:
         return None
     if "关系" in text or "关联" in text:
-        return {"action": "delete_relation", "relation_text": item}
+        payload: dict[str, Any] = {"action": "delete_relation", "relation_text": item}
+        endpoints = _relation_endpoints_from_text(item)
+        if endpoints:
+            payload["source_entity"], payload["target_entity"] = endpoints
+        return payload
     if "泳道" in text or diagram_type == "swimlane":
         lane_name = re.sub(r"(泳道)$", "", item).strip(" ，,。；;:：、 ") or item
         return {"action": "delete_swimlane", "lane_name": lane_name}

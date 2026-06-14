@@ -33,13 +33,20 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
     elif action == "delete_swimlane":
         next_source = _delete_swimlane(source, str(payload.get("lane_name") or ""))
     elif action == "delete_relation":
-        next_source = _delete_relation(source, str(payload.get("relation_text") or ""))
+        next_source = _delete_relation(
+            source,
+            str(payload.get("relation_text") or ""),
+            str(payload.get("source_entity") or ""),
+            str(payload.get("target_entity") or ""),
+        )
     elif action == "update_relation":
         next_source = _update_relation(
             source,
             str(payload.get("relation_text") or ""),
             str(payload.get("new_label") or ""),
             str(payload.get("cardinality") or ""),
+            str(payload.get("source_entity") or ""),
+            str(payload.get("target_entity") or ""),
         )
     else:
         raise PlantUMLEditError(f"不支持的 PlantUML 编辑动作: {action}")
@@ -159,6 +166,19 @@ def _named_aliases(source: str) -> dict[str, str]:
         display_name = match.group(1).split("\\n", 1)[0].strip()
         aliases[display_name] = match.group(2)
     return aliases
+
+
+def _aliases_for_entities(source: str, source_entity: str, target_entity: str) -> tuple[str, str] | None:
+    if not source_entity.strip() or not target_entity.strip():
+        return None
+    aliases = _named_aliases(source)
+    source_label = _safe_label(source_entity)
+    target_label = _safe_label(target_entity)
+    matched_source = next((alias for name, alias in aliases.items() if _label_matches(name, source_label)), None)
+    matched_target = next((alias for name, alias in aliases.items() if _label_matches(name, target_label)), None)
+    if matched_source is None or matched_target is None:
+        raise PlantUMLEditError(f"没有找到 PlantUML 关系端点: {source_label} / {target_label}")
+    return matched_source, matched_target
 
 
 def _relation_from_text(source: str, relation_text: str) -> tuple[str, str, str]:
@@ -304,14 +324,23 @@ def _relation_operator_for_cardinality(cardinality: str) -> str | None:
     return mapping.get(normalized)
 
 
-def _delete_relation(source: str, relation_text: str) -> str:
+def _relation_matches(match: re.Match[str], relation: str, endpoint_aliases: tuple[str, str] | None) -> bool:
+    if endpoint_aliases is not None:
+        expected = set(endpoint_aliases)
+        actual = {match.group("source"), match.group("target")}
+        return actual == expected
+    return _label_matches(match.group("label"), relation)
+
+
+def _delete_relation(source: str, relation_text: str, source_entity: str = "", target_entity: str = "") -> str:
     relation = _safe_label(relation_text, max_length=80)
+    endpoint_aliases = _aliases_for_entities(source, source_entity, target_entity)
     pattern = _relation_line_pattern()
     output: list[str] = []
     removed = False
     for line in source.splitlines():
         match = pattern.match(line)
-        if match and _label_matches(match.group("label"), relation):
+        if match and _relation_matches(match, relation, endpoint_aliases):
             removed = True
             continue
         output.append(line)
@@ -320,18 +349,26 @@ def _delete_relation(source: str, relation_text: str) -> str:
     return "\n".join(output)
 
 
-def _update_relation(source: str, relation_text: str, new_label: str, cardinality: str) -> str:
+def _update_relation(
+    source: str,
+    relation_text: str,
+    new_label: str,
+    cardinality: str,
+    source_entity: str = "",
+    target_entity: str = "",
+) -> str:
     relation = _safe_label(relation_text, max_length=80)
     label = _safe_label(new_label, max_length=30) if new_label.strip() else None
     operator = _relation_operator_for_cardinality(cardinality)
     if label is None and operator is None:
         raise PlantUMLEditError("修改关系需要提供新标签或新基数")
     pattern = _relation_line_pattern()
+    endpoint_aliases = _aliases_for_entities(source, source_entity, target_entity)
     output: list[str] = []
     updated = False
     for line in source.splitlines():
         match = pattern.match(line)
-        if not match or not _label_matches(match.group("label"), relation):
+        if not match or not _relation_matches(match, relation, endpoint_aliases):
             output.append(line)
             continue
         next_operator = operator or match.group("operator")
