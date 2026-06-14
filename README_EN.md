@@ -57,7 +57,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 - **Voice-first creation**: recording and voice feedback are the primary controls. A mouse-based drawing toolbar is intentionally absent.
 - **Structured planning**: every command becomes a `CommandPlan` or `SceneGraph v2` before it mutates the canvas.
 - **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs.
-- **PlantUML source editing**: voice commands can rename diagram nodes, append Gantt tasks, append swimlanes, and add ER relationships.
+- **PlantUML source editing**: voice commands can rename or delete diagram nodes, append or delete Gantt tasks, append or delete swimlanes, and add or rewrite ER relationships.
 - **Editable objects**: SVG objects carry geometry, styles, semantic tags, grouping, and layer metadata.
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.

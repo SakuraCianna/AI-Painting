@@ -537,6 +537,94 @@ def test_voice_edit_plantuml_er_adds_relationship(client: TestClient, monkeypatc
     assert source.count("收藏") == 1
 
 
+def test_voice_edit_plantuml_flowchart_deletes_node(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "删除流程图里的意图分类节点"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["operations"][0]["operation_type"] == "edit_plantuml"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert ":意图分类;" not in source
+    assert ":任务规划;" in source
+
+
+def test_voice_edit_plantuml_gantt_deletes_task_and_rewires_milestone(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "删除甘特图里的测试任务"},
+    )
+
+    assert edit_response.status_code == 200
+    source = _only_plantuml_object(edit_response.json())["geometry"]["source"]
+    assert "[测试]" not in source
+    assert "[上线里程碑] happens at [开发]'s end" in source
+
+
+def test_voice_edit_plantuml_swimlane_deletes_lane_and_step(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个泳道图，包含销售、运营和交付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "删除泳道图里的运营泳道"},
+    )
+
+    assert edit_response.status_code == 200
+    source = _only_plantuml_object(edit_response.json())["geometry"]["source"]
+    assert "|运营|" not in source
+    assert ":资源排期;" not in source
+    assert "|销售|" in source
+
+
+def test_voice_edit_plantuml_er_updates_relationship_cardinality_and_label(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个用户订单ER图，包含用户、订单、商品和支付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把ER图里的创建关系改成一对一的下单关系"},
+    )
+
+    assert edit_response.status_code == 200
+    source = _only_plantuml_object(edit_response.json())["geometry"]["source"]
+    assert "entity_1 ||--|| entity_2 : 下单" in source
+    assert "entity_1 ||--o{ entity_2 : 创建" not in source
+
+
 def test_undo_and_redo(client: TestClient) -> None:
     artwork_id = client.post("/api/artworks", json={}).json()["id"]
     client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个黄色星星在左边"})
