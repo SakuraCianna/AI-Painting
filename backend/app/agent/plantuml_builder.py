@@ -284,7 +284,7 @@ def _plantuml_er_graph(text: str) -> AgentSceneGraph:
         source = aliases[relationship["source_index"]]
         target = aliases[relationship["target_index"]]
         relation = _relationship_cardinality(relationship["name"])
-        lines.append(f'{source} {relation} {target} : {relationship["name"]}')
+        lines.append(f"{source} {relation} {target} : {relationship['name']}")
     lines.append("@enduml")
     relationship_summary = "、".join(str(relationship["name"]) for relationship in relationships)
     summary = f"使用 PlantUML 绘制{title}, 包含{'、'.join(entity_names)}实体, 关系包括{relationship_summary}"
@@ -470,7 +470,7 @@ def _plantuml_class_graph(text: str) -> AgentSceneGraph:
         "  +plan()",
         "  +execute()",
         "}",
-        "Artwork \"1\" o-- \"many\" DrawingObject",
+        'Artwork "1" o-- "many" DrawingObject',
         "DrawingAgent --> CommandPlan",
         "CommandPlan --> DrawingObject",
         "@enduml",
