@@ -12,7 +12,7 @@ import { CanvasStage } from "./drawing/CanvasStage";
 import { AppErrorBoundary } from "./ErrorBoundary";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
-import type { Artwork, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan } from "./types";
+import type { Artwork, AsrProviderCapability, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan } from "./types";
 import { exportArtworkJson, exportSvgAsPng, exportSvgFile, svgToPngDataUrl } from "./utils/exportPng";
 
 interface TimelineItem {
@@ -116,6 +116,19 @@ function formatLatency(value: number | null | undefined): string {
     return `${(value / 1000).toFixed(2)} s`;
   }
   return `${Math.round(value)} ms`;
+}
+
+function getAsrModeText(capability: AsrProviderCapability | null | undefined): string {
+  if (!capability) {
+    return "能力未知";
+  }
+  if (capability.interim_results_supported) {
+    return "实时 interim";
+  }
+  if (capability.segment_submission) {
+    return capability.silence_stop_ms ? `整段转写 · 静音 ${(capability.silence_stop_ms / 1000).toFixed(1)}s` : "整段转写";
+  }
+  return capability.mode;
 }
 
 function getEndToEndLatency(commandMetrics: CommandExecutionMetrics | null, asrMetrics: AsrTranscriptionMetrics | null): number | null {
@@ -279,6 +292,7 @@ function WorkspaceApp() {
   const objectCountText = useMemo(() => `${artwork?.objects.length ?? 0} 个对象`, [artwork?.objects.length]);
   const planConfidenceText = latestPlan ? `${Math.round(latestPlan.confidence * 100)}%` : "暂无";
   const listeningLabel = voice.isListening ? voice.providerLabel : `待机: ${voice.providerLabel}`;
+  const asrModeText = getAsrModeText(voice.providerCapability);
   const endToEndLatency = getEndToEndLatency(latestCommandMetrics, latestAsrMetrics);
 
   return (
@@ -348,6 +362,7 @@ function WorkspaceApp() {
           <span className={voice.isListening ? "status-pill listening" : "status-pill"}>
             <Icon icon={voice.isListening ? graphicEqRounded : radioButtonUnchecked} width={16} height={16} />
             {listeningLabel}
+            <small className="status-pill-note">{asrModeText}</small>
           </span>
           <span className="status-pill">
             <Icon icon={categoryRounded} width={16} height={16} />

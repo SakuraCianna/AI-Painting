@@ -91,6 +91,16 @@ def test_provider_status_prefers_xiaomi_then_local(monkeypatch) -> None:
     assert status.primary_provider == "xiaomi"
     assert status.fallback_provider == "web_speech"
     assert status.provider_labels["local"] == "Qwen3-ASR 本地服务"
+    assert status.provider_capabilities["xiaomi"].mode == "segment"
+    assert status.provider_capabilities["xiaomi"].streaming_supported is False
+    assert status.provider_capabilities["xiaomi"].interim_results_supported is False
+    assert status.provider_capabilities["xiaomi"].segment_submission is True
+    assert status.provider_capabilities["xiaomi"].silence_stop_ms == 1500
+    assert status.provider_capabilities["local"].mode == "segment"
+    assert status.provider_capabilities["web_speech"].mode == "browser_interim"
+    assert status.provider_capabilities["web_speech"].streaming_supported is True
+    assert status.provider_capabilities["web_speech"].interim_results_supported is True
+    assert status.provider_capabilities["web_speech"].segment_submission is False
 
 
 class _FakeAsrResponse:

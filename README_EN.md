@@ -64,7 +64,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.
 - **Grouped undo**: multi-step voice plans can be undone and redone as a single semantic action.
-- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR currently submits a full audio segment after silence detection; only the Web Speech API fallback exposes browser interim text, while backend streaming transcription remains on the roadmap.
+- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR currently submits a full audio segment after silence detection; only the Web Speech API fallback exposes browser interim text, while backend streaming transcription remains on the roadmap. The provider status endpoint returns capability metadata, and the console shows whether the active path is segment transcription or browser interim transcription.
 - **Image generation and refinement**: text-to-image and image-to-image providers are abstracted behind configurable provider adapters.
 - **Latency observability**: ASR, rule parsing, agent planning, execution, and end-to-end latency are logged.
 - **CI coverage**: GitHub Actions runs backend tests, frontend tests, frontend builds, Docker validation, and API smoke checks.
@@ -168,7 +168,7 @@ flowchart TD
 | `POST /api/artworks/{artwork_id}/commands` | Parse and execute a voice command |
 | `POST /api/artworks/{artwork_id}/undo` | Undo |
 | `POST /api/artworks/{artwork_id}/redo` | Redo |
-| `GET /api/asr/providers` | Inspect ASR provider status |
+| `GET /api/asr/providers` | Inspect ASR provider status and capability metadata |
 | `POST /api/asr/transcribe` | Backend ASR transcription |
 | `POST /api/tts/synthesize` | TTS voice feedback |
 | `GET /api/metrics/latency` | Latency metrics |

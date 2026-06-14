@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchAsrProviders, transcribeAudio } from "../api";
-import type { AsrTranscriptionMetrics } from "../types";
+import type { AsrProviderCapability, AsrTranscriptionMetrics } from "../types";
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
@@ -61,6 +61,25 @@ const TARGET_SAMPLE_RATE = 16000;
 const SPEECH_THRESHOLD = 0.045;
 const SILENCE_MS = 1500;
 const MIN_SPEECH_MS = 480;
+const WEB_SPEECH_PROVIDER = "web_speech";
+
+const DEFAULT_WEB_SPEECH_CAPABILITY: AsrProviderCapability = {
+  mode: "browser_interim",
+  streaming_supported: true,
+  interim_results_supported: true,
+  segment_submission: false,
+  silence_stop_ms: null,
+  description: "浏览器 SpeechRecognition 兜底路径, 可显示 interim 文本",
+};
+
+const DEFAULT_BACKEND_CAPABILITY: AsrProviderCapability = {
+  mode: "segment",
+  streaming_supported: false,
+  interim_results_supported: false,
+  segment_submission: true,
+  silence_stop_ms: SILENCE_MS,
+  description: "前端静音截停后把整段音频提交到后端 ASR",
+};
 
 function mergeChunks(chunks: Float32Array[]): Float32Array {
   const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
@@ -151,6 +170,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const shouldListenRef = useRef(false);
   const providerRef = useRef<VoiceProvider>("none");
+  const providerCapabilitiesRef = useRef<Record<string, AsrProviderCapability>>({});
   const isUploadingRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -168,6 +188,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<VoiceProvider>("none");
   const [providerLabel, setProviderLabel] = useState("小米 MiMo ASR");
+  const [providerCapability, setProviderCapability] = useState<AsrProviderCapability | null>(null);
   const [lastAsrMetrics, setLastAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
 
   useEffect(() => {
@@ -196,6 +217,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       providerRef.current = "none";
       setProvider("none");
       setProviderLabel("无可用语音识别");
+      setProviderCapability(null);
       setIsListening(false);
       setIsSupported(false);
       setError("当前浏览器不支持内置语音识别, 且后端 ASR 不可用");
@@ -251,6 +273,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     providerRef.current = "web_speech";
     setProvider("web_speech");
     setProviderLabel("Web Speech API");
+    setProviderCapability(providerCapabilitiesRef.current[WEB_SPEECH_PROVIDER] ?? DEFAULT_WEB_SPEECH_CAPABILITY);
     try {
       shouldListenRef.current = true;
       recognition.start();
@@ -277,6 +300,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
           throw new Error("ASR 没有返回文本");
         }
         setProviderLabel(response.provider_label);
+        setProviderCapability(providerCapabilitiesRef.current[response.provider] ?? DEFAULT_BACKEND_CAPABILITY);
         setLastAsrMetrics(response.metrics);
         setLastFinalTranscript(text);
         setInterimTranscript("");
@@ -336,7 +360,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   );
 
   const startBackendAudio = useCallback(
-    async (label: string) => {
+    async (label: string, providerName: string) => {
       const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
       if (!navigator.mediaDevices?.getUserMedia || !AudioContextClass) {
         setError("浏览器不支持麦克风录音, 已切换到 Web Speech API");
@@ -377,6 +401,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         providerRef.current = "backend";
         setProvider("backend");
         setProviderLabel(label);
+        setProviderCapability(providerCapabilitiesRef.current[providerName] ?? DEFAULT_BACKEND_CAPABILITY);
         setIsSupported(true);
         setIsListening(true);
         setError(null);
@@ -394,10 +419,11 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     setError(null);
     try {
       const status = await fetchAsrProviders();
+      providerCapabilitiesRef.current = status.provider_capabilities ?? {};
       const primaryProvider = status.primary_provider ?? status.providers[0];
       if (primaryProvider) {
         const label = status.provider_labels[primaryProvider] ?? "后端 ASR";
-        await startBackendAudio(label);
+        await startBackendAudio(label, primaryProvider);
         return;
       }
     } catch {
@@ -421,14 +447,17 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   useEffect(() => {
     fetchAsrProviders()
       .then((status) => {
+        providerCapabilitiesRef.current = status.provider_capabilities ?? {};
         const primaryProvider = status.primary_provider ?? status.providers[0];
         if (primaryProvider) {
           setProviderLabel(status.provider_labels[primaryProvider] ?? "后端 ASR");
+          setProviderCapability(providerCapabilitiesRef.current[primaryProvider] ?? DEFAULT_BACKEND_CAPABILITY);
           setIsSupported(true);
           return;
         }
         const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
         setProviderLabel("Web Speech API");
+        setProviderCapability(providerCapabilitiesRef.current[WEB_SPEECH_PROVIDER] ?? DEFAULT_WEB_SPEECH_CAPABILITY);
         setIsSupported(Boolean(Recognition));
         if (!Recognition) {
           setError("当前没有可用的语音识别");
@@ -437,6 +466,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       .catch(() => {
         const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
         setProviderLabel("Web Speech API");
+        setProviderCapability(DEFAULT_WEB_SPEECH_CAPABILITY);
         setIsSupported(Boolean(Recognition));
       });
     return () => {
@@ -454,6 +484,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     error,
     provider,
     providerLabel,
+    providerCapability,
     lastAsrMetrics,
     start,
     stop,
