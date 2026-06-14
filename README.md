@@ -187,6 +187,13 @@ npm run build --prefix frontend
 git diff --check
 ```
 
+真实 Provider 评测脚手架:
+
+```powershell
+.\.venv\Scripts\python.exe backend\evaluate_asr_samples.py docs\evaluation\asr-samples.example.json --output reports\asr-xiaomi.json
+.\.venv\Scripts\python.exe backend\evaluate_image_provider.py docs\evaluation\image-provider-samples.example.json --output reports\image-provider.json
+```
+
 首次运行 e2e 如果提示缺少 Chromium 浏览器, 先在 Windows PowerShell 执行:
 
 ```powershell
@@ -195,7 +202,7 @@ npm --prefix frontend exec -- playwright install chromium
 
 `npm run test:e2e --prefix frontend` 会启动 Vite dev server, 使用 Playwright Chromium 模拟 Web Speech API 最终转写文本, 验证无键盘快捷绘图入口、语音新建画布、绘制、编辑、撤销、恢复、PNG/SVG/项目 JSON 下载边界、SVG 像素抽样、重叠语音指令单飞保护、麦克风拒绝后的 Web Speech fallback 和无语音识别能力时的禁用状态。
 
-CI 会在 `push`、`pull_request` 和手动触发时运行 Ruff、渐进式 mypy、pre-commit、后端测试、前端测试、前端构建、Docker 校验和 API smoke test。当前 mypy 先覆盖 Agent 图执行、SceneGraph、编译器、validator、metrics 和策略模块, planner 大文件仍在后续拆分计划内。
+CI 会在 `push`、`pull_request` 和手动触发时运行 Ruff、渐进式 mypy、pre-commit、后端测试、前端测试、前端构建、Docker 校验和 API smoke test。当前 mypy 先覆盖 Agent 图执行、SceneGraph、编译器、validator、metrics、ASR/图片评测和策略模块, planner 大文件仍在后续拆分计划内。
 
 ## 项目结构
 
@@ -203,6 +210,8 @@ CI 会在 `push`、`pull_request` 和手动触发时运行 Ruff、渐进式 mypy
 .
 ├── backend
 │   ├── app
+│   ├── evaluate_asr_samples.py
+│   ├── evaluate_image_provider.py
 │   ├── local_asr_qwen3.py
 │   ├── requirements-dev.txt
 │   ├── requirements.txt
@@ -238,6 +247,7 @@ CI 会在 `push`、`pull_request` 和手动触发时运行 Ruff、渐进式 mypy
 - [当前差距评估](docs/status/voice-drawing-gap-analysis.md)
 - [复杂命令评测集](docs/evaluation/command-evaluation.md)
 - [ASR 样本评测](docs/evaluation/asr-benchmark.md)
+- [图片 Provider 评测](docs/evaluation/image-provider-benchmark.md)
 - [本地 Qwen3-ASR](docs/local-asr-qwen3.md)
 - [Docker 备用部署](docs/docker-deploy.md)
 

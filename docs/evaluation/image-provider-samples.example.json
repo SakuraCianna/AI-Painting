@@ -1,0 +1,34 @@
+{
+  "metadata": {
+    "status": "example_seed",
+    "description": "图片 Provider 评测样本示例。真实评测时请复制到本机未跟踪目录, 按需替换 prompt 和 input_image_data_url。"
+  },
+  "samples": [
+    {
+      "id": "text-image-ink-landscape",
+      "task": "text_to_image",
+      "prompt": "生成一张国风水墨山水画, 远处有群山, 近处有小船和松树, 画面留白充足",
+      "width": 1280,
+      "height": 720,
+      "notes": "验证空白画布文生图质量和横向画布尺寸"
+    },
+    {
+      "id": "text-image-anime-portrait",
+      "task": "text_to_image",
+      "prompt": "生成一张二次元动漫人物半身肖像, 柔和光线, 干净背景, 眼睛明亮",
+      "width": 1024,
+      "height": 1024,
+      "notes": "验证人物类文生图质量"
+    },
+    {
+      "id": "image-edit-polish-landscape",
+      "task": "image_edit",
+      "prompt": "精修这张图片, 让云雾更丰富, 水面更有层次, 保持水墨风格",
+      "width": 1280,
+      "height": 720,
+      "source_prompt": "国风水墨山水画, 远处有群山, 近处有小船和松树, 画面留白充足",
+      "input_image_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+      "notes": "示例 data URL 只是 1x1 PNG 占位。真实评测应替换为文生图输出或画布截图。"
+    }
+  ]
+}

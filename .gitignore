@@ -16,6 +16,7 @@ frontend/vite.config.js
 frontend/vite.config.d.ts
 reports/
 output/
+演示稿.md
 .env
 .env.*
 !.env.example
