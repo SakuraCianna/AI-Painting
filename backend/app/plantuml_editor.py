@@ -22,6 +22,13 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
         next_source = _add_activity_node(source, str(payload.get("node_text") or ""))
     elif action == "add_gantt_task":
         next_source = _add_gantt_task(source, str(payload.get("task_name") or ""))
+    elif action == "update_gantt_task":
+        next_source = _update_gantt_task(
+            source,
+            str(payload.get("task_name") or ""),
+            payload.get("duration_days"),
+            str(payload.get("starts_after") or ""),
+        )
     elif action == "add_swimlane":
         next_source = _add_swimlane(source, str(payload.get("lane_name") or ""), str(payload.get("step_name") or ""))
     elif action == "add_relation":
@@ -276,6 +283,62 @@ def _delete_gantt_task(source: str, task_name: str) -> str:
         output.append(line)
     if not removed:
         raise PlantUMLEditError(f"没有找到 PlantUML 甘特任务: {task}")
+    return "\n".join(output)
+
+
+def _normalized_duration_days(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        raise PlantUMLEditError("甘特任务时长必须是数字")
+    if isinstance(value, int):
+        days = value
+    elif isinstance(value, str):
+        try:
+            days = int(value)
+        except ValueError as exc:
+            raise PlantUMLEditError("甘特任务时长必须是数字") from exc
+    else:
+        raise PlantUMLEditError("甘特任务时长必须是数字")
+    if days < 1 or days > 365:
+        raise PlantUMLEditError("甘特任务时长必须在 1 到 365 天之间")
+    return days
+
+
+def _update_gantt_task(source: str, task_name: str, duration_days: object, starts_after: str) -> str:
+    task = _matching_task_name(source, task_name)
+    days = _normalized_duration_days(duration_days)
+    dependency = _matching_task_name(source, starts_after) if starts_after.strip() else None
+    if days is None and dependency is None:
+        raise PlantUMLEditError("修改甘特任务需要提供时长或开始依赖")
+    if dependency == task:
+        raise PlantUMLEditError("甘特任务不能依赖自身开始")
+
+    output: list[str] = []
+    updated_duration = days is None
+    updated_dependency = dependency is None
+    for line in source.splitlines():
+        stripped = line.strip()
+        duration_match = re.match(rf"^\[{re.escape(task)}\]\s+lasts\s+\d+\s+days\s*$", stripped)
+        if duration_match:
+            if dependency is not None and not updated_dependency:
+                output.append(f"[{task}] starts at [{dependency}]'s end")
+                updated_dependency = True
+            output.append(f"[{task}] lasts {days} days" if days is not None else line)
+            updated_duration = True
+            continue
+        dependency_match = re.match(rf"^\[{re.escape(task)}\]\s+starts at \[[^\]]+\]'s end\s*$", stripped)
+        if dependency_match:
+            if dependency is not None:
+                output.append(f"[{task}] starts at [{dependency}]'s end")
+                updated_dependency = True
+            continue
+        output.append(line)
+
+    if not updated_duration:
+        raise PlantUMLEditError(f"没有找到 PlantUML 甘特任务时长: {task}")
+    if not updated_dependency:
+        raise PlantUMLEditError(f"没有找到 PlantUML 甘特任务开始位置: {task}")
     return "\n".join(output)
 
 

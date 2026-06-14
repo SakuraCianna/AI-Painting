@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..command_parser import COLOR_MAP
+from ..command_parser import COLOR_MAP, chinese_number_to_int
 from ..schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
 
 
-PLANTUML_EDIT_KEYWORDS = ("改成", "改为", "换成", "变成", "增加", "新增", "添加", "删除", "移除", "去掉", "删掉")
+PLANTUML_EDIT_KEYWORDS = ("改成", "改为", "换成", "变成", "增加", "新增", "添加", "删除", "移除", "去掉", "删掉", "开始")
 DIAGRAM_TAGS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("er图", "er 图", "实体关系图", "实体关系"), "er"),
     (("甘特图", "排期图", "项目排期", "进度计划"), "gantt"),
@@ -61,11 +61,16 @@ def _operation_payload_for_text(text: str) -> dict[str, Any] | None:
     if "加粗" in text or any(color_name in text for color_name in COLOR_MAP):
         return None
     diagram_type = _diagram_type_for_text(text)
-    if diagram_type is None and not any(keyword in text for keyword in ("plantuml", "图表")):
+    looks_like_gantt_task_update = _looks_like_gantt_task_update(text)
+    if diagram_type is None and not any(keyword in text for keyword in ("plantuml", "图表")) and not looks_like_gantt_task_update:
         return None
     target = {"selector": "all", "type": "plantuml"}
     if diagram_type:
         target["semantic_tag"] = f"plantuml.{diagram_type}"
+
+    update_gantt_task_payload = _update_gantt_task_payload(text, diagram_type, looks_like_gantt_task_update=looks_like_gantt_task_update)
+    if update_gantt_task_payload:
+        return {"target": target, **update_gantt_task_payload}
 
     update_relation_payload = _update_relation_payload(text)
     if update_relation_payload:
@@ -114,6 +119,94 @@ def _rename_payload(text: str) -> dict[str, Any] | None:
     if not old_text or not new_text:
         return None
     return {"action": "rename", "old_text": old_text, "new_text": new_text}
+
+
+def _latest_rename_marker(text: str) -> tuple[int, str] | None:
+    matches = [(text.rfind(word), word) for word in RENAME_WORDS if word in text]
+    return sorted(matches)[-1] if matches else None
+
+
+def _duration_days_from_text(text: str) -> int | None:
+    match = re.search(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:天|日|days?)", text, re.IGNORECASE)
+    if not match:
+        return None
+    days = chinese_number_to_int(match.group(1))
+    if days is None:
+        return None
+    return max(1, min(days, 365))
+
+
+def _clean_gantt_task_name(value: str) -> str:
+    cleaned = _clean_fragment(value)
+    for suffix in ("持续时间", "开始时间", "开始日期", "结束时间", "结束日期", "时长", "耗时", "周期", "日期", "时间", "开始", "结束", "任务"):
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[: -len(suffix)].strip(" 的地得，,。；;:：、 ")
+            break
+    return _clean_fragment(cleaned)
+
+
+def _clean_starts_after_task(value: str) -> str:
+    cleaned = _clean_fragment(value)
+    for suffix in (
+        "任务结束后开始",
+        "任务完成后开始",
+        "结束后开始",
+        "完成后开始",
+        "任务结束后",
+        "任务完成后",
+        "结束后",
+        "完成后",
+        "之后开始",
+        "后开始",
+        "之后",
+        "任务",
+    ):
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[: -len(suffix)].strip(" 的地得，,。；;:：、 ")
+            break
+    return _clean_fragment(cleaned)
+
+
+def _looks_like_gantt_task_update(text: str) -> bool:
+    if "任务" not in text:
+        return False
+    return any(keyword in text for keyword in ("时长", "持续", "耗时", "周期", "开始时间", "开始日期", "结束后开始", "完成后开始", "之后开始", "后开始"))
+
+
+def _update_gantt_task_payload(text: str, diagram_type: str | None, *, looks_like_gantt_task_update: bool = False) -> dict[str, Any] | None:
+    if diagram_type != "gantt" and "甘特" not in text and "排期" not in text and not looks_like_gantt_task_update:
+        return None
+    marker = _latest_rename_marker(text)
+    payload: dict[str, Any] = {"action": "update_gantt_task"}
+    if marker:
+        position, word = marker
+        before = text[:position]
+        after = text[position + len(word) :]
+        if any(keyword in before for keyword in ("时长", "持续", "耗时", "周期")):
+            task_name = _clean_gantt_task_name(before)
+            duration_days = _duration_days_from_text(after)
+            if task_name and duration_days is not None:
+                payload["task_name"] = task_name
+                payload["duration_days"] = duration_days
+        elif any(keyword in before for keyword in ("开始", "日期", "时间")) and any(keyword in after for keyword in ("结束", "完成", "之后", "后")):
+            task_name = _clean_gantt_task_name(before)
+            starts_after = _clean_starts_after_task(after)
+            if task_name and starts_after:
+                payload["task_name"] = task_name
+                payload["starts_after"] = starts_after
+    if "task_name" not in payload:
+        match = re.search(r"(?:让|把)?(.+?)任务?从(.+?)任务?(?:结束后|完成后|之后|后)开始", text)
+        if match:
+            task_name = _clean_gantt_task_name(match.group(1))
+            starts_after = _clean_starts_after_task(match.group(2))
+            if task_name and starts_after:
+                payload["task_name"] = task_name
+                payload["starts_after"] = starts_after
+    if "task_name" not in payload:
+        return None
+    if "duration_days" not in payload and "starts_after" not in payload:
+        return None
+    return payload
 
 
 def _relation_cardinality_for_text(text: str) -> str | None:
@@ -235,6 +328,13 @@ def _action_title(payload: dict[str, Any]) -> str:
         return f"把 {payload.get('old_text')} 改成 {payload.get('new_text')}"
     if action == "add_gantt_task":
         return f"增加甘特任务 {payload.get('task_name')}"
+    if action == "update_gantt_task":
+        parts = [f"修改甘特任务 {payload.get('task_name')}"]
+        if payload.get("duration_days"):
+            parts.append(f"时长为 {payload.get('duration_days')} 天")
+        if payload.get("starts_after"):
+            parts.append(f"开始依赖 {payload.get('starts_after')}")
+        return ", ".join(parts)
     if action == "add_swimlane":
         return f"增加泳道 {payload.get('lane_name')}"
     if action == "add_relation":
