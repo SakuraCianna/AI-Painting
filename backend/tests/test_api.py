@@ -9,6 +9,13 @@ from fastapi.testclient import TestClient
 SAMPLE_PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 
 
+def _only_plantuml_object(body: dict) -> dict:
+    objects = body["artwork"]["objects"]
+    assert len(objects) == 1
+    assert objects[0]["type"] == "plantuml"
+    return objects[0]
+
+
 def _seed_drawing_object(artwork_id: str, obj: dict) -> None:
     from app.database import connect_db
     from app.drawing_engine import apply_operation
@@ -431,6 +438,103 @@ def test_agent_gantt_chart_command_executes_timeline_scene(client: TestClient, m
     semantic_tags = plantuml_object["semantic_tags"]
     assert "plantuml.gantt" in semantic_tags
     assert "gantt_chart" in semantic_tags
+
+
+def test_voice_edit_plantuml_flowchart_node_and_undo_redo(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    create_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行"},
+    )
+    original_source = _only_plantuml_object(create_response.json())["geometry"]["source"]
+    assert "ASR 识别" in original_source
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把流程图里的ASR识别节点改成语音识别"},
+    )
+
+    assert edit_response.status_code == 200
+    edit_body = edit_response.json()
+    assert edit_body["plan"]["planner_source"] == "agent"
+    assert edit_body["plan"]["operations"][0]["operation_type"] == "edit_plantuml"
+    source = _only_plantuml_object(edit_body)["geometry"]["source"]
+    assert "语音识别" in source
+    assert "ASR 识别" not in source
+
+    undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
+    assert undo_response.status_code == 200
+    assert _only_plantuml_object(undo_response.json())["geometry"]["source"] == original_source
+
+    redo_response = client.post(f"/api/artworks/{artwork_id}/redo")
+    assert redo_response.status_code == 200
+    assert "语音识别" in _only_plantuml_object(redo_response.json())["geometry"]["source"]
+
+
+def test_voice_edit_plantuml_gantt_adds_task(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个产品迭代项目排期甘特图，包含需求、设计、开发、测试和上线里程碑"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "给甘特图增加评审任务"},
+    )
+
+    assert edit_response.status_code == 200
+    source = _only_plantuml_object(edit_response.json())["geometry"]["source"]
+    assert "[评审]" in source
+    assert "[上线里程碑] happens at [评审]'s end" in source
+
+
+def test_voice_edit_plantuml_swimlane_adds_lane(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个泳道图，包含销售、运营和交付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "给泳道图增加法务泳道"},
+    )
+
+    assert edit_response.status_code == 200
+    source = _only_plantuml_object(edit_response.json())["geometry"]["source"]
+    assert "|法务|" in source
+    assert ":法务处理;" in source
+
+
+def test_voice_edit_plantuml_er_adds_relationship(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个用户订单ER图，包含用户、订单、商品和支付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "给ER图增加用户收藏商品关系"},
+    )
+
+    assert edit_response.status_code == 200
+    source = _only_plantuml_object(edit_response.json())["geometry"]["source"]
+    assert " : 收藏" in source
+    assert source.count("收藏") == 1
 
 
 def test_undo_and_redo(client: TestClient) -> None:

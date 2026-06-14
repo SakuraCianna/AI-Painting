@@ -5,6 +5,7 @@ from typing import Any
 
 from ..command_parser import COLOR_MAP, SHAPE_MAP, chinese_number_to_int
 from ..schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
+from .plantuml_edit_planner import build_plantuml_edit_plan
 
 
 EDIT_KEYWORDS = ("改成", "换成", "变成", "设为", "设置为", "移动", "往", "向", "放大", "缩小", "变大", "变小", "改大", "改小", "加粗")
@@ -303,6 +304,10 @@ def _split_clauses(text: str) -> list[str]:
 
 
 def build_local_edit_plan(raw_text: str, normalized_text: str) -> CommandPlan | None:
+    plantuml_plan = build_plantuml_edit_plan(raw_text, normalized_text)
+    if plantuml_plan is not None:
+        return plantuml_plan
+
     if any(keyword in normalized_text for keyword in CREATE_KEYWORDS):
         return None
     if not any(keyword in normalized_text for keyword in EDIT_KEYWORDS):
