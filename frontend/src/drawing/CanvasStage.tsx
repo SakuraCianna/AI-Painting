@@ -1,9 +1,11 @@
 import { memo, useMemo } from "react";
 import type { Artwork, DrawingObject } from "../types";
 import { getOrderedCanvasObjects, SVG_CANVAS_RUNTIME } from "./canvasRuntime";
+import type { PlantUmlLayerView, PlantUmlFocusBox } from "./plantUmlVoiceView";
 
 interface CanvasStageProps {
   artwork: Artwork | null;
+  plantUmlView?: PlantUmlLayerView | null;
 }
 
 function numeric(value: unknown, fallback: number): number {
@@ -93,7 +95,86 @@ function plantUmlHref(object: DrawingObject): string {
   return "";
 }
 
-function renderObject(object: DrawingObject) {
+function safeSvgId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function plantUmlBox(object: DrawingObject): PlantUmlFocusBox {
+  return {
+    x: numeric(object.geometry.x, 48),
+    y: numeric(object.geometry.y, 48),
+    width: numeric(object.geometry.width, 928),
+    height: numeric(object.geometry.height, 672),
+  };
+}
+
+function roundViewNumber(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function plantUmlViewTransform(box: PlantUmlFocusBox, scale: number, focusBox?: PlantUmlFocusBox): string {
+  const sourceCenterX = focusBox ? focusBox.x + focusBox.width / 2 : box.x + box.width / 2;
+  const sourceCenterY = focusBox ? focusBox.y + focusBox.height / 2 : box.y + box.height / 2;
+  const targetCenterX = box.x + box.width / 2;
+  const targetCenterY = box.y + box.height / 2;
+  return `translate(${roundViewNumber(targetCenterX)} ${roundViewNumber(targetCenterY)}) scale(${roundViewNumber(scale)}) translate(${-roundViewNumber(sourceCenterX)} ${-roundViewNumber(sourceCenterY)})`;
+}
+
+function renderPlantUmlObject(object: DrawingObject, plantUmlView?: PlantUmlLayerView | null) {
+  const opacity = object.style.opacity ?? 1;
+  const box = plantUmlBox(object);
+  const image = (
+    <image
+      href={plantUmlHref(object)}
+      x={box.x}
+      y={box.y}
+      width={box.width}
+      height={box.height}
+      opacity={opacity}
+      preserveAspectRatio={String(object.geometry.preserveAspectRatio ?? "xMidYMid meet")}
+      data-object-id={object.id}
+      data-layer-id={object.layer_id}
+    />
+  );
+
+  if (plantUmlView?.objectId !== object.id || plantUmlView.scale <= 1) {
+    return <g key={object.id}>{image}</g>;
+  }
+
+  const clipId = `plantuml-view-clip-${safeSvgId(object.id)}`;
+  return (
+    <g key={object.id} data-plantuml-view-layer="true">
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={box.x} y={box.y} width={box.width} height={box.height} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${clipId})`} data-plantuml-view={plantUmlView.mode} data-view-scale={plantUmlView.scale}>
+        <g transform={plantUmlViewTransform(box, plantUmlView.scale, plantUmlView.focusBox)}>
+          {image}
+          {plantUmlView.focusBox ? (
+            <rect
+              data-plantuml-focus="true"
+              x={plantUmlView.focusBox.x}
+              y={plantUmlView.focusBox.y}
+              width={plantUmlView.focusBox.width}
+              height={plantUmlView.focusBox.height}
+              rx={10}
+              fill="none"
+              stroke="#0b57d0"
+              strokeWidth={3}
+              strokeDasharray="10 6"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          ) : null}
+        </g>
+      </g>
+    </g>
+  );
+}
+
+function renderObject(object: DrawingObject, plantUmlView?: PlantUmlLayerView | null) {
   const fill = object.style.fill ?? "transparent";
   const stroke = object.style.stroke ?? "#111827";
   const strokeWidth = object.style.strokeWidth ?? 2;
@@ -228,19 +309,7 @@ function renderObject(object: DrawingObject) {
   }
 
   if (object.type === "plantuml") {
-    return (
-      <image
-        key={object.id}
-        href={plantUmlHref(object)}
-        x={numeric(object.geometry.x, 48)}
-        y={numeric(object.geometry.y, 48)}
-        width={numeric(object.geometry.width, 928)}
-        height={numeric(object.geometry.height, 672)}
-        opacity={opacity}
-        preserveAspectRatio={String(object.geometry.preserveAspectRatio ?? "xMidYMid meet")}
-        {...objectAttrs}
-      />
-    );
+    return renderPlantUmlObject(object, plantUmlView);
   }
 
   return (
@@ -260,12 +329,12 @@ function renderObject(object: DrawingObject) {
   );
 }
 
-export const CanvasStage = memo(function CanvasStage({ artwork }: CanvasStageProps) {
+export const CanvasStage = memo(function CanvasStage({ artwork, plantUmlView = null }: CanvasStageProps) {
   const width = artwork?.width ?? 1024;
   const height = artwork?.height ?? 768;
   const background = artwork?.background ?? "#ffffff";
   const orderedObjects = useMemo(() => getOrderedCanvasObjects(artwork?.objects ?? []), [artwork?.objects]);
-  const renderedObjects = useMemo(() => orderedObjects.map(renderObject), [orderedObjects]);
+  const renderedObjects = useMemo(() => orderedObjects.map((object) => renderObject(object, plantUmlView)), [orderedObjects, plantUmlView]);
 
   return (
     <div className="canvas-shell" aria-label="语音绘图画布">

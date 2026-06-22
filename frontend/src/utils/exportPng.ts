@@ -9,6 +9,19 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+function cloneSvgForExport(svg: SVGSVGElement): SVGSVGElement {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.querySelectorAll("[data-plantuml-view-layer]").forEach((layer) => {
+    const originalImage = layer.querySelector("image[data-object-id]");
+    if (!originalImage) {
+      layer.remove();
+      return;
+    }
+    layer.replaceWith(originalImage.cloneNode(true));
+  });
+  return clone;
+}
+
 export async function svgToPngDataUrl(svgId: string): Promise<string> {
   const svg = document.getElementById(svgId);
   if (!(svg instanceof SVGSVGElement)) {
@@ -16,7 +29,7 @@ export async function svgToPngDataUrl(svgId: string): Promise<string> {
   }
 
   const viewBox = svg.viewBox.baseVal;
-  const serialized = new XMLSerializer().serializeToString(svg);
+  const serialized = new XMLSerializer().serializeToString(cloneSvgForExport(svg));
   const blob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
@@ -58,7 +71,7 @@ export function exportSvgFile(svgId: string, filename: string): void {
     throw new Error("没有找到可导出的画布");
   }
 
-  const serialized = new XMLSerializer().serializeToString(svg);
+  const serialized = new XMLSerializer().serializeToString(cloneSvgForExport(svg));
   downloadBlob(new Blob([serialized], { type: "image/svg+xml;charset=utf-8" }), filename);
 }
 

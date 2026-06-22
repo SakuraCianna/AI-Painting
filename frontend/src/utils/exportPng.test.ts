@@ -35,8 +35,41 @@ function appendSvg() {
   document.body.appendChild(svg);
 }
 
+function appendSvgWithPlantUmlView() {
+  appendSvg();
+  const svg = document.getElementById("voice-canvas-svg");
+  if (!(svg instanceof SVGSVGElement)) {
+    throw new Error("missing svg");
+  }
+  svg.querySelector("circle")?.remove();
+  const viewLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  viewLayer.setAttribute("data-plantuml-view-layer", "true");
+  const clippedGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  clippedGroup.setAttribute("data-plantuml-view", "focus");
+  clippedGroup.setAttribute("data-view-scale", "2.2");
+  const transformedGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  transformedGroup.setAttribute("transform", "translate(160 90) scale(2.2) translate(-160 -90)");
+  const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  image.setAttribute("data-object-id", "plantuml-1");
+  image.setAttribute("href", "data:image/svg+xml;base64,PHN2Zy8+");
+  image.setAttribute("x", "20");
+  image.setAttribute("y", "20");
+  image.setAttribute("width", "280");
+  image.setAttribute("height", "140");
+  const focusMarker = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  focusMarker.setAttribute("data-plantuml-focus", "true");
+  focusMarker.setAttribute("x", "120");
+  focusMarker.setAttribute("y", "60");
+  focusMarker.setAttribute("width", "80");
+  focusMarker.setAttribute("height", "40");
+  transformedGroup.append(image, focusMarker);
+  clippedGroup.appendChild(transformedGroup);
+  viewLayer.appendChild(clippedGroup);
+  svg.appendChild(viewLayer);
+}
+
 describe("exportPng", () => {
-  const createObjectURL = vi.fn(() => "blob:voice-canvas");
+  const createObjectURL = vi.fn((_: Blob | MediaSource) => "blob:voice-canvas");
   const revokeObjectURL = vi.fn();
   const drawImage = vi.fn();
 
@@ -68,6 +101,19 @@ describe("exportPng", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(drawImage).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:voice-canvas");
+  });
+
+  it("strips readonly PlantUML view state before PNG serialization", async () => {
+    appendSvgWithPlantUmlView();
+
+    await svgToPngDataUrl("voice-canvas-svg");
+
+    const serialized = await (createObjectURL.mock.calls[0][0] as Blob).text();
+    expect(serialized).toContain("data-object-id=\"plantuml-1\"");
+    expect(serialized).not.toContain("data-plantuml-view");
+    expect(serialized).not.toContain("data-view-scale");
+    expect(serialized).not.toContain("data-plantuml-focus");
+    expect(serialized).not.toContain("scale(2.2)");
   });
 
   it("rejects when the browser cannot create a 2D canvas context", async () => {
@@ -113,6 +159,20 @@ describe("exportPng", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:voice-canvas");
+  });
+
+  it("strips readonly PlantUML view state from downloaded SVG files", async () => {
+    appendSvgWithPlantUmlView();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    exportSvgFile("voice-canvas-svg", "作品.svg");
+
+    const serialized = await (createObjectURL.mock.calls[0][0] as Blob).text();
+    expect(serialized).toContain("data-object-id=\"plantuml-1\"");
+    expect(serialized).not.toContain("data-plantuml-view");
+    expect(serialized).not.toContain("data-view-scale");
+    expect(serialized).not.toContain("data-plantuml-focus");
+    expect(click).toHaveBeenCalledTimes(1);
   });
 
   it("downloads project JSON with artwork data", () => {
