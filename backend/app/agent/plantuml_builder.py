@@ -8,6 +8,7 @@ from .scene_graph import AgentSceneGraph, AgentSceneObject, AgentStyle
 
 
 ER_DEFAULT_ENTITIES = ("用户", "订单", "商品", "支付")
+ER_LIBRARY_ENTITIES = ("读者", "图书", "借阅记录", "馆员")
 ER_ENTITY_ATTRIBUTES = {
     "用户": ("用户ID", "昵称", "手机号"),
     "订单": ("订单ID", "金额", "状态"),
@@ -165,10 +166,16 @@ def _extract_title(text: str, markers: tuple[str, ...], fallback: str) -> str:
     return fallback
 
 
+def _default_er_entities_for_text(text: str) -> list[str]:
+    if any(keyword in text for keyword in ("图书管理", "图书馆", "借阅", "书籍管理", "藏书")):
+        return list(ER_LIBRARY_ENTITIES)
+    return list(ER_DEFAULT_ENTITIES)
+
+
 def _extract_er_entity_names(text: str) -> list[str]:
     match = re.search(r"(?:实体|数据表|表|包含)\s*(?:包括|包含|有)?(.+?)(?:关系\s*(?:包括|包含|有)|。|$)", text)
     if not match:
-        return list(ER_DEFAULT_ENTITIES)
+        return _default_er_entities_for_text(text)
     raw_text = match.group(1)
     names: list[str] = []
     for raw_name in re.split(r"[、,，;；和]+", raw_text):
@@ -178,7 +185,7 @@ def _extract_er_entity_names(text: str) -> list[str]:
         names.append(name)
         if len(names) == 6:
             break
-    return names or list(ER_DEFAULT_ENTITIES)
+    return names or _default_er_entities_for_text(text)
 
 
 def _relationship_cardinality(name: str) -> str:
@@ -200,6 +207,12 @@ def _infer_relationship_endpoints(relationship_name: str, entity_names: list[str
     return source, min(source + 1, len(entity_names) - 1)
 
 
+def _default_er_relationships(entity_names: list[str]) -> list[tuple[int, int, str]]:
+    if entity_names[:4] == list(ER_LIBRARY_ENTITIES):
+        return [(0, 2, "发起借阅"), (2, 1, "记录图书"), (3, 1, "管理"), (0, 1, "预约")]
+    return [(0, 1, "创建"), (1, 2, "包含"), (1, 3, "产生"), (0, 2, "浏览")]
+
+
 def _extract_er_relationships(text: str, entity_names: list[str]) -> list[dict[str, Any]]:
     match = re.search(r"(?:关系|关联)\s*(?:包括|包含|有)(.+?)(?:[。]|$)", text)
     relationship_names = [_clean_token(name) for name in re.split(r"[、,，;；]+", match.group(1))] if match else []
@@ -212,7 +225,7 @@ def _extract_er_relationships(text: str, entity_names: list[str]) -> list[dict[s
             relationships.append({"name": raw_name, "source_index": source_index, "target_index": target_index})
         if len(relationships) == 5:
             return relationships
-    defaults = [(0, 1, "创建"), (1, 2, "包含"), (1, 3, "产生"), (0, 2, "浏览")]
+    defaults = _default_er_relationships(entity_names)
     for source_index, target_index, name in defaults:
         if len(relationships) == 5 or target_index >= len(entity_names):
             break

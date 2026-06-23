@@ -539,6 +539,32 @@ def test_voice_edit_plantuml_er_adds_relationship(client: TestClient, monkeypatc
     assert source.count("收藏") == 1
 
 
+def test_voice_edit_plantuml_er_renames_entity_without_explicit_diagram_keyword(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个用户订单ER图，包含用户、订单、商品和支付"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把商品换成图书"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["planner_source"] == "agent"
+    assert body["plan"]["operations"][0]["operation_type"] == "edit_plantuml"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert 'entity "图书"' in source
+    assert "图书ID" in source
+    assert 'entity "商品"' not in source
+    assert "商品ID" not in source
+
+
 def test_voice_edit_plantuml_flowchart_deletes_node(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)

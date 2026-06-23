@@ -557,6 +557,26 @@ def test_agent_template_builds_er_diagram(monkeypatch) -> None:
     assert result.metrics.agent_succeeded is True
 
 
+def test_agent_template_uses_library_domain_defaults_for_book_management_er(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一份图书管理系统的ER图"))
+
+    assert result.plan.planner_source == "agent"
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    for entity_name in ("读者", "图书", "借阅记录", "馆员"):
+        assert f'entity "{entity_name}"' in source
+    assert 'entity "商品"' not in source
+    assert 'entity "订单"' not in source
+    assert 'entity "支付"' not in source
+    assert "发起借阅" in source
+    assert "管理" in source
+
+
 def test_agent_template_builds_sequence_and_class_plantuml_diagrams(monkeypatch) -> None:
     from app import main
 

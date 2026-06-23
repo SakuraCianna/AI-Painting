@@ -115,9 +115,9 @@ def _rename_text(source: str, old_text: str, new_text: str) -> str:
     old_label = _safe_label(old_text)
     new_label = _safe_label(new_text)
     if old_label in source:
-        return source.replace(old_label, new_label, 1)
+        return source.replace(old_label, new_label)
     pattern = _flexible_text_pattern(old_label)
-    next_source, count = pattern.subn(new_label, source, count=1)
+    next_source, count = pattern.subn(new_label, source)
     if count == 0:
         raise PlantUMLEditError(f"没有找到 PlantUML 文本: {old_label}")
     return next_source

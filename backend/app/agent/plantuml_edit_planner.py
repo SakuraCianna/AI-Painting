@@ -38,6 +38,22 @@ RENAME_WORDS = ("改成", "改为", "换成", "变成")
 RECONNECT_WORDS = ("改连接到", "改连到", "改指向", "连接到", "连到", "指向")
 ADD_WORDS = ("增加", "新增", "添加")
 DELETE_WORDS = ("删除", "移除", "去掉", "删掉")
+COMMON_PLANTUML_LABEL_TERMS = {
+    "用户",
+    "订单",
+    "商品",
+    "支付",
+    "读者",
+    "图书",
+    "书籍",
+    "借阅记录",
+    "借阅",
+    "馆员",
+    "图书馆",
+    "会员",
+    "库存",
+    "分类",
+}
 
 
 def build_plantuml_edit_plan(raw_text: str, normalized_text: str) -> CommandPlan | None:
@@ -80,6 +96,9 @@ def _operation_payload_for_text(text: str) -> dict[str, Any] | None:
     diagram_type = _diagram_type_for_text(text)
     looks_like_gantt_task_update = _looks_like_gantt_task_update(text)
     if diagram_type is None and not any(keyword in text for keyword in ("plantuml", "图表")) and not looks_like_gantt_task_update:
+        generic_rename_payload = _generic_label_rename_payload(text)
+        if generic_rename_payload:
+            return {"target": {"selector": "all", "type": "plantuml"}, **generic_rename_payload}
         return None
     target = {"selector": "all", "type": "plantuml"}
     if diagram_type:
@@ -140,6 +159,17 @@ def _rename_payload(text: str) -> dict[str, Any] | None:
     if not old_text or not new_text:
         return None
     return {"action": "rename", "old_text": old_text, "new_text": new_text}
+
+
+def _generic_label_rename_payload(text: str) -> dict[str, Any] | None:
+    payload = _rename_payload(text)
+    if not payload:
+        return None
+    old_text = str(payload["old_text"])
+    new_text = str(payload["new_text"])
+    if old_text in COMMON_PLANTUML_LABEL_TERMS or new_text in COMMON_PLANTUML_LABEL_TERMS:
+        return payload
+    return None
 
 
 def _latest_rename_marker(text: str) -> tuple[int, str] | None:
