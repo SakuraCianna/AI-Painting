@@ -25,7 +25,7 @@ AI Painting 是一个只能通过语音完成创作的绘图工作台。它把�
 ## 核心特性
 
 - **纯语音绘图**: 绘图、编辑、撤销、恢复、导出都通过语音指令完成。
-- **专业图表优先 PlantUML**: ER 图、系统架构图、流程图、时序图、UML 类图、组织结构图、甘特图和泳道图会生成 PlantUML 源码并渲染为 SVG 图层, 保留源码便于后续语音修改。系统架构图会抽取用户说出的模块, PlantUML 图层会使用紧凑字号并避免小图被强行放大。
+- **专业图表优先 PlantUML**: ER 图、系统架构图、流程图、时序图、UML 类图、组织结构图、甘特图和泳道图会生成 PlantUML 源码并渲染为 SVG 图层, 保留源码便于后续语音修改。ER 图会按图书、教务、医院、酒店、内容、库存、CRM 和电商等常见领域推断默认实体, 系统架构图会抽取用户说出的模块, PlantUML 图层会使用紧凑字号并避免小图被强行放大。
 - **PlantUML 源码级编辑**: 支持通过语音修改和删除图表节点、追加或删除甘特任务、追加或删除泳道, 以及按关系标签或实体端点新增、删除和改写 ER 关系。
 - **矢量场景优先**: 房子、草地、太阳、树和简单场景走程序化 SVG 渲染, 便于精确修改。
 - **生图增强**: 水墨画、二次元人物、商业视觉图等艺术类任务可以走 GPT-image-2 或 OpenAI 兼容 Provider。
@@ -182,6 +182,7 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 | `MIMO_API_KEY` | 小米 MiMo API Key | 空 |
 | `AI_PAINTING_ASR_PROVIDERS` | 后端 ASR Provider 顺序 | `xiaomi,local` |
 | `AI_PAINTING_ENABLE_AGENT_PLANNER` | 启用 Drawing Agent | `true` |
+| `AI_PAINTING_MIMO_TTS_MODEL` | 小米 TTS 模型, 默认使用 2.5 版, 可按 `.env.example` 注释切回旧版 | `mimo-v2.5-tts` |
 | `AI_PAINTING_LOCAL_ASR_URL` | 本地 ASR HTTP 服务地址 | `http://127.0.0.1:9001/asr` |
 | `AI_PAINTING_TEXT_IMAGE_MODEL` | 文生图模型 | `gpt-image-2` |
 | `AI_PAINTING_IMAGE_EDIT_MODEL` | 图生图模型 | `gpt-image-2` |

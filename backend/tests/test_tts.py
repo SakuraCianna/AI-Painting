@@ -22,6 +22,14 @@ def test_xiaomi_tts_payload_puts_text_in_assistant_message(monkeypatch) -> None:
     assert payload["audio"] == {"format": "wav", "voice": "default_zh"}
 
 
+def test_xiaomi_tts_payload_defaults_to_mimo_25_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AI_PAINTING_MIMO_TTS_MODEL", raising=False)
+
+    payload = build_xiaomi_tts_payload("已添加圆形")
+
+    assert payload["model"] == "mimo-v2.5-tts"
+
+
 def test_tts_payload_validates_text_and_custom_voice(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_PAINTING_MIMO_TTS_MODEL", "custom-tts")
 

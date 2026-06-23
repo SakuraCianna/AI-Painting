@@ -1,14 +1,64 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..plantuml_renderer import render_plantuml_source
 from .scene_graph import AgentSceneGraph, AgentSceneObject, AgentStyle
 
 
+class ERDomainProfile(NamedTuple):
+    keywords: tuple[str, ...]
+    entities: tuple[str, ...]
+    relationships: tuple[tuple[int, int, str], ...]
+
+
 ER_DEFAULT_ENTITIES = ("用户", "订单", "商品", "支付")
 ER_LIBRARY_ENTITIES = ("读者", "图书", "借阅记录", "馆员")
+ER_DEFAULT_RELATIONSHIPS = ((0, 1, "创建"), (1, 2, "包含"), (1, 3, "产生"), (0, 2, "浏览"))
+ER_DOMAIN_PROFILES = (
+    ERDomainProfile(
+        ("图书管理", "图书馆", "借阅", "书籍管理", "藏书", "馆藏"),
+        ER_LIBRARY_ENTITIES,
+        ((0, 2, "发起借阅"), (2, 1, "记录图书"), (3, 1, "管理"), (0, 1, "预约")),
+    ),
+    ERDomainProfile(
+        ("学生选课", "选课", "教务", "课程管理", "学校", "教学"),
+        ("学生", "课程", "选课记录", "教师"),
+        ((0, 2, "提交选课"), (2, 1, "选择课程"), (3, 1, "教师授课"), (0, 1, "修读")),
+    ),
+    ERDomainProfile(
+        ("医院", "挂号", "门诊", "诊疗", "就诊", "医疗"),
+        ("患者", "医生", "挂号记录", "科室"),
+        ((0, 2, "提交挂号"), (2, 1, "医生接诊"), (1, 3, "归属科室"), (0, 1, "就诊")),
+    ),
+    ERDomainProfile(
+        ("酒店", "客房", "预订", "入住", "民宿"),
+        ("住客", "客房", "预订", "入住记录"),
+        ((0, 2, "提交预订"), (2, 1, "预订客房"), (0, 3, "办理入住"), (3, 1, "占用客房")),
+    ),
+    ERDomainProfile(
+        ("博客", "内容管理", "文章", "评论", "CMS", "cms"),
+        ("作者", "文章", "评论", "分类"),
+        ((0, 1, "撰写文章"), (2, 1, "提交评论"), (1, 3, "归类"), (0, 2, "回复评论")),
+    ),
+    ERDomainProfile(
+        ("库存", "仓储", "仓库", "入库", "出库", "进销存"),
+        ("仓库", "库存", "入库单", "出库单"),
+        ((0, 1, "记录库存"), (2, 1, "生成入库"), (3, 1, "生成出库"), (0, 2, "接收入库")),
+    ),
+    ERDomainProfile(
+        ("CRM", "crm", "客户管理", "销售线索", "商机", "跟进"),
+        ("客户", "销售线索", "商机", "跟进记录"),
+        ((0, 1, "产生线索"), (1, 2, "转化商机"), (2, 3, "跟进"), (0, 3, "触达")),
+    ),
+    ERDomainProfile(
+        ("电商", "商城", "商场", "购物", "商品", "订单", "支付"),
+        ER_DEFAULT_ENTITIES,
+        ER_DEFAULT_RELATIONSHIPS,
+    ),
+)
+ER_FALLBACK_PROFILE = ERDomainProfile((), ER_DEFAULT_ENTITIES, ER_DEFAULT_RELATIONSHIPS)
 ER_ENTITY_ATTRIBUTES = {
     "用户": ("用户ID", "昵称", "手机号"),
     "订单": ("订单ID", "金额", "状态"),
@@ -18,6 +68,30 @@ ER_ENTITY_ATTRIBUTES = {
     "图书": ("图书ID", "书名", "ISBN"),
     "借阅记录": ("借阅ID", "借出时间", "归还状态"),
     "馆员": ("馆员ID", "姓名", "工号"),
+    "学生": ("学生ID", "姓名", "学号"),
+    "课程": ("课程ID", "名称", "学分"),
+    "选课记录": ("选课ID", "成绩", "学期"),
+    "教师": ("教师ID", "姓名", "职称"),
+    "患者": ("患者ID", "姓名", "手机号"),
+    "医生": ("医生ID", "姓名", "职称"),
+    "挂号记录": ("挂号ID", "时间", "状态"),
+    "科室": ("科室ID", "名称", "楼层"),
+    "住客": ("住客ID", "姓名", "证件号"),
+    "客房": ("客房ID", "房号", "房型"),
+    "预订": ("预订ID", "入住日期", "状态"),
+    "入住记录": ("入住ID", "入住时间", "退房时间"),
+    "作者": ("作者ID", "昵称", "账号"),
+    "文章": ("文章ID", "标题", "发布时间"),
+    "评论": ("评论ID", "内容", "时间"),
+    "分类": ("分类ID", "名称", "排序"),
+    "仓库": ("仓库ID", "名称", "位置"),
+    "库存": ("库存ID", "数量", "预警值"),
+    "入库单": ("入库ID", "数量", "时间"),
+    "出库单": ("出库ID", "数量", "时间"),
+    "客户": ("客户ID", "名称", "联系方式"),
+    "销售线索": ("线索ID", "来源", "状态"),
+    "商机": ("商机ID", "金额", "阶段"),
+    "跟进记录": ("跟进ID", "方式", "时间"),
 }
 SWIMLANE_DEFAULT_LANES = ("销售", "运营", "交付")
 SWIMLANE_STEP_NAMES = {
@@ -166,10 +240,15 @@ def _extract_title(text: str, markers: tuple[str, ...], fallback: str) -> str:
     return fallback
 
 
+def _er_domain_profile_for_text(text: str) -> ERDomainProfile:
+    return next(
+        (profile for profile in ER_DOMAIN_PROFILES if any(keyword in text for keyword in profile.keywords)),
+        ER_FALLBACK_PROFILE,
+    )
+
+
 def _default_er_entities_for_text(text: str) -> list[str]:
-    if any(keyword in text for keyword in ("图书管理", "图书馆", "借阅", "书籍管理", "藏书")):
-        return list(ER_LIBRARY_ENTITIES)
-    return list(ER_DEFAULT_ENTITIES)
+    return list(_er_domain_profile_for_text(text).entities)
 
 
 def _extract_er_entity_names(text: str) -> list[str]:
@@ -208,9 +287,11 @@ def _infer_relationship_endpoints(relationship_name: str, entity_names: list[str
 
 
 def _default_er_relationships(entity_names: list[str]) -> list[tuple[int, int, str]]:
-    if entity_names[:4] == list(ER_LIBRARY_ENTITIES):
-        return [(0, 2, "发起借阅"), (2, 1, "记录图书"), (3, 1, "管理"), (0, 1, "预约")]
-    return [(0, 1, "创建"), (1, 2, "包含"), (1, 3, "产生"), (0, 2, "浏览")]
+    entity_prefix = tuple(entity_names[:4])
+    for profile in ER_DOMAIN_PROFILES:
+        if entity_prefix == profile.entities:
+            return list(profile.relationships)
+    return list(ER_FALLBACK_PROFILE.relationships)
 
 
 def _extract_er_relationships(text: str, entity_names: list[str]) -> list[dict[str, Any]]:

@@ -10,7 +10,7 @@ from .schemas import TtsSynthesisResponse
 
 
 MIMO_TTS_URL = "https://api.xiaomimimo.com/v1/chat/completions"
-MIMO_TTS_MODEL = "mimo-v2-tts"
+MIMO_TTS_MODEL = "mimo-v2.5-tts"
 
 
 class TtsProviderError(RuntimeError):

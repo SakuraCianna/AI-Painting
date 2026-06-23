@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from app.agent.planner import DrawingAgentError
 from app.agent.scene_graph import AgentSceneGraph, AgentSceneObject, AgentStyle
 from app.schemas import CommandPlan, OperationRequest
@@ -575,6 +577,40 @@ def test_agent_template_uses_library_domain_defaults_for_book_management_er(monk
     assert 'entity "支付"' not in source
     assert "发起借阅" in source
     assert "管理" in source
+
+
+@pytest.mark.parametrize(
+    ("prompt", "expected_entities", "expected_relationships"),
+    [
+        ("画一个学生选课系统ER图", ("学生", "课程", "选课记录", "教师"), ("提交选课", "教师授课")),
+        ("画一个医院挂号系统ER图", ("患者", "医生", "挂号记录", "科室"), ("提交挂号", "医生接诊")),
+        ("画一个酒店预订系统ER图", ("住客", "客房", "预订", "入住记录"), ("预订客房", "办理入住")),
+        ("画一个博客内容管理系统ER图", ("作者", "文章", "评论", "分类"), ("撰写文章", "提交评论")),
+        ("画一个库存管理系统ER图", ("仓库", "库存", "入库单", "出库单"), ("记录库存", "生成入库")),
+    ],
+)
+def test_agent_template_uses_domain_defaults_for_common_er_systems(
+    monkeypatch,
+    prompt: str,
+    expected_entities: tuple[str, ...],
+    expected_relationships: tuple[str, ...],
+) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics(prompt))
+
+    assert result.plan.planner_source == "agent"
+    source = result.plan.operations[0].payload["object"]["geometry"]["source"]
+    for entity_name in expected_entities:
+        assert f'entity "{entity_name}"' in source
+    for relationship_name in expected_relationships:
+        assert relationship_name in source
+    assert 'entity "商品"' not in source
+    assert 'entity "订单"' not in source
+    assert 'entity "支付"' not in source
 
 
 def test_agent_template_builds_sequence_and_class_plantuml_diagrams(monkeypatch) -> None:

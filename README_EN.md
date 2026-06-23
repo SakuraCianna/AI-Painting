@@ -58,7 +58,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 
 - **Voice-first creation**: recording and voice feedback are the primary controls. A mouse-based drawing toolbar is intentionally absent.
 - **Structured planning**: every command becomes a `CommandPlan` or `SceneGraph v2` before it mutates the canvas.
-- **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs. System architecture diagrams extract user-provided modules, and PlantUML layers use compact typography without upscaling small diagrams.
+- **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs. ER diagrams infer default entities for common domains such as libraries, education, hospitals, hotels, content systems, inventory, CRM, and ecommerce. System architecture diagrams extract user-provided modules, and PlantUML layers use compact typography without upscaling small diagrams.
 - **PlantUML source editing**: voice commands can rename or delete diagram nodes, append or delete Gantt tasks, append or delete swimlanes, and add, delete, or rewrite ER relationships by label or entity endpoints.
 - **Editable objects**: SVG objects carry geometry, styles, semantic tags, grouping, and layer metadata.
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
@@ -260,6 +260,7 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 | `AI_PAINTING_ASR_PROVIDERS` | Backend ASR provider order | `xiaomi,local` |
 | `AI_PAINTING_ENABLE_AGENT_PLANNER` | Enable Drawing Agent planner | `true` |
 | `AI_PAINTING_MIMO_LLM_MODEL` | Xiaomi complex planning model | `mimo-v2.5-pro` |
+| `AI_PAINTING_MIMO_TTS_MODEL` | Xiaomi TTS model, defaults to 2.5 and can be switched back using `.env.example` comments | `mimo-v2.5-tts` |
 | `AI_PAINTING_LOCAL_ASR_URL` | Local ASR HTTP service URL | `http://127.0.0.1:9001/asr` |
 | `AI_PAINTING_IMAGE_PROVIDER` | Text-to-image provider | `openai_compatible` or `placeholder` |
 | `AI_PAINTING_TEXT_IMAGE_BASE_URL` | OpenAI-compatible generation base URL | see `.env.example` |
