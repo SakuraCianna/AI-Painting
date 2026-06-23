@@ -117,4 +117,41 @@ describe("CanvasStage", () => {
     expect(svg).toHaveAttribute("data-supports-semantic-editing", "true");
     expect(renderedIds).toEqual(["sky", "tree", "label"]);
   });
+
+  it("applies a voice-triggered readonly PlantUML focus view without changing canvas objects", () => {
+    const plantuml = drawingObject({
+      id: "plantuml-1",
+      type: "plantuml",
+      geometry: {
+        src: "data:image/svg+xml;base64,PHN2Zy8+",
+        source: '@startuml\ncomponent "支付服务" as payment\n@enduml',
+        x: 100,
+        y: 80,
+        width: 360,
+        height: 240,
+      },
+    });
+
+    const { container } = render(
+      <CanvasStage
+        artwork={artwork([plantuml])}
+        plantUmlView={{
+          objectId: "plantuml-1",
+          mode: "focus",
+          scale: 2.2,
+          focusLabel: "支付服务",
+          focusBox: { x: 210, y: 140, width: 120, height: 80 },
+        }}
+      />
+    );
+
+    const viewGroup = container.querySelector('[data-plantuml-view="focus"]');
+    const focusMarker = container.querySelector('rect[data-plantuml-focus="true"]');
+    const renderedIds = Array.from(container.querySelectorAll("[data-object-id]")).map((node) => node.getAttribute("data-object-id"));
+
+    expect(viewGroup).toHaveAttribute("data-view-scale", "2.2");
+    expect(viewGroup?.querySelector("g")).toHaveAttribute("transform", expect.stringContaining("scale(2.2)"));
+    expect(focusMarker).toHaveAttribute("stroke", "#0b57d0");
+    expect(renderedIds).toEqual(["plantuml-1"]);
+  });
 });

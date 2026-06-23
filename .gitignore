@@ -17,6 +17,7 @@ frontend/vite.config.d.ts
 reports/
 output/
 演示稿.md
+路演.pptx
 .env
 .env.*
 !.env.example

@@ -75,6 +75,32 @@ function makeArtworkWithTitle(title: string, objects: Artwork["objects"] = []): 
   };
 }
 
+function makePlantUmlArchitectureObject(): Artwork["objects"][number] {
+  return {
+    id: "plantuml-component",
+    type: "plantuml",
+    name: "系统架构图",
+    layer_id: "middle",
+    group_id: "plantuml-component",
+    semantic_tags: ["plantuml", "plantuml.component", "system_architecture"],
+    transform: {},
+    geometry: {
+      x: 48,
+      y: 48,
+      width: 928,
+      height: 672,
+      title: "系统架构图",
+      diagramType: "component",
+      source:
+        '@startuml\ncomponent "前端" as frontend\ncomponent "后端" as backend\ncomponent "支付服务" as payment\ndatabase "数据库" as database\nfrontend --> backend\nbackend --> payment\nbackend --> database\n@enduml',
+      src: "data:image/svg+xml;base64,PHN2Zy8+",
+      preserveAspectRatio: "xMidYMid meet",
+    },
+    style: { opacity: 1 },
+    z_index: 10,
+  };
+}
+
 function makePlan(overrides: Partial<CommandPlan> = {}): CommandPlan {
   return {
     raw_text: "画一个蓝色圆形",
@@ -513,6 +539,57 @@ describe("App", () => {
     });
     await waitFor(() => expect(exportMocks.exportArtworkJson).toHaveBeenCalledWith(makeArtwork(), "语音绘图作品.json"));
     expect(exportMocks.exportSvgAsPng).not.toHaveBeenCalled();
+  });
+
+  it("submits non-PlantUML image zoom commands to the backend planner", async () => {
+    apiMocks.submitVoiceCommand.mockResolvedValue({
+      message: "已放大图片",
+      plan: makePlan({ raw_text: "放大图片", operations: [{ operation_type: "scale_object", payload: {} }] }),
+      artwork: makeArtwork(),
+      metrics: makeMetrics(),
+    });
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("放大图片", null);
+    });
+
+    expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith("artwork-1", "放大图片", undefined);
+    expect(document.querySelector("[data-plantuml-view]")).not.toBeInTheDocument();
+  });
+
+  it("zooms a PlantUML architecture layer from voice without submitting a drawing edit", async () => {
+    apiMocks.createArtwork.mockResolvedValue(makeArtwork([makePlantUmlArchitectureObject()]));
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("放大这张架构图", null);
+    });
+
+    expect(apiMocks.submitVoiceCommand).not.toHaveBeenCalled();
+    expect((await screen.findAllByText("已放大系统架构图视图")).length).toBeGreaterThan(0);
+    expect(screen.getByText("前端视图控制")).toBeInTheDocument();
+    expect(screen.getByText("查看图表图层")).toBeInTheDocument();
+    expect(document.querySelector('[data-plantuml-view="zoom"]')).toHaveAttribute("data-view-scale", "1.45");
+    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已放大系统架构图视图");
+  });
+
+  it("focuses a PlantUML payment module from voice without adding mouse view controls", async () => {
+    apiMocks.createArtwork.mockResolvedValue(makeArtwork([makePlantUmlArchitectureObject()]));
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("聚焦支付模块", null);
+    });
+
+    expect(apiMocks.submitVoiceCommand).not.toHaveBeenCalled();
+    expect((await screen.findAllByText("已聚焦支付服务模块视图")).length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-plantuml-view="focus"]')).toHaveAttribute("data-view-scale", "2.2");
+    expect(document.querySelector('rect[data-plantuml-focus="true"]')).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /放大|聚焦|缩放/ })).not.toBeInTheDocument();
   });
 
   it("records failed command execution and speaks the failure message", async () => {

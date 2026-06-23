@@ -9,10 +9,12 @@ import refreshRounded from "@iconify-icons/material-symbols/refresh-rounded";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArtwork, submitVoiceCommand, synthesizeSpeech } from "./api";
 import { CanvasStage } from "./drawing/CanvasStage";
+import { resolvePlantUmlVoiceView } from "./drawing/plantUmlVoiceView";
 import { AppErrorBoundary } from "./ErrorBoundary";
 import { useVoiceRecognition } from "./hooks/useVoiceRecognition";
 import "./styles.css";
 import type { Artwork, AsrProviderCapability, AsrTranscriptionMetrics, CommandExecutionMetrics, CommandPlan } from "./types";
+import type { PlantUmlLayerView, PlantUmlViewResult } from "./drawing/plantUmlVoiceView";
 import { exportArtworkJson, exportSvgAsPng, exportSvgFile, svgToPngDataUrl } from "./utils/exportPng";
 
 interface TimelineItem {
@@ -38,6 +40,7 @@ const OPERATION_LABELS: Record<string, string> = {
   replace_shape: "替换形状",
   replace_shape_many: "批量替换形状",
   edit_plantuml: "修改图表源码",
+  view_plantuml: "查看图表图层",
   generate_image_asset: "生成图片",
   polish_image_asset: "精修图片",
   delete_object: "删除对象",
@@ -52,7 +55,8 @@ const PLANNER_SOURCE_LABELS: Record<string, string> = {
   rules: "规则解析",
   agent: "Drawing Agent",
   mimo: "MiMo 规划",
-  rules_fallback: "规则兜底"
+  rules_fallback: "规则兜底",
+  frontend_view: "前端视图控制"
 };
 
 const FALLBACK_REASON_LABELS: Record<string, string> = {
@@ -166,6 +170,31 @@ function getExportFormat(plan: CommandPlan): ExportFormat | null {
   return "png";
 }
 
+function buildPlantUmlViewPlan(text: string, result: PlantUmlViewResult): CommandPlan {
+  return {
+    raw_text: text,
+    normalized_text: text,
+    operations: [
+      {
+        operation_type: "view_plantuml",
+        payload: {
+          action: result.action,
+          object_id: result.objectId,
+          target_label: result.targetLabel,
+          scale: result.view?.scale,
+        },
+      },
+    ],
+    scene_plan: null,
+    confidence: 1,
+    requires_confirmation: false,
+    clarification_question: null,
+    risk_level: "low",
+    explanation: result.message,
+    planner_source: "frontend_view",
+  };
+}
+
 async function runArtworkExport(format: ExportFormat, exportArtwork: Artwork): Promise<void> {
   if (format === "svg") {
     exportSvgFile("voice-canvas-svg", `${exportArtwork.title}.svg`);
@@ -186,6 +215,7 @@ function WorkspaceApp() {
   const [latestPlan, setLatestPlan] = useState<CommandPlan | null>(null);
   const [latestCommandMetrics, setLatestCommandMetrics] = useState<CommandExecutionMetrics | null>(null);
   const [latestAsrMetrics, setLatestAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
+  const [plantUmlView, setPlantUmlView] = useState<PlantUmlLayerView | null>(null);
   const hasCreatedArtworkRef = useRef(false);
   const feedbackAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -216,6 +246,16 @@ function WorkspaceApp() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!plantUmlView || !artwork) {
+      return;
+    }
+    const viewTargetStillExists = artwork.objects.some((object) => object.type === "plantuml" && object.id === plantUmlView.objectId);
+    if (!viewTargetStillExists) {
+      setPlantUmlView(null);
+    }
+  }, [artwork, plantUmlView]);
+
   const handleFinalTranscript = useCallback(
     async (text: string, asrMetrics: AsrTranscriptionMetrics | null) => {
       if (!artwork) {
@@ -223,6 +263,29 @@ function WorkspaceApp() {
       }
       if (isBusy) {
         setStatusMessage("正在执行上一条语音指令，请稍后再说");
+        return;
+      }
+
+      const plantUmlViewResult = resolvePlantUmlVoiceView(text, artwork, plantUmlView);
+      if (plantUmlViewResult) {
+        const localPlan = buildPlantUmlViewPlan(text, plantUmlViewResult);
+        setPlantUmlView(plantUmlViewResult.view);
+        setLatestPlan(localPlan);
+        setLatestCommandMetrics(null);
+        setLatestAsrMetrics(asrMetrics);
+        setTimeline((items) => [
+          {
+            id: crypto.randomUUID(),
+            transcript: text,
+            message: plantUmlViewResult.message,
+            plan: localPlan,
+            commandMetrics: null,
+            asrMetrics
+          },
+          ...items
+        ].slice(0, 12));
+        setStatusMessage(plantUmlViewResult.message);
+        void playFeedback(plantUmlViewResult.message);
         return;
       }
 
@@ -280,7 +343,7 @@ function WorkspaceApp() {
         setIsBusy(false);
       }
     },
-    [artwork, isBusy, playFeedback]
+    [artwork, isBusy, plantUmlView, playFeedback]
   );
 
   const voice = useVoiceRecognition({ onFinalTranscript: handleFinalTranscript });
@@ -301,7 +364,7 @@ function WorkspaceApp() {
   return (
     <main className="workspace">
       <section className="stage-panel">
-        <CanvasStage artwork={artwork} />
+        <CanvasStage artwork={artwork} plantUmlView={plantUmlView} />
       </section>
 
       <aside className="side-panel" aria-live="polite">
