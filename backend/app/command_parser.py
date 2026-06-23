@@ -74,6 +74,8 @@ CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
 TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
 OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
 COLOR_CONTEXT_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_的]+")
+DIAGRAM_TYPE_KEYWORDS = ("er图", "er 图", "实体关系图", "架构图", "结构图", "流程图", "时序图", "序列图", "类图", "uml", "甘特图", "泳道图", "组织结构图")
+ASR_ER_SUFFIX_CONFUSIONS = ("的一样", "的一项", "的一氧", "的一样的", "的一张", "的一二", "的er", "的e r", "一样", "一项", "一氧")
 COLOR_LINK_WORDS = ("是", "为", "设为", "设置为", "设置成", "改为", "改成", "变为", "变成", "用", "使用", "涂成", "刷成", "画成")
 POSITION_RANK_PATTERN = re.compile(r"第?\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|棵|扇|座|条|张|块|只|件)")
 LAYER_MAP: dict[str, str] = {
@@ -344,6 +346,26 @@ def normalize_text(text: str) -> str:
     for source, target in replacements.items():
         normalized = normalized.replace(source, target)
     normalized = WHITESPACE_PATTERN.sub(" ", normalized)
+    return normalized
+
+
+def repair_asr_command_text(text: str) -> str:
+    normalized = normalize_text(text).strip(" \t\r\n.,!?;:，。！？；：")
+    if not normalized:
+        return normalized
+    if not any(keyword in normalized for keyword in ("画", "创建", "生成", "写")):
+        return normalized
+    if any(keyword in normalized for keyword in DIAGRAM_TYPE_KEYWORDS):
+        return normalized
+    if "系统" not in normalized:
+        return normalized
+    for suffix in ASR_ER_SUFFIX_CONFUSIONS:
+        if normalized.endswith(suffix):
+            base = normalized[: -len(suffix)].rstrip(" 的")
+            if base.endswith("系统"):
+                return f"{base}的ER图"
+    if normalized.endswith("系统的"):
+        return f"{normalized.rstrip('的')}的ER图"
     return normalized
 
 

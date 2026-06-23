@@ -13,7 +13,7 @@ from sqlite3 import Connection
 
 from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_audio_data_url
 from .asr_stream import StreamingAsrProtocolError, StreamingAsrSession
-from .command_parser import normalize_text, parse_command
+from .command_parser import normalize_text, parse_command, repair_asr_command_text
 from .config import load_env_file
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
@@ -379,16 +379,17 @@ def _build_rules_routing_fallback_command(
 
 
 async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
+    command_text = repair_asr_command_text(text)
     started_at = perf_counter()
     rule_started_at = perf_counter()
-    rule_plan = _with_plan_metadata(parse_command(text), "rules")
+    rule_plan = _with_plan_metadata(parse_command(command_text), "rules")
     rule_finished_at = perf_counter()
     metrics = CommandExecutionMetrics(
         rule_parse_ms=round((rule_finished_at - rule_started_at) * 1000, 2),
         planner_source=rule_plan.planner_source,
     )
     try:
-        use_agent = should_use_drawing_agent(text, rule_plan)
+        use_agent = should_use_drawing_agent(command_text, rule_plan)
     except Exception as exc:
         return _build_rules_routing_fallback_command(rule_plan, metrics, started_at=started_at, exc=exc)
     if not use_agent:
@@ -399,7 +400,7 @@ async def build_command_plan_with_metrics(text: str) -> PlannedCommand:
     metrics.agent_attempted = True
     agent_started_at = perf_counter()
     try:
-        plan = _with_plan_metadata(await plan_with_drawing_agent(text, rule_plan=rule_plan), "agent")
+        plan = _with_plan_metadata(await plan_with_drawing_agent(command_text, rule_plan=rule_plan), "agent")
         agent_finished_at = perf_counter()
         metrics.agent_planner_ms = round((agent_finished_at - agent_started_at) * 1000, 2)
         metrics.llm_planner_ms = metrics.agent_planner_ms

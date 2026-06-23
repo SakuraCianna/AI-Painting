@@ -565,6 +565,85 @@ def test_voice_edit_plantuml_er_renames_entity_without_explicit_diagram_keyword(
     assert "商品ID" not in source
 
 
+def test_voice_edit_plantuml_er_adds_entity_node_and_inferred_relationships(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一下学生管理系统的ER图"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "再加一个教师节点"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "edit_plantuml"
+    assert len(body["artwork"]["objects"]) == 1
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert 'entity "教师"' in source
+    assert "教师ID" in source
+    assert " : 授课" in source
+    assert " : 管理" in source
+
+
+def test_voice_edit_plantuml_er_adds_open_domain_entity_node(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一下学生管理系统的ER图"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "再加一个辅导员节点"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "edit_plantuml"
+    assert len(body["artwork"]["objects"]) == 1
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert 'entity "辅导员"' in source
+    assert "辅导员ID" in source
+    assert " : 关联" in source
+
+
+def test_voice_edit_plantuml_renames_open_domain_node_with_diagram_context(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一下学生管理系统的ER图"},
+    )
+    client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "再加一个辅导员节点"},
+    )
+
+    edit_response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把辅导员节点换成班主任"},
+    )
+
+    assert edit_response.status_code == 200
+    body = edit_response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "edit_plantuml"
+    source = _only_plantuml_object(body)["geometry"]["source"]
+    assert 'entity "班主任"' in source
+    assert "班主任ID" in source
+    assert 'entity "辅导员"' not in source
+
+
 def test_voice_edit_plantuml_flowchart_deletes_node(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
     monkeypatch.delenv("MIMO_API_KEY", raising=False)

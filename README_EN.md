@@ -59,12 +59,12 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 - **Voice-first creation**: recording and voice feedback are the primary controls. A mouse-based drawing toolbar is intentionally absent.
 - **Structured planning**: every command becomes a `CommandPlan` or `SceneGraph v2` before it mutates the canvas.
 - **PlantUML diagram layer**: professional diagrams are stored as both PlantUML source and rendered SVG data URLs. ER diagrams infer default entities for common domains such as libraries, education, hospitals, hotels, content systems, inventory, CRM, and ecommerce. System architecture diagrams extract user-provided modules, and PlantUML layers use compact typography without upscaling small diagrams.
-- **PlantUML source editing**: voice commands can rename or delete diagram nodes, append or delete Gantt tasks, append or delete swimlanes, and add, delete, or rewrite ER relationships by label or entity endpoints.
+- **PlantUML source editing**: voice commands can rename or delete diagram nodes, append or delete Gantt tasks, append or delete swimlanes, add open-domain ER entity nodes, and add, delete, or rewrite ER relationships by label or entity endpoints. Node/entity renames with diagram-structure context do not depend on a fixed label list. New ER entities use domain-specific relation inference first, then fall back to the most connected entity in the current diagram.
 - **Editable objects**: SVG objects carry geometry, styles, semantic tags, grouping, and layer metadata.
 - **Complex command decomposition**: the Drawing Agent can break scenes into steps for houses, flows, org charts, Gantt charts, posters, and UI drafts.
 - **Confirmation safety**: risky operations such as clearing the canvas keep `requires_confirmation` and only execute after explicit confirmation.
 - **Grouped undo**: multi-step voice plans can be undone and redone as a single semantic action.
-- **ASR fallback chain**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR now supports WebSocket audio streaming transport and returns the final transcript after silence detection; the Web Speech API fallback exposes browser interim text. The provider status endpoint returns capability metadata, and the console shows whether the active path is streaming upload with final recognition or browser interim transcription.
+- **ASR fallback chain and command repair**: Xiaomi MiMo ASR first, local Qwen3-ASR and Web Speech API as fallback options. Backend ASR supports WebSocket audio streaming transport and returns the final transcript after silence detection; before execution, high-confidence ASR command repairs can turn phrases such as `学生管理系统的一样` into `学生管理系统的ER图`. The Web Speech API fallback exposes browser interim text. The provider status endpoint returns capability metadata, and the console shows whether the active path is streaming upload with final recognition or browser interim transcription.
 - **Image generation and refinement**: text-to-image and image-to-image providers are abstracted behind configurable provider adapters.
 - **Latency observability**: ASR, rule parsing, agent planning, execution, and end-to-end latency are logged.
 - **CI coverage**: GitHub Actions runs backend tests, frontend tests, frontend builds, Docker validation, and API smoke checks.
@@ -109,6 +109,7 @@ Draw a voice drawing flowchart from user voice to ASR, then to the planner, then
 给甘特图增加评审任务
 给泳道图增加法务泳道
 给ER图增加用户收藏商品关系
+再加一个教师节点
 Draw a product iteration Gantt chart with requirements, design, development, testing, and launch milestones
 Change the second tree on the left to yellow
 Change the button inside the card and on the same row as the title to green

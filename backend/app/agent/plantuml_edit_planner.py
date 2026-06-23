@@ -15,6 +15,8 @@ PLANTUML_EDIT_KEYWORDS = (
     "增加",
     "新增",
     "添加",
+    "再加",
+    "加",
     "删除",
     "移除",
     "去掉",
@@ -36,9 +38,9 @@ DIAGRAM_TAGS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 RENAME_WORDS = ("改成", "改为", "换成", "变成")
 RECONNECT_WORDS = ("改连接到", "改连到", "改指向", "连接到", "连到", "指向")
-ADD_WORDS = ("增加", "新增", "添加")
+ADD_WORDS = ("增加", "新增", "添加", "再加", "加")
 DELETE_WORDS = ("删除", "移除", "去掉", "删掉")
-COMMON_PLANTUML_LABEL_TERMS = {
+PLANTUML_RENAME_COMPATIBILITY_TERMS = {
     "用户",
     "订单",
     "商品",
@@ -53,7 +55,31 @@ COMMON_PLANTUML_LABEL_TERMS = {
     "会员",
     "库存",
     "分类",
+    "学生",
+    "班级",
+    "课程",
+    "成绩",
+    "教师",
+    "老师",
 }
+PLANTUML_RENAME_CONTEXT_HINTS = (
+    "图里",
+    "图中",
+    "图上的",
+    "图内",
+    "节点",
+    "实体",
+    "模块",
+    "组件",
+    "服务",
+    "表",
+    "类",
+    "接口",
+    "泳道",
+    "任务",
+    "关系",
+    "关联",
+)
 
 
 def build_plantuml_edit_plan(raw_text: str, normalized_text: str) -> CommandPlan | None:
@@ -99,6 +125,9 @@ def _operation_payload_for_text(text: str) -> dict[str, Any] | None:
         generic_rename_payload = _generic_label_rename_payload(text)
         if generic_rename_payload:
             return {"target": {"selector": "all", "type": "plantuml"}, **generic_rename_payload}
+        generic_add_payload = _generic_er_entity_add_payload(text)
+        if generic_add_payload:
+            return {"target": {"selector": "all", "type": "plantuml", "semantic_tag": "plantuml.er"}, **generic_add_payload}
         return None
     target = {"selector": "all", "type": "plantuml"}
     if diagram_type:
@@ -167,7 +196,9 @@ def _generic_label_rename_payload(text: str) -> dict[str, Any] | None:
         return None
     old_text = str(payload["old_text"])
     new_text = str(payload["new_text"])
-    if old_text in COMMON_PLANTUML_LABEL_TERMS or new_text in COMMON_PLANTUML_LABEL_TERMS:
+    if any(hint in text for hint in PLANTUML_RENAME_CONTEXT_HINTS):
+        return payload
+    if old_text in PLANTUML_RENAME_COMPATIBILITY_TERMS or new_text in PLANTUML_RENAME_COMPATIBILITY_TERMS:
         return payload
     return None
 
@@ -383,7 +414,27 @@ def _extract_after_add_word(text: str) -> str | None:
     if not matches:
         return None
     position, word = sorted(matches)[-1]
-    return _clean_fragment(text[position + len(word) :])
+    return _clean_added_item(text[position + len(word) :])
+
+
+def _clean_added_item(value: str) -> str:
+    cleaned = _clean_fragment(value)
+    cleaned = re.sub(r"^(一个|一名|一位|一条|一项|一份|一张|个|名|位)", "", cleaned).strip(" ，,。；;:：、 ")
+    return _clean_fragment(cleaned)
+
+
+def _generic_er_entity_add_payload(text: str) -> dict[str, Any] | None:
+    if "节点" not in text and "实体" not in text:
+        return None
+    item = _extract_after_add_word(text)
+    if not item:
+        return None
+    entity_name = re.sub(r"(节点|实体)$", "", item).strip(" ，,。；;:：、 ") or item
+    if entity_name in {"节点", "实体", "关系", "关联", "内容", "对象"}:
+        return None
+    if len(entity_name) > 24:
+        return None
+    return {"action": "add_er_entity", "entity_name": entity_name}
 
 
 def _extract_after_delete_word(text: str) -> str | None:
@@ -400,6 +451,9 @@ def _add_payload(text: str, diagram_type: str | None) -> dict[str, Any] | None:
         return None
     if "关系" in text or "关联" in text:
         return {"action": "add_relation", "relation_text": item}
+    if diagram_type == "er" and ("节点" in text or "实体" in text):
+        entity_name = re.sub(r"(节点|实体)$", "", item).strip(" ，,。；;:：、 ") or item
+        return {"action": "add_er_entity", "entity_name": entity_name}
     if "泳道" in text or diagram_type == "swimlane":
         lane_name = re.sub(r"(泳道)$", "", item).strip(" ，,。；;:：、 ") or item
         return {"action": "add_swimlane", "lane_name": lane_name, "step_name": f"{lane_name}处理"}
@@ -451,6 +505,8 @@ def _action_title(payload: dict[str, Any]) -> str:
         return f"增加泳道 {payload.get('lane_name')}"
     if action == "add_relation":
         return f"增加关系 {payload.get('relation_text')}"
+    if action == "add_er_entity":
+        return f"增加 ER 实体 {payload.get('entity_name')}"
     if action == "add_node":
         return f"增加节点 {payload.get('node_text')}"
     if action == "delete_node":

@@ -476,6 +476,146 @@ describe("useVoiceRecognition", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores a short noise spike before the silence window", async () => {
+    let now = 0;
+    let processor: ScriptProcessorNode | null = null;
+    const onFinalTranscript = vi.fn();
+
+    vi.spyOn(window.performance, "now").mockImplementation(() => now);
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        sampleRate = 16000;
+        destination = {};
+        close = vi.fn().mockResolvedValue(undefined);
+
+        createMediaStreamSource() {
+          return { connect: vi.fn(), disconnect: vi.fn() };
+        }
+
+        createScriptProcessor() {
+          processor = { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null } as unknown as ScriptProcessorNode;
+          return processor;
+        }
+      }
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      mediaDevices: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() }],
+        }),
+      },
+    });
+    apiMocks.fetchAsrProviders.mockResolvedValue({
+      providers: ["xiaomi"],
+      provider_labels: { xiaomi: "小米 MiMo ASR", web_speech: "Web Speech API" },
+      primary_provider: "xiaomi",
+      fallback_provider: "web_speech",
+    });
+    vi.mocked(transcribeAudio).mockResolvedValue({
+      text: "不应该被触发",
+      provider: "xiaomi",
+      provider_label: "小米 MiMo ASR",
+      attempts: [],
+      metrics: {
+        total_ms: 800,
+        audio_bytes: 3200,
+        attempt_count: 1,
+        successful_provider: "xiaomi",
+        fallback_count: 0,
+      },
+    });
+    const { result } = renderHook(() => useVoiceRecognition({ onFinalTranscript }));
+
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(result.current.provider).toBe("backend"));
+
+    act(() => {
+      now = 0;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0.09, 0.08, 0.09])));
+      now = 1701;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0, 0, 0])));
+    });
+
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(onFinalTranscript).not.toHaveBeenCalled();
+  });
+
+  it("starts recording when real speech has brief low-energy frames", async () => {
+    let now = 0;
+    let processor: ScriptProcessorNode | null = null;
+    const onFinalTranscript = vi.fn();
+
+    vi.spyOn(window.performance, "now").mockImplementation(() => now);
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        sampleRate = 16000;
+        destination = {};
+        close = vi.fn().mockResolvedValue(undefined);
+
+        createMediaStreamSource() {
+          return { connect: vi.fn(), disconnect: vi.fn() };
+        }
+
+        createScriptProcessor() {
+          processor = { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null } as unknown as ScriptProcessorNode;
+          return processor;
+        }
+      }
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      mediaDevices: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() }],
+        }),
+      },
+    });
+    apiMocks.fetchAsrProviders.mockResolvedValue({
+      providers: ["xiaomi"],
+      provider_labels: { xiaomi: "小米 MiMo ASR", web_speech: "Web Speech API" },
+      primary_provider: "xiaomi",
+      fallback_provider: "web_speech",
+    });
+    vi.mocked(transcribeAudio).mockResolvedValue({
+      text: "画一个学生管理系统的ER图",
+      provider: "xiaomi",
+      provider_label: "小米 MiMo ASR",
+      attempts: [],
+      metrics: {
+        total_ms: 800,
+        audio_bytes: 3200,
+        attempt_count: 1,
+        successful_provider: "xiaomi",
+        fallback_count: 0,
+      },
+    });
+    const { result } = renderHook(() => useVoiceRecognition({ onFinalTranscript }));
+
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(result.current.provider).toBe("backend"));
+
+    act(() => {
+      now = 0;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0.08, 0.09, 0.07])));
+      now = 80;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0.01, 0.015, 0.01])));
+      now = 170;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0.08, 0.09, 0.07])));
+      now = 1901;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0, 0, 0])));
+    });
+
+    await waitFor(() => expect(transcribeAudio).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onFinalTranscript).toHaveBeenCalledWith("画一个学生管理系统的ER图", expect.any(Object)));
+  });
+
   it("does not cut long speech at 30 seconds before the 1.5 second silence window", async () => {
     let now = 0;
     let processor: ScriptProcessorNode | null = null;

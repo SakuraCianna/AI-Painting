@@ -163,6 +163,34 @@ def test_build_command_plan_skips_mimo_for_voice_noise(monkeypatch) -> None:
     assert result.metrics.planner_source == "rules"
 
 
+def test_build_command_plan_repairs_asr_er_suffix_before_agent_routing(monkeypatch) -> None:
+    from app import main
+
+    captured_text = ""
+
+    async def fake_plan_with_drawing_agent(text: str, *, rule_plan: CommandPlan | None = None) -> CommandPlan:
+        nonlocal captured_text
+        captured_text = text
+        assert rule_plan is not None
+        assert rule_plan.requires_confirmation is True
+        return CommandPlan(
+            raw_text=text,
+            normalized_text=text,
+            operations=[],
+            confidence=0.8,
+            planner_source="agent",
+        )
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.setattr(main, "plan_with_drawing_agent", fake_plan_with_drawing_agent)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个学生管理系统的一样。"))
+
+    assert captured_text == "画一个学生管理系统的ER图"
+    assert result.plan.normalized_text == "画一个学生管理系统的ER图"
+    assert result.metrics.agent_attempted is True
+
+
 def test_build_command_plan_metrics_track_rule_parser(monkeypatch) -> None:
     from app import main
 
@@ -611,6 +639,57 @@ def test_agent_template_uses_domain_defaults_for_common_er_systems(
     assert 'entity "商品"' not in source
     assert 'entity "订单"' not in source
     assert 'entity "支付"' not in source
+
+
+def test_agent_template_repairs_asr_er_suffix_for_student_management(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个学生管理系统的一样。"))
+
+    assert result.plan.planner_source == "agent"
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["geometry"]["diagramType"] == "er"
+    for entity_name in ("学生", "班级", "课程", "成绩"):
+        assert f'entity "{entity_name}"' in source
+    assert "学生管理系统的er图" in result.plan.normalized_text
+
+
+def test_agent_template_accepts_write_verb_for_student_management_er(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("写一份学生管理系统的ER图。"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.requires_confirmation is False
+    assert len(result.plan.operations) == 1
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["geometry"]["diagramType"] == "er"
+    assert plantuml_object["geometry"]["title"] == "学生管理系统的ER图"
+    for entity_name in ("学生", "班级", "课程", "成绩"):
+        assert f'entity "{entity_name}"' in source
+
+
+def test_agent_template_cleans_casual_draw_prefix_from_plantuml_title(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一下学生管理系统的ER图。"))
+
+    plantuml_object = result.plan.operations[0].payload["object"]
+    source = plantuml_object["geometry"]["source"]
+    assert plantuml_object["geometry"]["title"] == "学生管理系统的ER图"
+    assert "title 学生管理系统的ER图" in source
+    assert "一下学生管理系统" not in source
 
 
 def test_agent_template_builds_sequence_and_class_plantuml_diagrams(monkeypatch) -> None:

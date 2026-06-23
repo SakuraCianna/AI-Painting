@@ -33,6 +33,8 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
         next_source = _add_swimlane(source, str(payload.get("lane_name") or ""), str(payload.get("step_name") or ""))
     elif action == "add_relation":
         next_source = _add_relation(source, str(payload.get("relation_text") or ""))
+    elif action == "add_er_entity":
+        next_source = _add_er_entity(source, str(payload.get("entity_name") or ""))
     elif action == "delete_node":
         next_source = _delete_node(source, str(payload.get("node_text") or ""))
     elif action == "delete_gantt_task":
@@ -223,6 +225,92 @@ def _add_relation(source: str, relation_text: str) -> str:
     if line in source:
         raise PlantUMLEditError(f"PlantUML 关系已存在: {label}")
     return _insert_before_line(source, r"@enduml", [line])
+
+
+ER_ENTITY_ATTRIBUTES = {
+    "教师": ("教师ID", "姓名", "职称"),
+    "老师": ("教师ID", "姓名", "职称"),
+    "学生": ("学生ID", "姓名", "学号"),
+    "班级": ("班级ID", "名称", "年级"),
+    "课程": ("课程ID", "名称", "学分"),
+    "成绩": ("成绩ID", "分数", "学期"),
+}
+
+
+def _next_entity_alias(source: str) -> str:
+    indexes = [int(match.group(1)) for match in re.finditer(r"\bentity_(\d+)\b", source)]
+    return f"entity_{max(indexes, default=0) + 1}"
+
+
+def _er_entity_lines(entity_name: str, alias: str) -> list[str]:
+    attributes = ER_ENTITY_ATTRIBUTES.get(entity_name, (f"{entity_name}ID", "名称", "状态"))
+    return [
+        f'entity "{entity_name}" as {alias} {{',
+        *[f"  {'*' if attribute.endswith('ID') else '--'} {attribute}" for attribute in attributes],
+        "}",
+    ]
+
+
+def _insert_before_first_relation(source: str, inserted_lines: list[str]) -> str:
+    lines = source.splitlines()
+    relation_pattern = _relation_line_pattern()
+    for index, line in enumerate(lines):
+        if relation_pattern.match(line):
+            return "\n".join([*lines[:index], *inserted_lines, *lines[index:]])
+    return _insert_before_line(source, r"@enduml", inserted_lines)
+
+
+def _central_er_target_alias(source: str, aliases: dict[str, str], new_alias: str) -> str | None:
+    candidates = [(name, alias) for name, alias in aliases.items() if alias != new_alias]
+    if not candidates:
+        return None
+    degree = {alias: 0 for _, alias in candidates}
+    relation_pattern = _relation_line_pattern()
+    for line in source.splitlines():
+        match = relation_pattern.match(line)
+        if not match:
+            continue
+        for endpoint in (match.group("source"), match.group("target")):
+            if endpoint in degree:
+                degree[endpoint] += 1
+
+    best_alias = candidates[0][1]
+    best_score = degree[best_alias]
+    for _, alias in candidates[1:]:
+        score = degree[alias]
+        if score > best_score:
+            best_alias = alias
+            best_score = score
+    return best_alias
+
+
+def _inferred_er_relationship_lines(source: str, entity_name: str, alias: str) -> list[str]:
+    aliases = _named_aliases(source)
+    relations: list[str] = []
+    if entity_name in {"教师", "老师"}:
+        if "课程" in aliases:
+            relations.append(f"{alias} ||--o{{ {aliases['课程']} : 授课")
+        if "班级" in aliases:
+            relations.append(f"{alias} ||--o{{ {aliases['班级']} : 管理")
+    if not relations:
+        target_alias = _central_er_target_alias(source, aliases, alias)
+        if target_alias:
+            relations.append(f"{alias} ||--o{{ {target_alias} : 关联")
+    return [line for line in relations if line not in source]
+
+
+def _add_er_entity(source: str, entity_name: str) -> str:
+    entity = _safe_label(entity_name, max_length=24)
+    if not re.search(r"^\s*entity\s+", source, re.IGNORECASE | re.MULTILINE):
+        raise PlantUMLEditError("当前 PlantUML 图不是 ER 图")
+    if any(_label_matches(name, entity) for name in _named_aliases(source)):
+        raise PlantUMLEditError(f"PlantUML 实体已存在: {entity}")
+    alias = _next_entity_alias(source)
+    with_entity = _insert_before_first_relation(source, _er_entity_lines(entity, alias))
+    relation_lines = _inferred_er_relationship_lines(with_entity, entity, alias)
+    if relation_lines:
+        return _insert_before_line(with_entity, r"@enduml", relation_lines)
+    return with_entity
 
 
 def _delete_node(source: str, node_text: str) -> str:

@@ -23,6 +23,11 @@ ER_DOMAIN_PROFILES = (
         ((0, 2, "发起借阅"), (2, 1, "记录图书"), (3, 1, "管理"), (0, 1, "预约")),
     ),
     ERDomainProfile(
+        ("学生管理", "学籍", "成绩管理", "班级管理"),
+        ("学生", "班级", "课程", "成绩"),
+        ((0, 1, "归属班级"), (0, 3, "获得成绩"), (3, 2, "对应课程"), (1, 2, "开设课程")),
+    ),
+    ERDomainProfile(
         ("学生选课", "选课", "教务", "课程管理", "学校", "教学"),
         ("学生", "课程", "选课记录", "教师"),
         ((0, 2, "提交选课"), (2, 1, "选择课程"), (3, 1, "教师授课"), (0, 1, "修读")),
@@ -69,7 +74,9 @@ ER_ENTITY_ATTRIBUTES = {
     "借阅记录": ("借阅ID", "借出时间", "归还状态"),
     "馆员": ("馆员ID", "姓名", "工号"),
     "学生": ("学生ID", "姓名", "学号"),
+    "班级": ("班级ID", "名称", "年级"),
     "课程": ("课程ID", "名称", "学分"),
+    "成绩": ("成绩ID", "分数", "学期"),
     "选课记录": ("选课ID", "成绩", "学期"),
     "教师": ("教师ID", "姓名", "职称"),
     "患者": ("患者ID", "姓名", "手机号"),
@@ -122,7 +129,7 @@ COMPACT_PLANTUML_STYLE_LINES = (
 
 def build_plantuml_scene_graph(text: str) -> AgentSceneGraph | None:
     normalized_text = text.lower()
-    if not any(keyword in text for keyword in ("画", "创建", "生成")):
+    if not any(keyword in text for keyword in ("画", "创建", "生成", "写")):
         return None
     if "泳道图" in text:
         return _plantuml_swimlane_graph(text)
@@ -230,7 +237,28 @@ def _extract_title(text: str, markers: tuple[str, ...], fallback: str) -> str:
         if marker_index < 0:
             continue
         title = text[:marker_index]
-        for prefix in ("画一个", "创建一个", "生成一个", "画", "创建", "生成"):
+        for prefix in (
+            "帮我画一下",
+            "帮我画一个",
+            "帮我画一份",
+            "帮我写一个",
+            "帮我写一份",
+            "画一下",
+            "画一个",
+            "画一份",
+            "画一张",
+            "创建一个",
+            "创建一份",
+            "生成一个",
+            "生成一份",
+            "写一个",
+            "写一份",
+            "来一张",
+            "写",
+            "画",
+            "创建",
+            "生成",
+        ):
             if title.startswith(prefix):
                 title = title[len(prefix) :]
                 break

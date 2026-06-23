@@ -59,6 +59,8 @@ interface UseVoiceRecognitionOptions {
 
 const TARGET_SAMPLE_RATE = 16000;
 const SPEECH_THRESHOLD = 0.045;
+const SPEECH_START_CONFIRM_MS = 160;
+const SPEECH_START_GRACE_MS = 260;
 const SILENCE_MS = 1500;
 const MIN_SPEECH_MS = 480;
 const WEB_SPEECH_PROVIDER = "web_speech";
@@ -198,6 +200,10 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const captureChunksRef = useRef<Float32Array[]>([]);
   const recordingRef = useRef(false);
+  const speechCandidateStartedAtRef = useRef<number | null>(null);
+  const speechCandidateLastVoiceAtRef = useRef(0);
+  const speechCandidateVoiceFramesRef = useRef(0);
+  const speechCandidateChunksRef = useRef<Float32Array[]>([]);
   const speechStartedAtRef = useRef(0);
   const lastVoiceAtRef = useRef(0);
   const sampleRateRef = useRef(TARGET_SAMPLE_RATE);
@@ -239,6 +245,10 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     }
     captureChunksRef.current = [];
     recordingRef.current = false;
+    speechCandidateStartedAtRef.current = null;
+    speechCandidateLastVoiceAtRef.current = 0;
+    speechCandidateVoiceFramesRef.current = 0;
+    speechCandidateChunksRef.current = [];
     isUploadingRef.current = false;
     closeAsrStream();
   }, [closeAsrStream]);
@@ -482,22 +492,59 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       }
       const rms = Math.sqrt(sum / input.length);
       const now = window.performance.now();
+      const isVoiceFrame = rms > SPEECH_THRESHOLD;
+      let currentFrameCaptured = false;
 
-      if (rms > SPEECH_THRESHOLD) {
+      if (isVoiceFrame) {
         if (!recordingRef.current) {
+          if (speechCandidateStartedAtRef.current === null) {
+            speechCandidateStartedAtRef.current = now;
+            speechCandidateVoiceFramesRef.current = 0;
+            speechCandidateChunksRef.current = [];
+          }
+          const candidateFrame = new Float32Array(input);
+          speechCandidateChunksRef.current.push(candidateFrame);
+          speechCandidateLastVoiceAtRef.current = now;
+          speechCandidateVoiceFramesRef.current += 1;
+          if (speechCandidateVoiceFramesRef.current < 2 || now - speechCandidateStartedAtRef.current < SPEECH_START_CONFIRM_MS) {
+            return;
+          }
           recordingRef.current = true;
-          captureChunksRef.current = [];
-          speechStartedAtRef.current = now;
+          speechStartedAtRef.current = speechCandidateStartedAtRef.current;
+          captureChunksRef.current = [...speechCandidateChunksRef.current];
+          for (const chunk of speechCandidateChunksRef.current) {
+            sendAsrStreamFrame(chunk, sampleRate);
+          }
+          speechCandidateStartedAtRef.current = null;
+          speechCandidateLastVoiceAtRef.current = 0;
+          speechCandidateVoiceFramesRef.current = 0;
+          speechCandidateChunksRef.current = [];
+          currentFrameCaptured = true;
         }
         lastVoiceAtRef.current = now;
+      } else if (!recordingRef.current) {
+        if (
+          speechCandidateStartedAtRef.current !== null &&
+          now - speechCandidateLastVoiceAtRef.current <= SPEECH_START_GRACE_MS
+        ) {
+          speechCandidateChunksRef.current.push(new Float32Array(input));
+          return;
+        }
+        speechCandidateStartedAtRef.current = null;
+        speechCandidateLastVoiceAtRef.current = 0;
+        speechCandidateVoiceFramesRef.current = 0;
+        speechCandidateChunksRef.current = [];
+        return;
       }
 
       if (!recordingRef.current) {
         return;
       }
 
-      captureChunksRef.current.push(new Float32Array(input));
-      sendAsrStreamFrame(input, sampleRate);
+      if (!currentFrameCaptured) {
+        captureChunksRef.current.push(new Float32Array(input));
+        sendAsrStreamFrame(input, sampleRate);
+      }
       const speechDuration = now - speechStartedAtRef.current;
       const silenceDuration = now - lastVoiceAtRef.current;
       const shouldFinalize = speechDuration > MIN_SPEECH_MS && silenceDuration > SILENCE_MS;

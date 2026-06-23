@@ -140,6 +140,7 @@ describe("App", () => {
     };
     apiMocks.createArtwork.mockResolvedValue(makeArtwork());
     apiMocks.submitVoiceCommand.mockReset();
+    apiMocks.synthesizeSpeech.mockReset();
     apiMocks.synthesizeSpeech.mockResolvedValue({ audio_data_url: "data:audio/wav;base64,AAAA" });
     exportMocks.exportArtworkJson.mockReset();
     exportMocks.exportSvgFile.mockReset();
@@ -230,6 +231,36 @@ describe("App", () => {
     expect(screen.getByText("添加一个蓝色圆形")).toBeInTheDocument();
     expect(screen.getByText("画一个蓝色圆形")).toBeInTheDocument();
     expect(screen.getByText("1 个对象")).toBeInTheDocument();
+    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
+    expect(audioPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts TTS feedback as soon as the backend command response returns", async () => {
+    let resolveCommand: (response: CommandExecutionResponse) => void = () => {};
+    const pendingCommand = new Promise<CommandExecutionResponse>((resolve) => {
+      resolveCommand = resolve;
+    });
+    apiMocks.submitVoiceCommand.mockReturnValue(pendingCommand);
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    let finalTranscriptPromise: Promise<void> | void;
+    await act(async () => {
+      finalTranscriptPromise = voiceRuntime.onFinalTranscript?.("画一个蓝色圆形", null);
+    });
+    await waitFor(() => expect(apiMocks.submitVoiceCommand).toHaveBeenCalledTimes(1));
+    expect(apiMocks.synthesizeSpeech).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveCommand({
+        message: "已添加蓝色圆形",
+        plan: makePlan(),
+        artwork: makeArtwork(),
+        metrics: makeMetrics(),
+      });
+      await finalTranscriptPromise;
+    });
+
     expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
     expect(audioPlay).toHaveBeenCalledTimes(1);
   });
