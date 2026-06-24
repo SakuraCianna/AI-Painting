@@ -117,6 +117,59 @@ def test_apply_operation_plan_rolls_back_when_a_step_fails(tmp_path: Path) -> No
         assert operation_count == 0
 
 
+def test_latest_type_target_uses_the_same_object_for_snapshot_and_update(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        circle_id = _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "circle",
+                "name": "目标圆",
+                "geometry": {"cx": 120, "cy": 160, "radius": 30},
+                "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
+            },
+        )
+        _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "后添加矩形",
+                "geometry": {"x": 400, "y": 420, "width": 90, "height": 50},
+                "style": {"fill": "#dc2626", "stroke": "#7f1d1d", "strokeWidth": 2},
+            },
+        )
+
+        latest_circle = {"selector": "latest", "type": "circle"}
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(operation_type="set_style", payload={"target": latest_circle, "style": {"fill": "#16a34a"}}),
+        )
+        assert next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == circle_id).style["fill"] == "#16a34a"
+
+        undo_last_operation(connection, artwork_id)
+        circle = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == circle_id)
+        assert circle.style["fill"] == "#2563eb"
+
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(operation_type="move_object", payload={"target": latest_circle, "dx": 10, "dy": 20}),
+        )
+        circle = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == circle_id)
+        assert circle.geometry == {"cx": 130, "cy": 180, "radius": 30}
+
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(operation_type="scale_object", payload={"target": latest_circle, "factor": 2}),
+        )
+        circle = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == circle_id)
+        assert circle.geometry == {"cx": 130, "cy": 180, "radius": 60}
+
+
 def test_operation_plan_undo_and_redo_use_one_history_group(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)

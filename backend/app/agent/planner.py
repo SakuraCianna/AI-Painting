@@ -13,7 +13,7 @@ from .edit_planner import build_local_edit_plan
 from .graph import run_drawing_agent_graph
 from .model_client import AgentModelError, build_scene_graph_with_mimo, has_mimo_model_config, repair_scene_graph_with_mimo
 from .plantuml_builder import build_plantuml_scene_graph
-from .scene_graph import AgentSceneGraph, AgentSceneObject, AgentSceneRelation, AgentStyle
+from .scene_graph import AgentObjectType, AgentSceneGraph, AgentSceneObject, AgentSceneRelation, AgentStyle
 from .validator import SceneGraphValidationError
 
 
@@ -132,7 +132,7 @@ def _style(fill: str, stroke: str = "#111827", stroke_width: float = 2, opacity:
 
 def _object(
     object_id: str,
-    object_type: str,
+    object_type: AgentObjectType,
     name: str,
     geometry: dict[str, Any],
     fill: str,
@@ -147,7 +147,7 @@ def _object(
 ) -> AgentSceneObject:
     return AgentSceneObject(
         object_id=object_id,
-        type=object_type,  # type: ignore[arg-type]
+        type=object_type,
         name=name,
         layer_id=layer_id,
         group_id=group_id,
