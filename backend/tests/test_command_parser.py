@@ -165,6 +165,27 @@ def test_parse_pink_five_petal_flower() -> None:
     assert obj["style"]["fill"] == "#f9a8d4"
 
 
+def test_parse_latest_create_clause_does_not_mix_previous_shape() -> None:
+    plan = parse_command("画一个下弦月后再画一个粉色五瓣花")
+
+    obj = plan.operations[0].payload["object"]
+
+    assert obj["type"] == "boolean_shape"
+    assert obj["geometry"]["preset"] == "flower"
+    assert obj["geometry"]["petals"] == 5
+    assert obj["style"]["fill"] == "#f9a8d4"
+
+
+def test_parse_repeated_latest_create_clause_does_not_mix_previous_shape() -> None:
+    plan = parse_command("画一个下弦月，然后画三个粉色圆形")
+
+    objects = [operation.payload["object"] for operation in plan.operations]
+
+    assert [operation.operation_type for operation in plan.operations] == ["add_object", "add_object", "add_object"]
+    assert [obj["type"] for obj in objects] == ["circle", "circle", "circle"]
+    assert all(obj["style"]["fill"] == "#f9a8d4" for obj in objects)
+
+
 def test_parse_boolean_shape_colors_and_petals_more_generally() -> None:
     purple = parse_command("画一个紫色三瓣花").operations[0].payload["object"]
     assert purple["geometry"]["petals"] == 3
