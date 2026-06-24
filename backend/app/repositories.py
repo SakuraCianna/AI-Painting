@@ -10,7 +10,11 @@ from uuid import uuid4
 from .schemas import ArtworkCreateRequest, ArtworkResponse, DrawingObject
 
 
-_UNSET = object()
+class _UnsetType:
+    pass
+
+
+_UNSET = _UnsetType()
 POSITION_ALIASES = {
     "left": "leftmost",
     "right": "rightmost",
@@ -792,22 +796,22 @@ def update_object(
     geometry: dict[str, Any] | None = None,
     replace_geometry: bool = False,
     style: dict[str, Any] | None = None,
-    name: str | None | object = _UNSET,
-    layer_id: str | None | object = _UNSET,
-    group_id: str | None | object = _UNSET,
-    semantic_tags: list[str] | None | object = _UNSET,
-    transform: dict[str, Any] | object = _UNSET,
+    name: str | None | _UnsetType = _UNSET,
+    layer_id: str | None | _UnsetType = _UNSET,
+    group_id: str | None | _UnsetType = _UNSET,
+    semantic_tags: list[str] | None | _UnsetType = _UNSET,
+    transform: dict[str, Any] | _UnsetType = _UNSET,
     commit: bool = True,
 ) -> DrawingObject:
     current = get_object(connection, artwork_id, object_id)
     next_geometry = dict(geometry or {}) if replace_geometry and geometry is not None else {**current.geometry, **(geometry or {})}
     next_style = {**current.style, **(style or {})}
     next_type = object_type or current.type
-    next_name = current.name if name is _UNSET else name
-    next_layer_id = current.layer_id if layer_id is _UNSET else layer_id or "base"
-    next_group_id = current.group_id if group_id is _UNSET else group_id
-    next_semantic_tags = current.semantic_tags if semantic_tags is _UNSET else semantic_tags or []
-    next_transform = current.transform if transform is _UNSET else transform
+    next_name = current.name if isinstance(name, _UnsetType) else name
+    next_layer_id = current.layer_id if isinstance(layer_id, _UnsetType) else layer_id or "base"
+    next_group_id = current.group_id if isinstance(group_id, _UnsetType) else group_id
+    next_semantic_tags = current.semantic_tags if isinstance(semantic_tags, _UnsetType) else semantic_tags or []
+    next_transform = current.transform if isinstance(transform, _UnsetType) else transform
     timestamp = now_iso()
     connection.execute(
         """

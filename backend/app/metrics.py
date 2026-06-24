@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import sqlite3
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -45,7 +46,10 @@ def _parse_latency(raw_latency: str) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _row_value(row: Mapping[str, Any], key: str) -> Any:
+LatencyRow = Mapping[str, Any] | sqlite3.Row
+
+
+def _row_value(row: LatencyRow, key: str) -> Any:
     if hasattr(row, "get"):
         return row.get(key)
     try:
@@ -54,7 +58,7 @@ def _row_value(row: Mapping[str, Any], key: str) -> Any:
         return None
 
 
-def summarize_latency_rows(rows: Iterable[Mapping[str, Any]], *, artwork_id: str | None = None, limit: int = 200) -> LatencyMetricsSummary:
+def summarize_latency_rows(rows: Iterable[LatencyRow], *, artwork_id: str | None = None, limit: int = 200) -> LatencyMetricsSummary:
     metric_values: dict[str, list[float]] = {key: [] for key in TRACKED_LATENCY_KEYS}
     statuses: Counter[str] = Counter()
     planner_sources: Counter[str] = Counter()

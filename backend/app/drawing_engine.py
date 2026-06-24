@@ -407,8 +407,8 @@ def apply_operation(
     should_clear_redo = clear_redo and record and operation_type not in {"undo", "redo"}
 
     if operation_type == "create_canvas":
-        current = get_artwork(connection, artwork_id)
-        inverse_payload = {"width": current.width, "height": current.height, "background": current.background}
+        current_artwork = get_artwork(connection, artwork_id)
+        inverse_payload = {"width": current_artwork.width, "height": current_artwork.height, "background": current_artwork.background}
         canvas_updates = _validated_canvas_payload(payload)
         update_artwork(
             connection,
@@ -426,12 +426,10 @@ def apply_operation(
         inverse_payload = {"object_id": created.id}
         message = f"已添加{created.name or created.type}"
     elif operation_type == "set_style":
-        object_id = _target_object_id(connection, artwork_id, payload.get("target"))
-        current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
-        if current is None:
-            current = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
+        current_object = _target_object(connection, artwork_id, payload.get("target"))
+        object_id = current_object.id
         style_updates = _validated_style(payload.get("style", {}))
-        inverse_payload = {"target": {"object_id": object_id}, "style": {key: current.style.get(key) for key in style_updates}}
+        inverse_payload = {"target": {"object_id": object_id}, "style": {key: current_object.style.get(key) for key in style_updates}}
         update_object(connection, artwork_id, object_id, style=style_updates, commit=commit)
         message = "已更新样式"
     elif operation_type == "set_metadata":
@@ -461,13 +459,11 @@ def apply_operation(
             _apply_metadata_updates(connection, artwork_id, obj.id, updates, commit=commit)
         message = f"已更新 {len(targets)} 个对象信息"
     elif operation_type == "move_object":
-        object_id = _target_object_id(connection, artwork_id, payload.get("target"))
-        current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
-        if current is None:
-            current = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
+        current_object = _target_object(connection, artwork_id, payload.get("target"))
+        object_id = current_object.id
         dx = _validated_delta(payload.get("dx", 0), "dx")
         dy = _validated_delta(payload.get("dy", 0), "dy")
-        update_object(connection, artwork_id, object_id, geometry=_move_geometry(current.geometry, dx, dy), commit=commit)
+        update_object(connection, artwork_id, object_id, geometry=_move_geometry(current_object.geometry, dx, dy), commit=commit)
         inverse_payload = {"target": {"object_id": object_id}, "dx": -dx, "dy": -dy}
         message = "已移动对象"
     elif operation_type == "move_many":
@@ -482,12 +478,10 @@ def apply_operation(
             update_object(connection, artwork_id, obj.id, geometry=_move_geometry(obj.geometry, dx, dy), commit=commit)
         message = f"已移动 {len(targets)} 个对象"
     elif operation_type == "scale_object":
-        object_id = _target_object_id(connection, artwork_id, payload.get("target"))
-        current = find_latest_object(connection, artwork_id) if payload.get("target", {}).get("selector") == "latest" else None
-        if current is None:
-            current = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == object_id)
+        current_object = _target_object(connection, artwork_id, payload.get("target"))
+        object_id = current_object.id
         factor = _validated_scale_factor(payload.get("factor", 1))
-        update_object(connection, artwork_id, object_id, geometry=_scale_geometry(current.geometry, factor), commit=commit)
+        update_object(connection, artwork_id, object_id, geometry=_scale_geometry(current_object.geometry, factor), commit=commit)
         inverse_payload = {"target": {"object_id": object_id}, "factor": 1 / factor}
         message = "已缩放对象"
     elif operation_type == "scale_many":
