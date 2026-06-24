@@ -75,8 +75,8 @@
     "text": "画一朵云在顶部",
     "tier": "rules",
     "expected_operation_types": ["add_object"],
-    "expected_object_types": ["path"],
-    "expected_semantic_tag": "cloud"
+    "expected_object_types": ["boolean_shape"],
+    "expected_semantic_tag": "shape.boolean.cloud"
   },
   {
     "id": "sun-cloud-two-step",
