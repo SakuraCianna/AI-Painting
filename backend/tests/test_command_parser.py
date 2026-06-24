@@ -62,6 +62,12 @@ def test_parse_polygon_path_and_bezier_shapes() -> None:
     assert polygon["type"] == "polygon"
     assert len(polygon["geometry"]["points"]) == 5
 
+    heptagon_plan = parse_command("画一个紫色七边形")
+    heptagon = heptagon_plan.operations[0].payload["object"]
+    assert heptagon["type"] == "polygon"
+    assert len(heptagon["geometry"]["points"]) == 7
+    assert heptagon["style"]["fill"] == "#9333ea"
+
     path_plan = parse_command("画一条弯曲小路")
     path = path_plan.operations[0].payload["object"]
     assert path["type"] == "path"
@@ -157,6 +163,28 @@ def test_parse_pink_five_petal_flower() -> None:
     assert obj["geometry"]["petals"] == 5
     assert len([operation for operation in obj["geometry"]["operations"] if operation["shape"] == "ellipse"]) == 6
     assert obj["style"]["fill"] == "#f9a8d4"
+
+
+def test_parse_boolean_shape_colors_and_petals_more_generally() -> None:
+    purple = parse_command("画一个紫色三瓣花").operations[0].payload["object"]
+    assert purple["geometry"]["petals"] == 3
+    assert purple["style"]["fill"] == "#9333ea"
+
+    cyan = parse_command("画一个青色七瓣花").operations[0].payload["object"]
+    assert cyan["geometry"]["petals"] == 7
+    assert cyan["style"]["fill"] == "#06b6d4"
+
+
+def test_parse_repeated_basic_shapes_generically() -> None:
+    plan = parse_command("画三个粉色圆形")
+
+    objects = [operation.payload["object"] for operation in plan.operations]
+
+    assert [operation.operation_type for operation in plan.operations] == ["add_object", "add_object", "add_object"]
+    assert [obj["type"] for obj in objects] == ["circle", "circle", "circle"]
+    assert all(obj["style"]["fill"] == "#f9a8d4" for obj in objects)
+    assert [obj["name"] for obj in objects] == ["圆形1", "圆形2", "圆形3"]
+    assert len({obj["geometry"]["cx"] for obj in objects}) == 3
 
 
 @pytest.mark.parametrize(

@@ -74,7 +74,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 
 | Capability | Status | Example |
 | --- | --- | --- |
-| Basic shapes | Supported | Circle, rectangle, ellipse, triangle, line, arrow, star, polygon, path, Bezier curve, diamond, parallelogram, trapezoid, cross, heart, cylinder, plus boolean-geometry moon phases, rings, clouds, flowers, and speech bubbles |
+| Basic shapes | Supported | Circle, rectangle, ellipse, triangle, line, arrow, star, polygon, path, Bezier curve, diamond, parallelogram, trapezoid, cross, heart, cylinder, plus boolean-geometry moon phases, rings, clouds, N-petal flowers, and speech bubbles; supports common color synonyms, N-sided polygons, and repeated basic shapes |
 | Composite scenes | Supported | "Draw a house with a red roof, blue door, and two windows" |
 | Batch drawing | Supported | "Draw three yellow stars, shrinking from left to right" |
 | Semantic editing | Supported | "Make all house windows bigger" |

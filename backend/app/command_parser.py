@@ -12,10 +12,17 @@ COLOR_MAP: dict[str, str] = {
     "红色": "#dc2626",
     "蓝色": "#2563eb",
     "浅蓝色": "#7dd3fc",
+    "深蓝色": "#1d4ed8",
     "粉红色": "#f9a8d4",
+    "淡粉色": "#fbcfe8",
     "浅粉色": "#fbcfe8",
     "粉色": "#f9a8d4",
+    "紫色": "#9333ea",
+    "青色": "#06b6d4",
+    "青蓝色": "#0891b2",
     "绿色": "#16a34a",
+    "浅绿色": "#86efac",
+    "深绿色": "#15803d",
     "黄色": "#facc15",
     "橙色": "#f97316",
     "棕色": "#92400e",
@@ -76,6 +83,7 @@ SHAPE_MAP: dict[str, str] = {
     "多边形": "polygon",
     "五边形": "polygon",
     "六边形": "polygon",
+    "边形": "polygon",
     "路径": "path",
     "曲线": "bezier",
     "贝塞尔曲线": "bezier",
@@ -935,8 +943,7 @@ def _boolean_shape_operations(preset: str, text: str) -> list[dict[str, Any]]:
             {"op": "add", "shape": "rect", "x": 0.14, "y": 0.54, "width": 0.72, "height": 0.28},
         ]
     if preset == "flower":
-        petals = _extract_number(text, "瓣", 6)
-        petals = max(4, min(petals, 12))
+        petals = _extract_petals(text)
         operations = [{"op": "base", "shape": "ellipse", "x": 0.38, "y": 0.02, "width": 0.24, "height": 0.42}]
         for index in range(1, petals):
             angle = -math.pi / 2 + index * 2 * math.pi / petals
@@ -984,7 +991,7 @@ def _boolean_shape_object(text: str, preset: str, x: int, y: int, style: dict[st
     if preset == "moon":
         geometry["phase"] = _moon_phase_for_text(text)
     if preset == "flower":
-        geometry["petals"] = max(4, min(_extract_number(text, "瓣", 6), 12))
+        geometry["petals"] = _extract_petals(text)
     return _decorate_object(
         text,
         {
@@ -1034,7 +1041,7 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
             text, {"type": "star", "name": "星星", "geometry": {"cx": x, "cy": y, "outerRadius": 80, "innerRadius": 36, "points": 5}, "style": style}
         )
     if shape == "polygon":
-        sides = 6 if "六边形" in text else 5 if "五边形" in text else 5
+        sides = _extract_polygon_sides(text)
         return _decorate_object(
             text,
             {
@@ -1113,6 +1120,73 @@ def _extract_count(text: str, default: int = 1) -> int:
     if not match:
         return default
     return max(1, min(chinese_number_to_int(match.group(1)) or default, 12))
+
+
+def _extract_draw_count(text: str, default: int = 1) -> int:
+    match = re.search(r"(?:画|创建|添加|生成)\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|颗|朵|条|张|扇|座|块|只|件)", text)
+    if not match:
+        return default
+    return max(1, min(chinese_number_to_int(match.group(1)) or default, 12))
+
+
+def _extract_polygon_sides(text: str) -> int:
+    sides = _extract_number(text, "边", 5)
+    return max(3, min(sides, 12))
+
+
+def _extract_petals(text: str) -> int:
+    petals = _extract_number(text, "瓣", 6)
+    return max(3, min(petals, 12))
+
+
+def _offset_object_for_repetition(obj: dict[str, Any], index: int, count: int, gap: int) -> dict[str, Any]:
+    offset = (index - (count - 1) / 2) * gap
+    geometry = dict(obj.get("geometry", {}))
+    for key in ("cx", "x", "x1", "x2"):
+        if isinstance(geometry.get(key), (int, float)):
+            geometry[key] = geometry[key] + offset
+    if isinstance(geometry.get("points"), list):
+        geometry["points"] = [
+            {**point, "x": point["x"] + offset} if isinstance(point, dict) and isinstance(point.get("x"), (int, float)) else point
+            for point in geometry["points"]
+        ]
+    if isinstance(geometry.get("commands"), list):
+        updated_commands = []
+        for command in geometry["commands"]:
+            if isinstance(command, dict):
+                updated = dict(command)
+                for key in ("x", "x1", "x2"):
+                    if isinstance(updated.get(key), (int, float)):
+                        updated[key] = updated[key] + offset
+                updated_commands.append(updated)
+            else:
+                updated_commands.append(command)
+        geometry["commands"] = updated_commands
+    obj["geometry"] = geometry
+    return obj
+
+
+def _multi_shape_plan(raw_text: str, normalized_text: str, shape: str) -> CommandPlan:
+    count = _extract_draw_count(normalized_text, 1)
+    gap = 170 if count <= 4 else 110
+    operations: list[OperationRequest] = []
+    for index in range(count):
+        obj = _make_object(normalized_text, shape)
+        obj["name"] = f"{obj.get('name', '对象')}{index + 1}"
+        obj = _offset_object_for_repetition(obj, index, count, gap)
+        operations.append(OperationRequest(operation_type="add_object", payload={"object": obj}))
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="add_repeated_objects",
+            summary=f"绘制 {count} 个{operations[0].payload['object'].get('name', '对象')[:-1] if operations else '对象'}",
+            steps=[ScenePlanStep(step_id="repeat-basic-shapes", title="绘制重复基础图形", intent="add_repeated_objects", operation_indexes=list(range(count)))],
+            expected_object_count=count,
+        ),
+        confidence=0.84,
+    )
 
 
 def _multi_star_plan(raw_text: str, normalized_text: str) -> CommandPlan:
@@ -1904,6 +1978,12 @@ def parse_command(text: str) -> CommandPlan:
         return _house_plan(text, normalized)
     elif "星" in normalized and _extract_count(normalized, 1) > 1:
         return _multi_star_plan(text, normalized)
+    elif (
+        (repeated_shape := _find_shape(normalized))
+        and _extract_draw_count(normalized, 1) > 1
+        and any(keyword in normalized for keyword in ("画", "创建", "添加"))
+    ):
+        return _multi_shape_plan(text, normalized, repeated_shape)
     elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not any(keyword in normalized for keyword in ("画", "创建", "新建", "保存")):
         object_name = _extract_object_name(normalized)
         if object_name:
