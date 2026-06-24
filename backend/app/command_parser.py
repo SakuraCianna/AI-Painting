@@ -4,97 +4,26 @@ import re
 import math
 from typing import Any
 
+from .command_slots import (
+    COLOR_MAP,
+    SHAPE_MAP,  # noqa: F401 - re-exported for older callers.
+    SORTED_COLOR_NAMES,
+    chinese_number_to_int,
+    color_display_name as _color_display_name,
+    compact_color_context as _compact_color_context,
+    extract_count as _extract_count,
+    extract_draw_count as _extract_draw_count,
+    extract_number as _extract_number,
+    extract_petals as _extract_petals,
+    extract_polygon_sides as _extract_polygon_sides,
+    find_all_colors as _find_all_colors,
+    find_color as _find_color,
+    find_shape as _find_shape,
+)
 from .schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
 from .render_strategy import classify_render_strategy
 
 
-COLOR_MAP: dict[str, str] = {
-    "红色": "#dc2626",
-    "蓝色": "#2563eb",
-    "浅蓝色": "#7dd3fc",
-    "深蓝色": "#1d4ed8",
-    "粉红色": "#f9a8d4",
-    "淡粉色": "#fbcfe8",
-    "浅粉色": "#fbcfe8",
-    "粉色": "#f9a8d4",
-    "紫色": "#9333ea",
-    "青色": "#06b6d4",
-    "青蓝色": "#0891b2",
-    "绿色": "#16a34a",
-    "浅绿色": "#86efac",
-    "深绿色": "#15803d",
-    "黄色": "#facc15",
-    "橙色": "#f97316",
-    "棕色": "#92400e",
-    "黑色": "#111827",
-    "白色": "#ffffff",
-    "米白色": "#faf7ed",
-    "灰色": "#6b7280",
-    "透明": "transparent",
-}
-
-SHAPE_MAP: dict[str, str] = {
-    "平行四边形": "parallelogram",
-    "菱形": "diamond",
-    "钻石形": "diamond",
-    "梯形": "trapezoid",
-    "十字形": "cross",
-    "十字": "cross",
-    "爱心": "heart",
-    "心形": "heart",
-    "上弦月": "moon",
-    "下弦月": "moon",
-    "满月": "moon",
-    "圆月": "moon",
-    "半月": "moon",
-    "新月": "moon",
-    "盈月": "moon",
-    "亏月": "moon",
-    "残月": "moon",
-    "缺月": "moon",
-    "月相": "moon",
-    "对话气泡": "speech_bubble",
-    "聊天气泡": "speech_bubble",
-    "气泡": "speech_bubble",
-    "六瓣花": "flower",
-    "五瓣花": "flower",
-    "花朵": "flower",
-    "花": "flower",
-    "月牙形": "crescent",
-    "月牙": "moon",
-    "月亮": "moon",
-    "圆环": "ring",
-    "空心圆": "ring",
-    "圆柱": "cylinder",
-    "数据库形状": "cylinder",
-    "圆形": "circle",
-    "圆": "circle",
-    "矩形": "rect",
-    "方形": "rect",
-    "正方形": "rect",
-    "椭圆": "ellipse",
-    "三角形": "triangle",
-    "线条": "line",
-    "直线": "line",
-    "线": "line",
-    "箭头": "arrow",
-    "星星": "star",
-    "星形": "star",
-    "多边形": "polygon",
-    "五边形": "polygon",
-    "六边形": "polygon",
-    "边形": "polygon",
-    "路径": "path",
-    "曲线": "bezier",
-    "贝塞尔曲线": "bezier",
-    "贝塞尔": "bezier",
-    "云朵": "cloud",
-    "云": "cloud",
-    "小路": "path",
-    "道路": "path",
-    "文字": "text",
-    "文本": "text",
-}
 BOX_SHAPE_NAMES: dict[str, str] = {
     "diamond": "菱形",
     "parallelogram": "平行四边形",
@@ -119,28 +48,12 @@ MOON_PHASE_BY_KEYWORD: tuple[tuple[str, float], ...] = (
     ("月牙", 0.2),
 )
 
-CHINESE_DIGITS: dict[str, int] = {
-    "零": 0,
-    "一": 1,
-    "二": 2,
-    "两": 2,
-    "三": 3,
-    "四": 4,
-    "五": 5,
-    "六": 6,
-    "七": 7,
-    "八": 8,
-    "九": 9,
-}
-
-SORTED_COLOR_NAMES = sorted(COLOR_MAP, key=len, reverse=True)
-SORTED_SHAPE_NAMES = sorted(SHAPE_MAP, key=len, reverse=True)
 WHITESPACE_PATTERN = re.compile(r"\s+")
 VOICE_NOISE_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_]+")
 CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
 TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
 OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
-COLOR_CONTEXT_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_的]+")
+CREATE_VERB_PATTERN = re.compile(r"(?:再\s*)?(?:画|创建|添加|生成|新建|加)")
 DIAGRAM_TYPE_KEYWORDS = ("er图", "er 图", "实体关系图", "架构图", "结构图", "流程图", "时序图", "序列图", "类图", "uml", "甘特图", "泳道图", "组织结构图")
 ASR_ER_SUFFIX_CONFUSIONS = ("的一样", "的一项", "的一氧", "的一样的", "的一张", "的一二", "的er", "的e r", "一样", "一项", "一氧")
 ASR_ER_CONTEXT_HINTS = (
@@ -389,26 +302,6 @@ VOICE_NOISE_EXACT_TOKENS = {
 }
 
 
-def chinese_number_to_int(text: str) -> int | None:
-    if not text:
-        return None
-    if text.isdigit():
-        return int(text)
-    if text in CHINESE_DIGITS:
-        return CHINESE_DIGITS[text]
-    if text == "十":
-        return 10
-    if "百" in text:
-        left, _, right = text.partition("百")
-        hundreds = CHINESE_DIGITS.get(left, 1 if left == "" else 0)
-        return hundreds * 100 + (chinese_number_to_int(right) or 0)
-    if "十" in text:
-        left, _, right = text.partition("十")
-        tens = CHINESE_DIGITS.get(left, 1 if left == "" else 0)
-        return tens * 10 + (chinese_number_to_int(right) or 0)
-    return None
-
-
 def normalize_text(text: str) -> str:
     normalized = text.strip().lower()
     replacements = {
@@ -489,29 +382,6 @@ def _voice_noise_clarification_plan(raw_text: str, normalized_text: str) -> Comm
     )
 
 
-def _find_color(text: str, default: str = "#2563eb") -> str:
-    # 先匹配长颜色名, 避免“浅蓝色”被“蓝色”提前命中。
-    for name in SORTED_COLOR_NAMES:
-        if name in text:
-            return COLOR_MAP[name]
-    return default
-
-
-def _find_all_colors(text: str) -> list[tuple[str, str]]:
-    return [(name, COLOR_MAP[name]) for name in SORTED_COLOR_NAMES if name in text]
-
-
-def _compact_color_context(text: str) -> str:
-    return COLOR_CONTEXT_STRIP_PATTERN.sub("", text)
-
-
-def _color_display_name(color: str) -> str:
-    for name, value in COLOR_MAP.items():
-        if value == color:
-            return name
-    return "彩色"
-
-
 def _find_component_color(text: str, target_words: tuple[str, ...], default: str) -> str:
     compact = _compact_color_context(text)
     if not compact:
@@ -549,19 +419,19 @@ def _find_house_body_color(text: str, default: str) -> str:
     return _find_component_color(text, ("房子主体", "墙体", "墙面", "房身", "主体", "墙"), default)
 
 
-def _find_shape(text: str) -> str | None:
-    for name in SORTED_SHAPE_NAMES:
-        if name in text:
-            return SHAPE_MAP[name]
-    return None
-
-
 def _find_replacement_shape(text: str) -> str | None:
     link_positions = [(text.rfind(link_word), link_word) for link_word in ("改成", "换成", "变成") if link_word in text]
     if not link_positions:
         return None
     position, link_word = sorted(link_positions)[-1]
     return _find_shape(text[position + len(link_word) :])
+
+
+def _latest_create_clause(text: str) -> str:
+    matches = list(CREATE_VERB_PATTERN.finditer(text))
+    if len(matches) <= 1:
+        return text
+    return text[matches[-1].start() :]
 
 
 def _extract_object_name(text: str) -> str | None:
@@ -815,19 +685,6 @@ def _decorate_object(text: str, obj: dict[str, Any]) -> dict[str, Any]:
     tags.update(_semantic_tags_for_text(text, obj.get("type"), obj.get("name")))
     obj["semantic_tags"] = sorted(tags)
     return obj
-
-
-def _extract_number(text: str, after: str, default: int) -> int:
-    pattern = rf"{after}\s*([0-9]+|[零一二两三四五六七八九十百]+)"
-    match = re.search(pattern, text)
-    if match:
-        return chinese_number_to_int(match.group(1)) or default
-    if re.fullmatch(r"[\u4e00-\u9fa5]+", after):
-        before_pattern = rf"([0-9]+|[零一二两三四五六七八九十百]+)\s*{after}"
-        before_match = re.search(before_pattern, text)
-        if before_match:
-            return chinese_number_to_int(before_match.group(1)) or default
-    return default
 
 
 def _extract_movement_amount(text: str) -> int:
@@ -1113,30 +970,6 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
             "style": {**style, "fill": style["fill"], "stroke": "transparent"},
         },
     )
-
-
-def _extract_count(text: str, default: int = 1) -> int:
-    match = re.search(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|颗|条|张|扇)?", text)
-    if not match:
-        return default
-    return max(1, min(chinese_number_to_int(match.group(1)) or default, 12))
-
-
-def _extract_draw_count(text: str, default: int = 1) -> int:
-    match = re.search(r"(?:画|创建|添加|生成)\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|颗|朵|条|张|扇|座|块|只|件)", text)
-    if not match:
-        return default
-    return max(1, min(chinese_number_to_int(match.group(1)) or default, 12))
-
-
-def _extract_polygon_sides(text: str) -> int:
-    sides = _extract_number(text, "边", 5)
-    return max(3, min(sides, 12))
-
-
-def _extract_petals(text: str) -> int:
-    petals = _extract_number(text, "瓣", 6)
-    return max(3, min(petals, 12))
 
 
 def _offset_object_for_repetition(obj: dict[str, Any], index: int, count: int, gap: int) -> dict[str, Any]:
@@ -1696,8 +1529,8 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
         "丰富当前图片": "丰富当前画布, 保留主要构图, 增加细节和层次",
         "美化当前图片": "美化当前画布, 保留主要构图, 提升视觉完成度",
     }
-    for source, target in replacements.items():
-        style_prompt = style_prompt.replace(source, target)
+    for source, replacement in replacements.items():
+        style_prompt = style_prompt.replace(source, replacement)
     if style_prompt == normalized_text:
         style_prompt = f"{normalized_text}, 保留当前画布的主体构图和对象位置"
     target_region = _find_image_region_target(normalized_text)
@@ -1723,7 +1556,7 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
         "target_subject": target_subject,
         "adjustment": adjustment,
     }
-    step_target = {"target": target}
+    step_target: dict[str, Any] = {"target": target}
     if target_region:
         step_target["target_region"] = target_region
     if target_subject:
@@ -1917,6 +1750,7 @@ def _cozy_cabin_scene_plan(raw_text: str, normalized_text: str) -> CommandPlan:
 def parse_command(text: str) -> CommandPlan:
     normalized = normalize_text(text)
     render_strategy = classify_render_strategy(normalized)
+    latest_create_clause = _latest_create_clause(normalized)
     operations: list[OperationRequest] = []
     requires_confirmation = False
     risk_level = "low"
@@ -1979,11 +1813,11 @@ def parse_command(text: str) -> CommandPlan:
     elif "星" in normalized and _extract_count(normalized, 1) > 1:
         return _multi_star_plan(text, normalized)
     elif (
-        (repeated_shape := _find_shape(normalized))
-        and _extract_draw_count(normalized, 1) > 1
+        (repeated_shape := _find_shape(latest_create_clause))
+        and _extract_draw_count(latest_create_clause, 1) > 1
         and any(keyword in normalized for keyword in ("画", "创建", "添加"))
     ):
-        return _multi_shape_plan(text, normalized, repeated_shape)
+        return _multi_shape_plan(text, latest_create_clause, repeated_shape)
     elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not any(keyword in normalized for keyword in ("画", "创建", "新建", "保存")):
         object_name = _extract_object_name(normalized)
         if object_name:
@@ -2046,9 +1880,9 @@ def parse_command(text: str) -> CommandPlan:
         operation_type = "scale_many" if _is_many_target(target) else "scale_object"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "factor": factor}))
     else:
-        shape = _find_shape(normalized)
+        shape = _find_shape(latest_create_clause)
         if shape:
-            operations.append(OperationRequest(operation_type="add_object", payload={"object": _make_object(normalized, shape)}))
+            operations.append(OperationRequest(operation_type="add_object", payload={"object": _make_object(latest_create_clause, shape)}))
 
     if not operations and render_strategy.mode == "programmatic":
         return _programmatic_render_clarification_plan(text, normalized, render_strategy.matched_keywords)

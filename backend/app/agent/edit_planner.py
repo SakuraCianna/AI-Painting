@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..command_parser import COLOR_MAP, SHAPE_MAP, chinese_number_to_int
+from ..command_slots import COLOR_MAP, SHAPE_MAP, chinese_number_to_int
 from ..schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
 from .plantuml_edit_planner import build_plantuml_edit_plan
 
