@@ -73,7 +73,7 @@ The product design is therefore **diagram-DSL first, vector-first, generative-en
 
 | Capability | Status | Example |
 | --- | --- | --- |
-| Basic shapes | Supported | "Draw a blue circle in the center with radius 100" |
+| Basic shapes | Supported | Circle, rectangle, ellipse, triangle, line, arrow, star, polygon, path, Bezier curve, diamond, parallelogram, trapezoid, cross, heart, crescent, ring, cylinder |
 | Composite scenes | Supported | "Draw a house with a red roof, blue door, and two windows" |
 | Batch drawing | Supported | "Draw three yellow stars, shrinking from left to right" |
 | Semantic editing | Supported | "Make all house windows bigger" |

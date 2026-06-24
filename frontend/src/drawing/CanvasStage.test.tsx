@@ -101,6 +101,30 @@ describe("CanvasStage", () => {
     expect(container.querySelector('image[data-object-id="plantuml-1"]')).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
   });
 
+  it("renders extended basic shapes as editable SVG objects", () => {
+    const objects = [
+      drawingObject({ id: "diamond-1", type: "diamond" as DrawingObject["type"], geometry: { x: 40, y: 40, width: 80, height: 70 } }),
+      drawingObject({ id: "parallelogram-1", type: "parallelogram" as DrawingObject["type"], geometry: { x: 140, y: 40, width: 100, height: 70 } }),
+      drawingObject({ id: "trapezoid-1", type: "trapezoid" as DrawingObject["type"], geometry: { x: 260, y: 40, width: 100, height: 70 } }),
+      drawingObject({ id: "cross-1", type: "cross" as DrawingObject["type"], geometry: { x: 390, y: 35, width: 80, height: 80 } }),
+      drawingObject({ id: "heart-1", type: "heart" as DrawingObject["type"], geometry: { x: 40, y: 150, width: 90, height: 80 } }),
+      drawingObject({ id: "crescent-1", type: "crescent" as DrawingObject["type"], geometry: { x: 160, y: 150, width: 80, height: 80 } }),
+      drawingObject({ id: "ring-1", type: "ring" as DrawingObject["type"], geometry: { x: 280, y: 150, width: 80, height: 80 } }),
+      drawingObject({ id: "cylinder-1", type: "cylinder" as DrawingObject["type"], geometry: { x: 400, y: 140, width: 90, height: 100 } }),
+    ];
+
+    const { container } = render(<CanvasStage artwork={artwork(objects)} />);
+
+    expect(container.querySelector('[data-object-id="diamond-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="parallelogram-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="trapezoid-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="cross-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="heart-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="crescent-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="ring-1"]')).toHaveAttribute("fill-rule", "evenodd");
+    expect(container.querySelector('[data-object-id="cylinder-1"]')).toBeInTheDocument();
+  });
+
   it("orders objects by canvas layer and z index with runtime metadata", () => {
     const objects = [
       drawingObject({ id: "label", type: "text", layer_id: "foreground", z_index: 1, geometry: { content: "前景文字", x: 100, y: 80 } }),

@@ -44,6 +44,23 @@ def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     assert body["metrics"]["total_ms"] >= body["metrics"]["planner_total_ms"]
 
 
+def test_execute_extended_basic_shape_voice_command(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "扩展图形测试"}).json()["id"]
+
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个黄色爱心在中间"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    obj = body["artwork"]["objects"][0]
+    assert obj["type"] == "heart"
+    assert obj["name"] == "爱心"
+    assert obj["style"]["fill"] == "#facc15"
+    assert "shape.heart" in obj["semantic_tags"]
+
+
 def test_latency_metrics_api_summarizes_voice_command_logs(client: TestClient) -> None:
     from app.database import connect_db
     from app.repositories import record_voice_log

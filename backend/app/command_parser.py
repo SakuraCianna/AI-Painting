@@ -24,6 +24,20 @@ COLOR_MAP: dict[str, str] = {
 }
 
 SHAPE_MAP: dict[str, str] = {
+    "平行四边形": "parallelogram",
+    "菱形": "diamond",
+    "钻石形": "diamond",
+    "梯形": "trapezoid",
+    "十字形": "cross",
+    "十字": "cross",
+    "爱心": "heart",
+    "心形": "heart",
+    "月牙": "crescent",
+    "月亮": "crescent",
+    "圆环": "ring",
+    "空心圆": "ring",
+    "圆柱": "cylinder",
+    "数据库形状": "cylinder",
     "圆形": "circle",
     "圆": "circle",
     "矩形": "rect",
@@ -50,6 +64,16 @@ SHAPE_MAP: dict[str, str] = {
     "道路": "path",
     "文字": "text",
     "文本": "text",
+}
+BOX_SHAPE_NAMES: dict[str, str] = {
+    "diamond": "菱形",
+    "parallelogram": "平行四边形",
+    "trapezoid": "梯形",
+    "cross": "十字形",
+    "heart": "爱心",
+    "crescent": "月牙",
+    "ring": "圆环",
+    "cylinder": "圆柱",
 }
 
 CHINESE_DIGITS: dict[str, int] = {
@@ -879,6 +903,23 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
                 "name": "贝塞尔曲线",
                 "geometry": {"commands": _bezier_commands(x, y)},
                 "style": {**style, "fill": "transparent", "strokeWidth": 5},
+            },
+        )
+    if shape in BOX_SHAPE_NAMES:
+        width = _extract_number(text, "宽", 180)
+        height = _extract_number(text, "高", 150)
+        box_style = {**style}
+        if shape in {"ring", "crescent"}:
+            box_style["strokeWidth"] = max(4, int(box_style.get("strokeWidth", 2)))
+        if shape == "cylinder":
+            box_style["strokeWidth"] = max(3, int(box_style.get("strokeWidth", 2)))
+        return _decorate_object(
+            text,
+            {
+                "type": shape,
+                "name": BOX_SHAPE_NAMES[shape],
+                "geometry": {"x": x - width // 2, "y": y - height // 2, "width": width, "height": height},
+                "style": box_style,
             },
         )
     content_match = CONTENT_PATTERN.search(text)

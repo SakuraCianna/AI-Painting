@@ -31,6 +31,78 @@ function trianglePoints(x: number, y: number, size: number): string {
   return `${x},${y - height / 2} ${x - size / 2},${y + height / 2} ${x + size / 2},${y + height / 2}`;
 }
 
+function boxGeometry(object: DrawingObject, fallbackWidth = 180, fallbackHeight = 150) {
+  return {
+    x: numeric(object.geometry.x, 512 - fallbackWidth / 2),
+    y: numeric(object.geometry.y, 384 - fallbackHeight / 2),
+    width: numeric(object.geometry.width, fallbackWidth),
+    height: numeric(object.geometry.height, fallbackHeight),
+  };
+}
+
+function diamondPoints(x: number, y: number, width: number, height: number): string {
+  return `${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`;
+}
+
+function parallelogramPoints(x: number, y: number, width: number, height: number): string {
+  const skew = Math.min(width * 0.24, 48);
+  return `${x + skew},${y} ${x + width},${y} ${x + width - skew},${y + height} ${x},${y + height}`;
+}
+
+function trapezoidPoints(x: number, y: number, width: number, height: number): string {
+  const inset = Math.min(width * 0.22, 46);
+  return `${x + inset},${y} ${x + width - inset},${y} ${x + width},${y + height} ${x},${y + height}`;
+}
+
+function crossPoints(x: number, y: number, width: number, height: number): string {
+  const left = x;
+  const top = y;
+  const right = x + width;
+  const bottom = y + height;
+  const x1 = x + width * 0.34;
+  const x2 = x + width * 0.66;
+  const y1 = y + height * 0.34;
+  const y2 = y + height * 0.66;
+  return `${x1},${top} ${x2},${top} ${x2},${y1} ${right},${y1} ${right},${y2} ${x2},${y2} ${x2},${bottom} ${x1},${bottom} ${x1},${y2} ${left},${y2} ${left},${y1} ${x1},${y1}`;
+}
+
+function ellipsePath(cx: number, cy: number, rx: number, ry: number): string {
+  return `M ${cx - rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx + rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx - rx} ${cy} Z`;
+}
+
+function ringPath(x: number, y: number, width: number, height: number): string {
+  const cx = x + width / 2;
+  const cy = y + height / 2;
+  const outer = ellipsePath(cx, cy, width / 2, height / 2);
+  const inner = ellipsePath(cx, cy, width * 0.28, height * 0.28);
+  return `${outer} ${inner}`;
+}
+
+function crescentPath(x: number, y: number, width: number, height: number): string {
+  const cx = x + width / 2;
+  const cy = y + height / 2;
+  const outer = ellipsePath(cx, cy, width / 2, height / 2);
+  const inner = ellipsePath(cx + width * 0.2, cy - height * 0.02, width * 0.42, height * 0.46);
+  return `${outer} ${inner}`;
+}
+
+function heartPath(x: number, y: number, width: number, height: number): string {
+  return [
+    `M ${x + width / 2} ${y + height * 0.92}`,
+    `C ${x + width * 0.14} ${y + height * 0.62}, ${x} ${y + height * 0.42}, ${x + width * 0.12} ${y + height * 0.22}`,
+    `C ${x + width * 0.24} ${y + height * 0.02}, ${x + width * 0.44} ${y + height * 0.1}, ${x + width / 2} ${y + height * 0.28}`,
+    `C ${x + width * 0.56} ${y + height * 0.1}, ${x + width * 0.76} ${y + height * 0.02}, ${x + width * 0.88} ${y + height * 0.22}`,
+    `C ${x + width} ${y + height * 0.42}, ${x + width * 0.86} ${y + height * 0.62}, ${x + width / 2} ${y + height * 0.92}`,
+    "Z",
+  ].join(" ");
+}
+
+function cylinderSidePath(x: number, y: number, width: number, height: number): string {
+  const rx = width / 2;
+  const ry = Math.min(height * 0.14, 28);
+  return `M ${x} ${y + ry} L ${x} ${y + height - ry} A ${rx} ${ry} 0 0 0 ${x + width} ${y + height - ry} L ${x + width} ${y + ry} A ${rx} ${ry} 0 0 1 ${x} ${y + ry} Z`;
+}
+
 function pointList(value: unknown, fallback: string): string {
   if (!Array.isArray(value)) {
     return fallback;
@@ -182,6 +254,86 @@ function renderObject(object: DrawingObject) {
         )}
         {...common}
       />
+    );
+  }
+
+  if (object.type === "diamond") {
+    const box = boxGeometry(object);
+    return <polygon key={object.id} points={diamondPoints(box.x, box.y, box.width, box.height)} {...common} />;
+  }
+
+  if (object.type === "parallelogram") {
+    const box = boxGeometry(object);
+    return <polygon key={object.id} points={parallelogramPoints(box.x, box.y, box.width, box.height)} {...common} />;
+  }
+
+  if (object.type === "trapezoid") {
+    const box = boxGeometry(object);
+    return <polygon key={object.id} points={trapezoidPoints(box.x, box.y, box.width, box.height)} {...common} />;
+  }
+
+  if (object.type === "cross") {
+    const box = boxGeometry(object, 150, 150);
+    return <polygon key={object.id} points={crossPoints(box.x, box.y, box.width, box.height)} {...common} />;
+  }
+
+  if (object.type === "heart") {
+    const box = boxGeometry(object);
+    return (
+      <path
+        key={object.id}
+        d={heartPath(box.x, box.y, box.width, box.height)}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        {...objectAttrs}
+      />
+    );
+  }
+
+  if (object.type === "crescent") {
+    const box = boxGeometry(object, 150, 150);
+    return (
+      <path
+        key={object.id}
+        d={crescentPath(box.x, box.y, box.width, box.height)}
+        fill={fill}
+        fillRule="evenodd"
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        {...objectAttrs}
+      />
+    );
+  }
+
+  if (object.type === "ring") {
+    const box = boxGeometry(object, 150, 150);
+    return (
+      <path
+        key={object.id}
+        d={ringPath(box.x, box.y, box.width, box.height)}
+        fill={fill}
+        fillRule="evenodd"
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        {...objectAttrs}
+      />
+    );
+  }
+
+  if (object.type === "cylinder") {
+    const box = boxGeometry(object, 160, 180);
+    const rx = box.width / 2;
+    const ry = Math.min(box.height * 0.14, 28);
+    return (
+      <g key={object.id} opacity={opacity} {...objectAttrs}>
+        <path d={cylinderSidePath(box.x, box.y, box.width, box.height)} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
+        <ellipse cx={box.x + rx} cy={box.y + ry} rx={rx} ry={ry} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
+        <path d={`M ${box.x} ${box.y + box.height - ry} A ${rx} ${ry} 0 0 0 ${box.x + box.width} ${box.y + box.height - ry}`} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
+      </g>
     );
   }
 

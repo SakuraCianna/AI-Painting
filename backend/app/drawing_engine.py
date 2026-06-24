@@ -45,8 +45,44 @@ SUPPORTED_OPERATION_TYPES = {
     "save_artwork",
     "export_artwork",
 }
-SUPPORTED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier", "image", "plantuml"}
-REPLACEABLE_SHAPE_TYPES = {"rect", "circle", "ellipse", "triangle", "star"}
+SUPPORTED_OBJECT_TYPES = {
+    "rect",
+    "circle",
+    "ellipse",
+    "triangle",
+    "line",
+    "arrow",
+    "star",
+    "diamond",
+    "parallelogram",
+    "trapezoid",
+    "cross",
+    "heart",
+    "crescent",
+    "ring",
+    "cylinder",
+    "text",
+    "polygon",
+    "path",
+    "bezier",
+    "image",
+    "plantuml",
+}
+REPLACEABLE_SHAPE_TYPES = {
+    "rect",
+    "circle",
+    "ellipse",
+    "triangle",
+    "star",
+    "diamond",
+    "parallelogram",
+    "trapezoid",
+    "cross",
+    "heart",
+    "crescent",
+    "ring",
+    "cylinder",
+}
 SUPPORTED_LAYER_IDS = {"background", "base", "middle", "foreground"}
 MIN_SCALE_FACTOR = 0.05
 MAX_SCALE_FACTOR = 20.0

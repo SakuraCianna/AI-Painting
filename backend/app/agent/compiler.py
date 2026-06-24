@@ -29,7 +29,29 @@ ALLOWED_OPERATION_TYPES = {
     "undo",
     "redo",
 }
-ALLOWED_OBJECT_TYPES = {"rect", "circle", "ellipse", "triangle", "line", "arrow", "star", "text", "polygon", "path", "bezier", "image", "plantuml"}
+ALLOWED_OBJECT_TYPES = {
+    "rect",
+    "circle",
+    "ellipse",
+    "triangle",
+    "line",
+    "arrow",
+    "star",
+    "diamond",
+    "parallelogram",
+    "trapezoid",
+    "cross",
+    "heart",
+    "crescent",
+    "ring",
+    "cylinder",
+    "text",
+    "polygon",
+    "path",
+    "bezier",
+    "image",
+    "plantuml",
+}
 
 
 class SceneGraphCompileError(ValueError):

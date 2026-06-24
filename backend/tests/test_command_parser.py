@@ -74,6 +74,31 @@ def test_parse_polygon_path_and_bezier_shapes() -> None:
     assert bezier["style"]["fill"] == "transparent"
 
 
+@pytest.mark.parametrize(
+    ("text", "expected_type", "expected_name"),
+    [
+        ("画一个红色菱形", "diamond", "菱形"),
+        ("画一个蓝色平行四边形", "parallelogram", "平行四边形"),
+        ("画一个绿色梯形", "trapezoid", "梯形"),
+        ("画一个黑色十字形", "cross", "十字形"),
+        ("画一个黄色爱心", "heart", "爱心"),
+        ("画一个黄色月牙", "crescent", "月牙"),
+        ("画一个蓝色圆环", "ring", "圆环"),
+        ("画一个灰色圆柱", "cylinder", "圆柱"),
+    ],
+)
+def test_parse_extended_basic_shapes(text: str, expected_type: str, expected_name: str) -> None:
+    plan = parse_command(text)
+
+    obj = plan.operations[0].payload["object"]
+
+    assert obj["type"] == expected_type
+    assert obj["name"] == expected_name
+    assert obj["geometry"]["width"] > 0
+    assert obj["geometry"]["height"] > 0
+    assert f"shape.{expected_type}" in obj["semantic_tags"]
+
+
 def test_parse_complex_house_plan() -> None:
     plan = parse_command("画一个房子 红色屋顶 蓝色门 两扇窗户")
     assert [op.payload["object"]["name"] for op in plan.operations] == ["房子主体", "红色屋顶", "蓝色门", "窗户1", "窗户2"]
