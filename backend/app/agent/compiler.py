@@ -45,6 +45,8 @@ ALLOWED_OBJECT_TYPES = {
     "crescent",
     "ring",
     "cylinder",
+    "moon",
+    "boolean_shape",
     "text",
     "polygon",
     "path",

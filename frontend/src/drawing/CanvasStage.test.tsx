@@ -111,6 +111,7 @@ describe("CanvasStage", () => {
       drawingObject({ id: "crescent-1", type: "crescent" as DrawingObject["type"], geometry: { x: 160, y: 150, width: 80, height: 80 } }),
       drawingObject({ id: "ring-1", type: "ring" as DrawingObject["type"], geometry: { x: 280, y: 150, width: 80, height: 80 } }),
       drawingObject({ id: "cylinder-1", type: "cylinder" as DrawingObject["type"], geometry: { x: 400, y: 140, width: 90, height: 100 } }),
+      drawingObject({ id: "moon-1", type: "moon" as DrawingObject["type"], geometry: { x: 520, y: 150, width: 80, height: 80, phase: 0.35 } }),
     ];
 
     const { container } = render(<CanvasStage artwork={artwork(objects)} />);
@@ -123,6 +124,53 @@ describe("CanvasStage", () => {
     expect(container.querySelector('[data-object-id="crescent-1"]')).toBeInTheDocument();
     expect(container.querySelector('[data-object-id="ring-1"]')).toHaveAttribute("fill-rule", "evenodd");
     expect(container.querySelector('[data-object-id="cylinder-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="moon-1"]')).toHaveAttribute("fill-rule", "evenodd");
+  });
+
+  it("renders boolean shape presets through the shared geometry compiler", () => {
+    const objects = [
+      drawingObject({
+        id: "boolean-moon",
+        type: "boolean_shape" as DrawingObject["type"],
+        geometry: {
+          preset: "moon",
+          x: 40,
+          y: 40,
+          width: 80,
+          height: 80,
+          phase: 0.25,
+          operations: [
+            { op: "base", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 },
+            { op: "subtract", shape: "ellipse", x: 0.32, y: 0, width: 0.74, height: 1 },
+          ],
+        },
+      }),
+      drawingObject({
+        id: "boolean-cloud",
+        type: "boolean_shape" as DrawingObject["type"],
+        geometry: {
+          preset: "cloud",
+          x: 150,
+          y: 40,
+          width: 130,
+          height: 80,
+          operations: [
+            { op: "base", shape: "ellipse", x: 0, y: 0.34, width: 0.42, height: 0.48 },
+            { op: "add", shape: "ellipse", x: 0.22, y: 0.06, width: 0.46, height: 0.62 },
+            { op: "add", shape: "ellipse", x: 0.52, y: 0.3, width: 0.48, height: 0.52 },
+          ],
+        },
+      }),
+      drawingObject({ id: "boolean-flower", type: "boolean_shape" as DrawingObject["type"], geometry: { preset: "flower", x: 320, y: 40, width: 90, height: 90, petals: 6 } }),
+      drawingObject({ id: "boolean-bubble", type: "boolean_shape" as DrawingObject["type"], geometry: { preset: "speech_bubble", x: 450, y: 40, width: 130, height: 90, tail: "right" } }),
+    ];
+
+    const { container } = render(<CanvasStage artwork={artwork(objects)} />);
+
+    expect(container.querySelector('[data-object-id="boolean-moon"]')).toHaveAttribute("fill-rule", "evenodd");
+    expect(container.querySelector('[data-object-id="boolean-cloud"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="boolean-flower"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-object-id="boolean-bubble"]')).toBeInTheDocument();
   });
 
   it("orders objects by canvas layer and z index with runtime metadata", () => {

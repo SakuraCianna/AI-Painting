@@ -32,8 +32,27 @@ SHAPE_MAP: dict[str, str] = {
     "十字": "cross",
     "爱心": "heart",
     "心形": "heart",
-    "月牙": "crescent",
-    "月亮": "crescent",
+    "上弦月": "moon",
+    "下弦月": "moon",
+    "满月": "moon",
+    "圆月": "moon",
+    "半月": "moon",
+    "新月": "moon",
+    "盈月": "moon",
+    "亏月": "moon",
+    "残月": "moon",
+    "缺月": "moon",
+    "月相": "moon",
+    "对话气泡": "speech_bubble",
+    "聊天气泡": "speech_bubble",
+    "气泡": "speech_bubble",
+    "六瓣花": "flower",
+    "五瓣花": "flower",
+    "花朵": "flower",
+    "花": "flower",
+    "月牙形": "crescent",
+    "月牙": "moon",
+    "月亮": "moon",
     "圆环": "ring",
     "空心圆": "ring",
     "圆柱": "cylinder",
@@ -58,8 +77,8 @@ SHAPE_MAP: dict[str, str] = {
     "曲线": "bezier",
     "贝塞尔曲线": "bezier",
     "贝塞尔": "bezier",
-    "云朵": "path",
-    "云": "path",
+    "云朵": "cloud",
+    "云": "cloud",
     "小路": "path",
     "道路": "path",
     "文字": "text",
@@ -75,6 +94,19 @@ BOX_SHAPE_NAMES: dict[str, str] = {
     "ring": "圆环",
     "cylinder": "圆柱",
 }
+MOON_PHASE_BY_KEYWORD: tuple[tuple[str, float], ...] = (
+    ("满月", 1),
+    ("圆月", 1),
+    ("上弦月", 0.5),
+    ("下弦月", -0.5),
+    ("半月", 0.5),
+    ("新月", 0),
+    ("盈月", 0.75),
+    ("亏月", -0.75),
+    ("残月", -0.2),
+    ("缺月", -0.35),
+    ("月牙", 0.2),
+)
 
 CHINESE_DIGITS: dict[str, int] = {
     "零": 0,
@@ -100,6 +132,28 @@ OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5
 COLOR_CONTEXT_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”‘’'\"（）()【】\[\]{}<>《》·…~～\-—_的]+")
 DIAGRAM_TYPE_KEYWORDS = ("er图", "er 图", "实体关系图", "架构图", "结构图", "流程图", "时序图", "序列图", "类图", "uml", "甘特图", "泳道图", "组织结构图")
 ASR_ER_SUFFIX_CONFUSIONS = ("的一样", "的一项", "的一氧", "的一样的", "的一张", "的一二", "的er", "的e r", "一样", "一项", "一氧")
+ASR_ER_CONTEXT_HINTS = (
+    "系统",
+    "管理",
+    "订单",
+    "图书",
+    "借阅",
+    "学生",
+    "课程",
+    "医院",
+    "挂号",
+    "酒店",
+    "预订",
+    "库存",
+    "客户",
+    "crm",
+    "博客",
+    "内容",
+    "会员",
+    "商品",
+    "支付",
+    "用户",
+)
 COLOR_LINK_WORDS = ("是", "为", "设为", "设置为", "设置成", "改为", "改成", "变为", "变成", "用", "使用", "涂成", "刷成", "画成")
 POSITION_RANK_PATTERN = re.compile(r"第?\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|棵|扇|座|条|张|块|只|件)")
 LAYER_MAP: dict[str, str] = {
@@ -381,16 +435,19 @@ def repair_asr_command_text(text: str) -> str:
         return normalized
     if any(keyword in normalized for keyword in DIAGRAM_TYPE_KEYWORDS):
         return normalized
-    if "系统" not in normalized:
-        return normalized
     for suffix in ASR_ER_SUFFIX_CONFUSIONS:
         if normalized.endswith(suffix):
             base = normalized[: -len(suffix)].rstrip(" 的")
-            if base.endswith("系统"):
+            if _looks_like_er_repair_context(base):
                 return f"{base}的ER图"
     if normalized.endswith("系统的"):
         return f"{normalized.rstrip('的')}的ER图"
     return normalized
+
+
+def _looks_like_er_repair_context(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text).casefold()
+    return any(hint in compact for hint in ASR_ER_CONTEXT_HINTS)
 
 
 def compact_voice_text(text: str) -> str:
@@ -831,6 +888,107 @@ def _bezier_commands(x: int, y: int) -> list[dict[str, Any]]:
     ]
 
 
+def _moon_phase_for_text(text: str) -> float:
+    for keyword, phase in MOON_PHASE_BY_KEYWORD:
+        if keyword in text:
+            return phase
+    if "左" in text:
+        return -0.2
+    return 0.35
+
+
+def _boolean_shape_operations(preset: str, text: str) -> list[dict[str, Any]]:
+    if preset == "moon":
+        phase = _moon_phase_for_text(text)
+        lit_amount = abs(phase)
+        if lit_amount >= 0.96:
+            return [{"op": "base", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1}]
+        if lit_amount <= 0.04:
+            return [
+                {"op": "base", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1},
+                {"op": "subtract", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1},
+            ]
+        shadow_offset = (1 if phase >= 0 else -1) * (0.42 - lit_amount * 0.3)
+        shadow_width = max(0.12, 1 - lit_amount * 0.36)
+        return [
+            {"op": "base", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1},
+            {"op": "subtract", "shape": "ellipse", "x": 0.5 - shadow_offset - shadow_width / 2, "y": 0, "width": shadow_width, "height": 1},
+        ]
+    if preset == "ring":
+        return [
+            {"op": "base", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1},
+            {"op": "subtract", "shape": "ellipse", "x": 0.28, "y": 0.28, "width": 0.44, "height": 0.44},
+        ]
+    if preset == "cloud":
+        return [
+            {"op": "base", "shape": "ellipse", "x": 0, "y": 0.35, "width": 0.42, "height": 0.46},
+            {"op": "add", "shape": "ellipse", "x": 0.22, "y": 0.1, "width": 0.46, "height": 0.58},
+            {"op": "add", "shape": "ellipse", "x": 0.5, "y": 0.3, "width": 0.5, "height": 0.52},
+            {"op": "add", "shape": "rect", "x": 0.14, "y": 0.54, "width": 0.72, "height": 0.28},
+        ]
+    if preset == "flower":
+        petals = _extract_number(text, "瓣", 6)
+        petals = max(4, min(petals, 12))
+        operations = [{"op": "base", "shape": "ellipse", "x": 0.38, "y": 0.02, "width": 0.24, "height": 0.42}]
+        for index in range(1, petals):
+            angle = -math.pi / 2 + index * 2 * math.pi / petals
+            operations.append(
+                {
+                    "op": "add",
+                    "shape": "ellipse",
+                    "x": 0.38 + math.cos(angle) * 0.28,
+                    "y": 0.29 + math.sin(angle) * 0.28,
+                    "width": 0.24,
+                    "height": 0.42,
+                }
+            )
+        operations.append({"op": "add", "shape": "ellipse", "x": 0.36, "y": 0.36, "width": 0.28, "height": 0.28})
+        return operations
+    if preset == "speech_bubble":
+        tail_points = [{"x": 0.72, "y": 0.78}, {"x": 0.92, "y": 0.98}, {"x": 0.84, "y": 0.7}]
+        return [
+            {"op": "base", "shape": "round_rect", "x": 0, "y": 0, "width": 1, "height": 0.78, "radius": 0.18},
+            {"op": "add", "shape": "polygon", "points": tail_points},
+        ]
+    return [{"op": "base", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1}]
+
+
+def _boolean_shape_object(text: str, preset: str, x: int, y: int, style: dict[str, Any]) -> dict[str, Any]:
+    default_name = {
+        "moon": "月亮",
+        "ring": "圆环",
+        "cloud": "云朵",
+        "flower": "花朵",
+        "speech_bubble": "对话气泡",
+    }[preset]
+    width = _extract_number(text, "宽", 190 if preset in {"cloud", "speech_bubble"} else 160)
+    height = _extract_number(text, "高", 120 if preset in {"cloud", "speech_bubble"} else width)
+    if preset in {"moon", "ring", "flower"}:
+        height = width
+    geometry: dict[str, Any] = {
+        "preset": preset,
+        "x": x - width // 2,
+        "y": y - height // 2,
+        "width": width,
+        "height": height,
+        "operations": _boolean_shape_operations(preset, text),
+    }
+    if preset == "moon":
+        geometry["phase"] = _moon_phase_for_text(text)
+    if preset == "flower":
+        geometry["petals"] = max(4, min(_extract_number(text, "瓣", 6), 12))
+    return _decorate_object(
+        text,
+        {
+            "type": "boolean_shape",
+            "name": default_name,
+            "geometry": geometry,
+            "style": style,
+            "semantic_tags": ["shape.boolean_shape", f"shape.boolean.{preset}"],
+        },
+    )
+
+
 def _make_object(text: str, shape: str) -> dict[str, Any]:
     x, y = _position(text)
     style = _base_style(text)
@@ -905,6 +1063,13 @@ def _make_object(text: str, shape: str) -> dict[str, Any]:
                 "style": {**style, "fill": "transparent", "strokeWidth": 5},
             },
         )
+    if shape in {"moon", "ring", "cloud", "flower", "speech_bubble"}:
+        boolean_style = {**style}
+        if shape == "moon":
+            boolean_style = {"fill": _find_color(text, "#facc15"), "stroke": "#92400e", "strokeWidth": 3, "opacity": 1}
+        if shape == "cloud":
+            boolean_style = {"fill": _find_color(text, "#e0f2fe"), "stroke": "#0284c7", "strokeWidth": 3, "opacity": 1}
+        return _boolean_shape_object(text, shape, x, y, boolean_style)
     if shape in BOX_SHAPE_NAMES:
         width = _extract_number(text, "宽", 180)
         height = _extract_number(text, "高", 150)

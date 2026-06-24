@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.command_parser import chinese_number_to_int, parse_command
+from app.command_parser import chinese_number_to_int, parse_command, repair_asr_command_text
 
 
 def test_chinese_number_to_int() -> None:
@@ -82,8 +82,7 @@ def test_parse_polygon_path_and_bezier_shapes() -> None:
         ("画一个绿色梯形", "trapezoid", "梯形"),
         ("画一个黑色十字形", "cross", "十字形"),
         ("画一个黄色爱心", "heart", "爱心"),
-        ("画一个黄色月牙", "crescent", "月牙"),
-        ("画一个蓝色圆环", "ring", "圆环"),
+        ("画一个黄色月牙形", "crescent", "月牙"),
         ("画一个灰色圆柱", "cylinder", "圆柱"),
     ],
 )
@@ -97,6 +96,72 @@ def test_parse_extended_basic_shapes(text: str, expected_type: str, expected_nam
     assert obj["geometry"]["width"] > 0
     assert obj["geometry"]["height"] > 0
     assert f"shape.{expected_type}" in obj["semantic_tags"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_phase"),
+    [
+        ("画一个满月", 1),
+        ("画一个上弦月", 0.5),
+        ("画一个下弦月", -0.5),
+        ("画一个月牙", 0.2),
+        ("画一个残月", -0.2),
+        ("画一个新月", 0),
+    ],
+)
+def test_parse_parameterized_moon_shapes(text: str, expected_phase: float) -> None:
+    plan = parse_command(text)
+
+    obj = plan.operations[0].payload["object"]
+
+    assert obj["type"] == "boolean_shape"
+    assert obj["name"] == "月亮"
+    assert obj["geometry"]["preset"] == "moon"
+    assert obj["geometry"]["phase"] == expected_phase
+    assert obj["geometry"]["width"] == obj["geometry"]["height"]
+    if expected_phase >= 0.96:
+        assert obj["geometry"]["operations"] == [{"op": "base", "shape": "ellipse", "x": 0, "y": 0, "width": 1, "height": 1}]
+    else:
+        assert obj["geometry"]["operations"][1]["op"] == "subtract"
+    assert "shape.boolean.moon" in obj["semantic_tags"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_preset"),
+    [
+        ("画一个蓝色圆环", "ring"),
+        ("画一朵云", "cloud"),
+        ("画一个云朵", "cloud"),
+        ("画一朵六瓣花", "flower"),
+        ("画一个对话气泡", "speech_bubble"),
+    ],
+)
+def test_parse_boolean_shape_presets(text: str, expected_preset: str) -> None:
+    plan = parse_command(text)
+
+    obj = plan.operations[0].payload["object"]
+
+    assert obj["type"] == "boolean_shape"
+    assert obj["geometry"]["preset"] == expected_preset
+    assert obj["geometry"]["operations"]
+    assert f"shape.boolean.{expected_preset}" in obj["semantic_tags"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("画一个学生管理系统的一样。", "画一个学生管理系统的ER图"),
+        ("写一份图书管理系统的一项", "写一份图书管理系统的ER图"),
+        ("画一个医院挂号系统的一氧", "画一个医院挂号系统的ER图"),
+        ("画一个库存管理的一样", "画一个库存管理的ER图"),
+    ],
+)
+def test_repair_asr_er_suffix_generalizes_across_domains(text: str, expected: str) -> None:
+    assert repair_asr_command_text(text) == expected
+
+
+def test_repair_asr_er_suffix_does_not_rewrite_plain_shapes() -> None:
+    assert repair_asr_command_text("画一个蓝色圆形一样") == "画一个蓝色圆形一样"
 
 
 def test_parse_complex_house_plan() -> None:

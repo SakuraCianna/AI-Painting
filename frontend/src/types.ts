@@ -3,8 +3,8 @@ export type DrawingGeometryValue =
   | string
   | boolean
   | null
-  | Array<Record<string, number | string>>
-  | Record<string, number | string>
+  | Array<Record<string, unknown>>
+  | Record<string, unknown>
   | undefined;
 
 export interface DrawingObject {
@@ -25,6 +25,8 @@ export interface DrawingObject {
     | "crescent"
     | "ring"
     | "cylinder"
+    | "moon"
+    | "boolean_shape"
     | "text"
     | "polygon"
     | "path"

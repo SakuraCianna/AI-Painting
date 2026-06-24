@@ -21,6 +21,8 @@ AgentObjectType = Literal[
     "crescent",
     "ring",
     "cylinder",
+    "moon",
+    "boolean_shape",
     "text",
     "polygon",
     "path",

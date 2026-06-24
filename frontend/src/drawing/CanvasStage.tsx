@@ -86,6 +86,22 @@ function crescentPath(x: number, y: number, width: number, height: number): stri
   return `${outer} ${inner}`;
 }
 
+function moonPhasePath(x: number, y: number, width: number, height: number, phaseValue: number): string {
+  const phase = Math.max(-1, Math.min(1, phaseValue));
+  const cx = x + width / 2;
+  const cy = y + height / 2;
+  const outer = ellipsePath(cx, cy, width / 2, height / 2);
+  const litAmount = Math.abs(phase);
+  if (litAmount >= 0.96) {
+    return outer;
+  }
+  const direction = phase >= 0 ? 1 : -1;
+  const shadowOffset = direction * width * (0.42 - litAmount * 0.3);
+  const shadowRx = width * (0.5 - litAmount * 0.18);
+  const shadow = ellipsePath(cx - shadowOffset, cy, Math.max(1, shadowRx), height * 0.5);
+  return `${outer} ${shadow}`;
+}
+
 function heartPath(x: number, y: number, width: number, height: number): string {
   return [
     `M ${x + width / 2} ${y + height * 0.92}`,
@@ -101,6 +117,113 @@ function cylinderSidePath(x: number, y: number, width: number, height: number): 
   const rx = width / 2;
   const ry = Math.min(height * 0.14, 28);
   return `M ${x} ${y + ry} L ${x} ${y + height - ry} A ${rx} ${ry} 0 0 0 ${x + width} ${y + height - ry} L ${x + width} ${y + ry} A ${rx} ${ry} 0 0 1 ${x} ${y + ry} Z`;
+}
+
+function roundedRectPath(x: number, y: number, width: number, height: number, radius: number): string {
+  const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+  return `M ${x + r} ${y} L ${x + width - r} ${y} Q ${x + width} ${y} ${x + width} ${y + r} L ${x + width} ${y + height - r} Q ${x + width} ${y + height} ${x + width - r} ${y + height} L ${x + r} ${y + height} Q ${x} ${y + height} ${x} ${y + height - r} L ${x} ${y + r} Q ${x} ${y} ${x + r} ${y} Z`;
+}
+
+type BooleanOperation = Record<string, unknown>;
+
+function relativeNumber(operation: BooleanOperation, key: string, fallback: number): number {
+  return numeric(operation[key], fallback);
+}
+
+function booleanOperationPath(operation: BooleanOperation, box: { x: number; y: number; width: number; height: number }): string {
+  const shape = String(operation.shape ?? "ellipse");
+  const x = box.x + relativeNumber(operation, "x", 0) * box.width;
+  const y = box.y + relativeNumber(operation, "y", 0) * box.height;
+  const width = relativeNumber(operation, "width", 1) * box.width;
+  const height = relativeNumber(operation, "height", 1) * box.height;
+  if (shape === "ellipse") {
+    return ellipsePath(x + width / 2, y + height / 2, width / 2, height / 2);
+  }
+  if (shape === "round_rect") {
+    return roundedRectPath(x, y, width, height, relativeNumber(operation, "radius", 0.14) * Math.min(box.width, box.height));
+  }
+  if (shape === "polygon" && Array.isArray(operation.points)) {
+    const points = operation.points
+      .map((point) => {
+        if (!point || typeof point !== "object") {
+          return "";
+        }
+        const source = point as Record<string, number | string>;
+        return `${box.x + numeric(source.x, 0) * box.width},${box.y + numeric(source.y, 0) * box.height}`;
+      })
+      .filter(Boolean)
+      .join(" ");
+    return points ? `M ${points.replaceAll(" ", " L ")} Z` : "";
+  }
+  return `M ${x} ${y} L ${x + width} ${y} L ${x + width} ${y + height} L ${x} ${y + height} Z`;
+}
+
+function presetBooleanOperations(object: DrawingObject): BooleanOperation[] {
+  const preset = String(object.geometry.preset ?? "");
+  const phase = numeric(object.geometry.phase, 0.35);
+  const litAmount = Math.abs(Math.max(-1, Math.min(1, phase)));
+  if (preset === "moon") {
+    if (litAmount >= 0.96) {
+      return [{ op: "base", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 }];
+    }
+    if (litAmount <= 0.04) {
+      return [
+        { op: "base", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 },
+        { op: "subtract", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 },
+      ];
+    }
+    const direction = phase >= 0 ? 1 : -1;
+    const shadowOffset = direction * (0.42 - litAmount * 0.3);
+    const shadowWidth = Math.max(0.12, 1 - litAmount * 0.36);
+    return [
+      { op: "base", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 },
+      { op: "subtract", shape: "ellipse", x: 0.5 - shadowOffset - shadowWidth / 2, y: 0, width: shadowWidth, height: 1 },
+    ];
+  }
+  if (preset === "ring") {
+    return [
+      { op: "base", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 },
+      { op: "subtract", shape: "ellipse", x: 0.28, y: 0.28, width: 0.44, height: 0.44 },
+    ];
+  }
+  if (preset === "cloud") {
+    return [
+      { op: "base", shape: "ellipse", x: 0, y: 0.35, width: 0.42, height: 0.46 },
+      { op: "add", shape: "ellipse", x: 0.22, y: 0.1, width: 0.46, height: 0.58 },
+      { op: "add", shape: "ellipse", x: 0.5, y: 0.3, width: 0.5, height: 0.52 },
+      { op: "add", shape: "rect", x: 0.14, y: 0.54, width: 0.72, height: 0.28 },
+    ];
+  }
+  if (preset === "flower") {
+    const petals = Math.max(4, Math.min(numeric(object.geometry.petals, 6), 12));
+    const operations: BooleanOperation[] = [];
+    for (let index = 0; index < petals; index += 1) {
+      const angle = -Math.PI / 2 + (index * 2 * Math.PI) / petals;
+      operations.push({ op: index === 0 ? "base" : "add", shape: "ellipse", x: 0.38 + Math.cos(angle) * 0.28, y: 0.29 + Math.sin(angle) * 0.28, width: 0.24, height: 0.42 });
+    }
+    operations.push({ op: "add", shape: "ellipse", x: 0.36, y: 0.36, width: 0.28, height: 0.28 });
+    return operations;
+  }
+  if (preset === "speech_bubble") {
+    return [
+      { op: "base", shape: "round_rect", x: 0, y: 0, width: 1, height: 0.78, radius: 0.18 },
+      { op: "add", shape: "polygon", points: [{ x: 0.72, y: 0.78 }, { x: 0.92, y: 0.98 }, { x: 0.84, y: 0.7 }] },
+    ];
+  }
+  return [{ op: "base", shape: "ellipse", x: 0, y: 0, width: 1, height: 1 }];
+}
+
+function booleanShapePath(object: DrawingObject, box: { x: number; y: number; width: number; height: number }): string {
+  const operations = Array.isArray(object.geometry.operations) && object.geometry.operations.length > 0 ? object.geometry.operations : presetBooleanOperations(object);
+  return operations
+    .map((operation) => (operation && typeof operation === "object" ? booleanOperationPath(operation as BooleanOperation, box) : ""))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function booleanShapeUsesEvenOdd(object: DrawingObject): boolean {
+  const operations = Array.isArray(object.geometry.operations) && object.geometry.operations.length > 0 ? object.geometry.operations : presetBooleanOperations(object);
+  return operations.some((operation) => operation && typeof operation === "object" && (operation as BooleanOperation).op === "subtract");
 }
 
 function pointList(value: unknown, fallback: string): string {
@@ -324,6 +447,22 @@ function renderObject(object: DrawingObject) {
     );
   }
 
+  if (object.type === "moon") {
+    const box = boxGeometry(object, 150, 150);
+    return (
+      <path
+        key={object.id}
+        d={moonPhasePath(box.x, box.y, box.width, box.height, numeric(object.geometry.phase, 0.35))}
+        fill={fill}
+        fillRule="evenodd"
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        {...objectAttrs}
+      />
+    );
+  }
+
   if (object.type === "cylinder") {
     const box = boxGeometry(object, 160, 180);
     const rx = box.width / 2;
@@ -334,6 +473,23 @@ function renderObject(object: DrawingObject) {
         <ellipse cx={box.x + rx} cy={box.y + ry} rx={rx} ry={ry} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
         <path d={`M ${box.x} ${box.y + box.height - ry} A ${rx} ${ry} 0 0 0 ${box.x + box.width} ${box.y + box.height - ry}`} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
       </g>
+    );
+  }
+
+  if (object.type === "boolean_shape") {
+    const box = boxGeometry(object, 180, 150);
+    return (
+      <path
+        key={object.id}
+        d={booleanShapePath(object, box)}
+        fill={fill}
+        fillRule={booleanShapeUsesEvenOdd(object) ? "evenodd" : "nonzero"}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        strokeLinejoin="round"
+        {...objectAttrs}
+      />
     );
   }
 

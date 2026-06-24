@@ -61,6 +61,8 @@ SUPPORTED_OBJECT_TYPES = {
     "crescent",
     "ring",
     "cylinder",
+    "moon",
+    "boolean_shape",
     "text",
     "polygon",
     "path",
@@ -82,6 +84,8 @@ REPLACEABLE_SHAPE_TYPES = {
     "crescent",
     "ring",
     "cylinder",
+    "moon",
+    "boolean_shape",
 }
 SUPPORTED_LAYER_IDS = {"background", "base", "middle", "foreground"}
 MIN_SCALE_FACTOR = 0.05

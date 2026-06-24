@@ -61,6 +61,23 @@ def test_execute_extended_basic_shape_voice_command(client: TestClient) -> None:
     assert "shape.heart" in obj["semantic_tags"]
 
 
+def test_execute_parameterized_moon_voice_command(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "月相测试"}).json()["id"]
+
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "画一个上弦月"},
+    )
+
+    assert response.status_code == 200
+    obj = response.json()["artwork"]["objects"][0]
+    assert obj["type"] == "boolean_shape"
+    assert obj["name"] == "月亮"
+    assert obj["geometry"]["preset"] == "moon"
+    assert obj["geometry"]["phase"] == 0.5
+    assert "shape.boolean.moon" in obj["semantic_tags"]
+
+
 def test_latency_metrics_api_summarizes_voice_command_logs(client: TestClient) -> None:
     from app.database import connect_db
     from app.repositories import record_voice_log
