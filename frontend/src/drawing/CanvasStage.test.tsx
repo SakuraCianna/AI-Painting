@@ -167,7 +167,10 @@ describe("CanvasStage", () => {
 
     const { container } = render(<CanvasStage artwork={artwork(objects)} />);
 
-    expect(container.querySelector('[data-object-id="boolean-moon"]')).toHaveAttribute("fill-rule", "evenodd");
+    const booleanMoon = container.querySelector('[data-object-id="boolean-moon"]');
+    expect(booleanMoon).toBeInTheDocument();
+    expect(booleanMoon?.querySelector('[data-boolean-role="fill"]')).toHaveAttribute("stroke", "none");
+    expect(booleanMoon?.querySelector('[data-boolean-role="stroke"]')).toHaveAttribute("fill", "none");
     expect(container.querySelector('[data-object-id="boolean-cloud"]')).toBeInTheDocument();
     expect(container.querySelector('[data-object-id="boolean-flower"]')).toBeInTheDocument();
     expect(container.querySelector('[data-object-id="boolean-bubble"]')).toBeInTheDocument();

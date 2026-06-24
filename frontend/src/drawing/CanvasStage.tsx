@@ -89,17 +89,17 @@ function crescentPath(x: number, y: number, width: number, height: number): stri
 function moonPhasePath(x: number, y: number, width: number, height: number, phaseValue: number): string {
   const phase = Math.max(-1, Math.min(1, phaseValue));
   const cx = x + width / 2;
-  const cy = y + height / 2;
-  const outer = ellipsePath(cx, cy, width / 2, height / 2);
-  const litAmount = Math.abs(phase);
+  const rx = width / 2;
+  const ry = height / 2;
+  const outer = ellipsePath(cx, y + height / 2, rx, ry);
+  const litAmount = Math.max(0.08, Math.abs(phase));
   if (litAmount >= 0.96) {
     return outer;
   }
-  const direction = phase >= 0 ? 1 : -1;
-  const shadowOffset = direction * width * (0.42 - litAmount * 0.3);
-  const shadowRx = width * (0.5 - litAmount * 0.18);
-  const shadow = ellipsePath(cx - shadowOffset, cy, Math.max(1, shadowRx), height * 0.5);
-  return `${outer} ${shadow}`;
+  const side = phase >= 0 ? 1 : -1;
+  const sweepFlag = side > 0 ? 1 : 0;
+  const innerX = cx + side * (0.5 - litAmount) * width;
+  return `M ${cx} ${y} A ${rx} ${ry} 0 0 ${sweepFlag} ${cx} ${y + height} C ${innerX} ${y + height}, ${innerX} ${y}, ${cx} ${y} Z`;
 }
 
 function heartPath(x: number, y: number, width: number, height: number): string {
@@ -214,6 +214,9 @@ function presetBooleanOperations(object: DrawingObject): BooleanOperation[] {
 }
 
 function booleanShapePath(object: DrawingObject, box: { x: number; y: number; width: number; height: number }): string {
+  if (String(object.geometry.preset ?? "") === "moon") {
+    return moonPhasePath(box.x, box.y, box.width, box.height, numeric(object.geometry.phase, 0.35));
+  }
   const operations = Array.isArray(object.geometry.operations) && object.geometry.operations.length > 0 ? object.geometry.operations : presetBooleanOperations(object);
   return operations
     .map((operation) => (operation && typeof operation === "object" ? booleanOperationPath(operation as BooleanOperation, box) : ""))
@@ -222,8 +225,28 @@ function booleanShapePath(object: DrawingObject, box: { x: number; y: number; wi
 }
 
 function booleanShapeUsesEvenOdd(object: DrawingObject): boolean {
+  if (String(object.geometry.preset ?? "") === "moon") {
+    return false;
+  }
   const operations = Array.isArray(object.geometry.operations) && object.geometry.operations.length > 0 ? object.geometry.operations : presetBooleanOperations(object);
   return operations.some((operation) => operation && typeof operation === "object" && (operation as BooleanOperation).op === "subtract");
+}
+
+function booleanShapeStrokePath(object: DrawingObject, box: { x: number; y: number; width: number; height: number }): string {
+  const operations = Array.isArray(object.geometry.operations) && object.geometry.operations.length > 0 ? object.geometry.operations : presetBooleanOperations(object);
+  const preset = String(object.geometry.preset ?? "");
+  if (preset === "moon") {
+    return moonPhasePath(box.x, box.y, box.width, box.height, numeric(object.geometry.phase, 0.35));
+  }
+  if (preset === "cloud") {
+    return "";
+  }
+  const strokeOperations =
+    operations.filter((operation) => operation && typeof operation === "object" && ((operation as BooleanOperation).op === "base" || (operation as BooleanOperation).op === "add" || preset === "ring"));
+  return strokeOperations
+    .map((operation) => booleanOperationPath(operation as BooleanOperation, box))
+    .filter(Boolean)
+    .join(" ");
 }
 
 function pointList(value: unknown, fallback: string): string {
@@ -478,18 +501,13 @@ function renderObject(object: DrawingObject) {
 
   if (object.type === "boolean_shape") {
     const box = boxGeometry(object, 180, 150);
+    const fillPath = booleanShapePath(object, box);
+    const strokePath = booleanShapeStrokePath(object, box);
     return (
-      <path
-        key={object.id}
-        d={booleanShapePath(object, box)}
-        fill={fill}
-        fillRule={booleanShapeUsesEvenOdd(object) ? "evenodd" : "nonzero"}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-        opacity={opacity}
-        strokeLinejoin="round"
-        {...objectAttrs}
-      />
+      <g key={object.id} opacity={opacity} {...objectAttrs}>
+        <path data-boolean-role="fill" d={fillPath} fill={fill} fillRule={booleanShapeUsesEvenOdd(object) ? "evenodd" : "nonzero"} stroke="none" />
+        {strokePath ? <path data-boolean-role="stroke" d={strokePath} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" /> : null}
+      </g>
     );
   }
 

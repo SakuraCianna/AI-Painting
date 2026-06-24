@@ -4,6 +4,7 @@ import asyncio
 import base64
 import subprocess
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,7 @@ from app.asr import (
     _extract_text_from_json,
     _transcribe_with_local_command,
     _transcribe_with_local_url,
+    _transcribe_with_xiaomi,
     build_xiaomi_payload,
     get_asr_provider_status,
     parse_audio_data_url,
@@ -77,6 +79,75 @@ def test_xiaomi_payload_rejects_unsafe_language() -> None:
         assert "ASR 语种" in str(exc)
     else:
         raise AssertionError("unsafe language should be rejected")
+
+
+def test_xiaomi_asr_retries_transient_disconnect(monkeypatch: pytest.MonkeyPatch) -> None:
+    audio = parse_audio_data_url("data:audio/wav;base64,AAAA")
+    calls: list[str] = []
+    sleeps: list[float] = []
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, *, headers, json):
+            calls.append(url)
+            if len(calls) == 1:
+                raise httpx.ConnectError("connection closed")
+            return _FakeAsrResponse(200, json_body={"text": "画一个月牙"})
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setenv("AI_PAINTING_XIAOMI_ASR_RETRIES", "2")
+    monkeypatch.setenv("AI_PAINTING_XIAOMI_ASR_RETRY_BASE_SECONDS", "0.1")
+    monkeypatch.setattr("app.asr.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.asr.asyncio.sleep", fake_sleep)
+
+    assert asyncio.run(_transcribe_with_xiaomi(audio, "zh")) == "画一个月牙"
+    assert len(calls) == 2
+    assert sleeps == [0.1]
+
+
+def test_xiaomi_asr_retries_503_before_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    audio = parse_audio_data_url("data:audio/wav;base64,AAAA")
+    responses = [
+        _FakeAsrResponse(503, json_body={"error": "busy"}),
+        _FakeAsrResponse(200, json_body={"text": "画一朵云"}),
+    ]
+    sleeps: list[float] = []
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, *, headers, json):
+            return responses.pop(0)
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setenv("MIMO_API_KEY", "test-key")
+    monkeypatch.setenv("AI_PAINTING_XIAOMI_ASR_RETRIES", "1")
+    monkeypatch.setenv("AI_PAINTING_XIAOMI_ASR_RETRY_BASE_SECONDS", "0.2")
+    monkeypatch.setattr("app.asr.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.asr.asyncio.sleep", fake_sleep)
+
+    assert asyncio.run(_transcribe_with_xiaomi(audio, "zh")) == "画一朵云"
+    assert sleeps == [0.2]
 
 
 def test_provider_status_prefers_xiaomi_then_local(monkeypatch) -> None:

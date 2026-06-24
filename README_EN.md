@@ -260,6 +260,9 @@ See [docs/local-asr-qwen3.md](docs/local-asr-qwen3.md).
 | `AI_PAINTING_CORS_ORIGINS` | Allowed backend CORS origins | `http://localhost:3001,http://127.0.0.1:3001` |
 | `MIMO_API_KEY` | Xiaomi MiMo API key | empty |
 | `AI_PAINTING_ASR_PROVIDERS` | Backend ASR provider order | `xiaomi,local` |
+| `AI_PAINTING_XIAOMI_ASR_RETRIES` | Automatic retries for temporary Xiaomi ASR disconnects, 429, 503, or gateway errors | `2` |
+| `AI_PAINTING_XIAOMI_ASR_RETRY_BASE_SECONDS` | Base wait time for Xiaomi ASR retries, with exponential backoff | `0.35` |
+| `AI_PAINTING_XIAOMI_ASR_RETRY_MAX_SECONDS` | Maximum wait time for a single Xiaomi ASR retry | `2` |
 | `AI_PAINTING_ENABLE_AGENT_PLANNER` | Enable Drawing Agent planner | `true` |
 | `AI_PAINTING_MIMO_LLM_MODEL` | Xiaomi complex planning model | `mimo-v2.5-pro` |
 | `AI_PAINTING_MIMO_TTS_MODEL` | Xiaomi TTS model, defaults to 2.5 and can be switched back using `.env.example` comments | `mimo-v2.5-tts` |

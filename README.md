@@ -183,6 +183,9 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 3001 --strictPort
 | `AI_PAINTING_CORS_ORIGINS` | 后端 CORS 允许来源 | `http://localhost:3001,http://127.0.0.1:3001` |
 | `MIMO_API_KEY` | 小米 MiMo API Key | 空 |
 | `AI_PAINTING_ASR_PROVIDERS` | 后端 ASR Provider 顺序 | `xiaomi,local` |
+| `AI_PAINTING_XIAOMI_ASR_RETRIES` | 小米 ASR 临时断连、429、503 或网关错误的自动重试次数 | `2` |
+| `AI_PAINTING_XIAOMI_ASR_RETRY_BASE_SECONDS` | 小米 ASR 重试基础等待秒数, 后续按指数退避增长 | `0.35` |
+| `AI_PAINTING_XIAOMI_ASR_RETRY_MAX_SECONDS` | 小米 ASR 单次重试最大等待秒数 | `2` |
 | `AI_PAINTING_ENABLE_AGENT_PLANNER` | 启用 Drawing Agent | `true` |
 | `AI_PAINTING_MIMO_TTS_MODEL` | 小米 TTS 模型, 默认使用 2.5 版, 可按 `.env.example` 注释切回旧版 | `mimo-v2.5-tts` |
 | `AI_PAINTING_LOCAL_ASR_URL` | 本地 ASR HTTP 服务地址 | `http://127.0.0.1:9001/asr` |

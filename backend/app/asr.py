@@ -26,6 +26,7 @@ from .schemas import (
 XIAOMI_ASR_URL = "https://api.xiaomimimo.com/v1/chat/completions"
 XIAOMI_ASR_MODEL = "mimo-v2.5-asr"
 WEB_SPEECH_PROVIDER = "web_speech"
+XIAOMI_RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 DATA_URL_PATTERN = re.compile(r"^data:(?P<mime>[-\w.+/]+);base64,(?P<data>.+)$", re.DOTALL)
 LANGUAGE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,20}$")
 SUPPORTED_AUDIO_TYPES = {
@@ -227,6 +228,12 @@ def _extract_text_from_json(payload: dict[str, Any]) -> str:
     raise AsrProviderError("ASR 响应中没有可用文本")
 
 
+def _xiaomi_asr_retry_delay(attempt: int) -> float:
+    base_seconds = max(0, _read_float_env("AI_PAINTING_XIAOMI_ASR_RETRY_BASE_SECONDS", 0.35))
+    max_seconds = max(base_seconds, _read_float_env("AI_PAINTING_XIAOMI_ASR_RETRY_MAX_SECONDS", 2.0))
+    return min(max_seconds, base_seconds * (2**attempt))
+
+
 async def _transcribe_with_xiaomi(audio: AudioPayload, language: str) -> str:
     api_key = os.getenv("MIMO_API_KEY")
     if not api_key:
@@ -239,15 +246,15 @@ async def _transcribe_with_xiaomi(audio: AudioPayload, language: str) -> str:
         "Content-Type": "application/json",
     }
     payload = build_xiaomi_payload(audio.data_url, language)
-    retries = max(0, _read_int_env("AI_PAINTING_XIAOMI_ASR_RETRIES", 1))
+    retries = max(0, _read_int_env("AI_PAINTING_XIAOMI_ASR_RETRIES", 2))
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url, headers=headers, json=payload)
-            if response.status_code >= 500 and attempt < retries:
+            if response.status_code in XIAOMI_RETRYABLE_STATUS_CODES and attempt < retries:
                 last_error = AsrProviderError(f"小米 ASR 请求失败: HTTP {response.status_code}")
-                await asyncio.sleep(0.25 * (attempt + 1))
+                await asyncio.sleep(_xiaomi_asr_retry_delay(attempt))
                 continue
             if response.status_code >= 400:
                 raise AsrProviderError(f"小米 ASR 请求失败: HTTP {response.status_code}")
@@ -256,8 +263,8 @@ async def _transcribe_with_xiaomi(audio: AudioPayload, language: str) -> str:
             last_error = exc
             if attempt >= retries:
                 break
-            await asyncio.sleep(0.25 * (attempt + 1))
-    raise AsrProviderError(f"小米 ASR 请求失败: {last_error}") from last_error
+            await asyncio.sleep(_xiaomi_asr_retry_delay(attempt))
+    raise AsrProviderError(f"小米 ASR 请求失败, 已重试 {retries} 次: {last_error}") from last_error
 
 
 async def _transcribe_with_local_url(audio: AudioPayload, language: str) -> str:
