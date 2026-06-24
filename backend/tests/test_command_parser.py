@@ -147,6 +147,18 @@ def test_parse_boolean_shape_presets(text: str, expected_preset: str) -> None:
     assert f"shape.boolean.{expected_preset}" in obj["semantic_tags"]
 
 
+def test_parse_pink_five_petal_flower() -> None:
+    plan = parse_command("画一个粉色五瓣花")
+
+    obj = plan.operations[0].payload["object"]
+
+    assert obj["type"] == "boolean_shape"
+    assert obj["geometry"]["preset"] == "flower"
+    assert obj["geometry"]["petals"] == 5
+    assert len([operation for operation in obj["geometry"]["operations"] if operation["shape"] == "ellipse"]) == 6
+    assert obj["style"]["fill"] == "#f9a8d4"
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [

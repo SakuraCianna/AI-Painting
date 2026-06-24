@@ -12,6 +12,9 @@ COLOR_MAP: dict[str, str] = {
     "红色": "#dc2626",
     "蓝色": "#2563eb",
     "浅蓝色": "#7dd3fc",
+    "粉红色": "#f9a8d4",
+    "浅粉色": "#fbcfe8",
+    "粉色": "#f9a8d4",
     "绿色": "#16a34a",
     "黄色": "#facc15",
     "橙色": "#f97316",
@@ -809,9 +812,14 @@ def _decorate_object(text: str, obj: dict[str, Any]) -> dict[str, Any]:
 def _extract_number(text: str, after: str, default: int) -> int:
     pattern = rf"{after}\s*([0-9]+|[零一二两三四五六七八九十百]+)"
     match = re.search(pattern, text)
-    if not match:
-        return default
-    return chinese_number_to_int(match.group(1)) or default
+    if match:
+        return chinese_number_to_int(match.group(1)) or default
+    if re.fullmatch(r"[\u4e00-\u9fa5]+", after):
+        before_pattern = rf"([0-9]+|[零一二两三四五六七八九十百]+)\s*{after}"
+        before_match = re.search(before_pattern, text)
+        if before_match:
+            return chinese_number_to_int(before_match.group(1)) or default
+    return default
 
 
 def _extract_movement_amount(text: str) -> int:
