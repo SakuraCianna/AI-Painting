@@ -562,8 +562,8 @@ describe("App", () => {
     apiMocks.submitVoiceCommand.mockResolvedValue({
       message: "已生成 Minecraft 风格图片",
       plan: makePlan({
-        raw_text: "把这个画换成Minecraft风格的图片",
-        normalized_text: "把这个画换成minecraft风格的图片",
+        raw_text: "将这个图片转化为Minecraft风格",
+        normalized_text: "将这个图片转化为minecraft风格",
         operations: [{ operation_type: "polish_image_asset", payload: {} }],
       }),
       artwork: makeArtwork(),
@@ -573,13 +573,13 @@ describe("App", () => {
     await screen.findByText("语音画布已准备");
 
     await act(async () => {
-      await voiceRuntime.onFinalTranscript?.("把这个画换成Minecraft风格的图片", null);
+      await voiceRuntime.onFinalTranscript?.("将这个图片转化为Minecraft风格", null);
     });
 
     await waitFor(() =>
       expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith(
         "artwork-1",
-        "把这个画换成Minecraft风格的图片",
+        "将这个图片转化为Minecraft风格",
         "data:image/png;base64,canvas",
         expect.any(AbortSignal)
       )
@@ -650,3 +650,4 @@ describe("App", () => {
     expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("后端执行失败", expect.any(AbortSignal));
   });
 });
+

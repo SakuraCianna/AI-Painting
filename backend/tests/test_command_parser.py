@@ -639,6 +639,10 @@ def test_parse_canvas_style_transfer_as_image_to_image_polish() -> None:
     [
         ("把这张图片换成Minecraft风格", "Minecraft风格"),
         ("把这张图换成Minecraft风格图片", "Minecraft风格"),
+        ("将这个图片转化为Minecraft风格。", "Minecraft风格"),
+        ("将这个图片转化为Minecraft样式。", "Minecraft样式"),
+        ("把当前画面转换为像素画风", "像素画风"),
+        ("把这个图处理成水彩效果", "水彩效果"),
         ("把当前画面改成像素风格", "像素风格"),
     ],
 )

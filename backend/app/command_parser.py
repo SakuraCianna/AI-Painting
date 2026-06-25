@@ -570,13 +570,17 @@ def _scene_clarification_plan(raw_text: str, normalized_text: str) -> CommandPla
 
 CANVAS_STYLE_TRANSFER_TARGETS = (
     "这个画",
+    "这个图片",
+    "这个图像",
+    "这个图",
     "这幅画",
     "这张画",
+    "这张图片",
+    "这张图像",
+    "这张图",
     "当前画",
     "当前画面",
     "当前画布",
-    "这张图片",
-    "这张图",
     "当前图片",
     "当前图像",
     "当前图",
@@ -584,14 +588,32 @@ CANVAS_STYLE_TRANSFER_TARGETS = (
     "作品",
     "画布",
 )
+CANVAS_STYLE_TRANSFER_ACTIONS = (
+    "换成",
+    "改成",
+    "变成",
+    "变为",
+    "转成",
+    "转为",
+    "转化为",
+    "转化成",
+    "转换为",
+    "转换成",
+    "转变为",
+    "转变成",
+    "处理成",
+    "做成",
+)
+CANVAS_STYLE_TRANSFER_MARKERS = ("风格", "样式", "画风", "效果", "质感")
 
 
 def _is_image_polish_request(normalized_text: str, render_mode: str) -> bool:
     if render_mode == "image_polish":
         return True
     has_style_transfer_target = any(keyword in normalized_text for keyword in CANVAS_STYLE_TRANSFER_TARGETS)
-    has_style_transfer_action = any(keyword in normalized_text for keyword in ("换成", "改成", "变成", "转成", "转换成"))
-    if has_style_transfer_target and has_style_transfer_action and "风格" in normalized_text:
+    has_style_transfer_action = any(keyword in normalized_text for keyword in CANVAS_STYLE_TRANSFER_ACTIONS)
+    has_style_transfer_marker = any(keyword in normalized_text for keyword in CANVAS_STYLE_TRANSFER_MARKERS)
+    if has_style_transfer_target and has_style_transfer_action and has_style_transfer_marker:
         return True
     has_polish_hint = any(keyword in normalized_text for keyword in IMAGE_POLISH_HINTS)
     if has_polish_hint:
