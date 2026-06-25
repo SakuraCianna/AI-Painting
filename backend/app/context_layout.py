@@ -11,6 +11,7 @@ LayoutKind = Literal["sky", "building", "plant", "ground", "generic"]
 
 SKY_TAGS = {"sky", "scene.background"}
 GROUND_TAGS = {"grass", "scene.grass", "ground", "scene.ground"}
+SCAFFOLD_TAGS = {"scene.background", "scene.grass", "scene.ground"}
 FOLLOW_UP_HINTS = ("再", "还有", "继续", "接着", "加", "添加", "再画")
 
 
@@ -137,6 +138,21 @@ def _bounds_for_object(obj: dict[str, Any] | DrawingObject) -> Bounds:
     return _bounds_for_item(_object_type(obj), _geometry(obj))
 
 
+def _virtual_drawing_object(obj: dict[str, Any], fallback_id: str) -> DrawingObject:
+    return DrawingObject(
+        id=str(obj.get("id") or fallback_id),
+        type=str(obj.get("type", "")),
+        name=obj.get("name"),
+        geometry=dict(obj.get("geometry", {})),
+        style=dict(obj.get("style", {})),
+        z_index=int(obj.get("z_index", 0) or 0),
+        layer_id=str(obj.get("layer_id", "base")),
+        group_id=None if obj.get("group_id") is None else str(obj.get("group_id")),
+        semantic_tags=[str(tag) for tag in obj.get("semantic_tags", [])],
+        transform=dict(obj.get("transform", {})),
+    )
+
+
 def _move_coordinate(item: Any, dx: float, dy: float) -> Any:
     if not isinstance(item, dict):
         return item
@@ -185,9 +201,16 @@ def _overlap_ratio(a: Bounds, b: Bounds) -> float:
 
 def _is_background_scaffold(obj: DrawingObject) -> bool:
     tags = _tags(obj)
-    if tags.intersection(SKY_TAGS | GROUND_TAGS):
+    if tags.intersection(SCAFFOLD_TAGS):
         return True
     return _layer_id(obj) == "background" and _bounds_for_object(obj).area > CANVAS_WIDTH * CANVAS_HEIGHT * 0.25
+
+
+def _is_planned_scaffold(obj: dict[str, Any]) -> bool:
+    tags = _tags(obj)
+    if tags.intersection(SCAFFOLD_TAGS):
+        return True
+    return str(obj.get("layer_id", "base")) == "background" and _bounds_for_object(obj).area > CANVAS_WIDTH * CANVAS_HEIGHT * 0.25
 
 
 def _colliders(artwork: ArtworkResponse) -> list[DrawingObject]:
@@ -217,7 +240,7 @@ def _classify_tags(tags: set[str]) -> LayoutKind:
         return "building"
     if "tree" in tags or _has_tag_prefix(tags, "tree"):
         return "plant"
-    if _has_tag_prefix(tags, "shape.boolean.flower") or "flower" in tags:
+    if _has_tag_prefix(tags, "shape.boolean.flower") or "flower" in tags or "bench" in tags or "person" in tags or _has_tag_prefix(tags, "person"):
         return "ground"
     return "generic"
 
@@ -323,6 +346,16 @@ def _slot_positions(kind: LayoutKind, bounds: Bounds, artwork: ArtworkResponse, 
     return [(_clamp(left, 18, artwork.width - bounds.width - 18), _clamp(top, 18, artwork.height - bounds.height - 18)) for left, top in raw_slots]
 
 
+def _current_position_fits_kind(kind: LayoutKind, bounds: Bounds, artwork: ArtworkResponse, zones: LayoutZones) -> bool:
+    if bounds.left < 0 or bounds.top < 0 or bounds.right > artwork.width or bounds.bottom > artwork.height:
+        return False
+    if kind == "sky":
+        return bounds.bottom <= min(zones.ground.top - 30, artwork.height * 0.52)
+    if kind in {"building", "plant", "ground"}:
+        return bounds.bottom >= zones.ground.top - 70 and bounds.top >= zones.sky.top + 40
+    return True
+
+
 def _score_slot(kind: LayoutKind, candidate_bounds: Bounds, colliders: list[DrawingObject], artwork: ArtworkResponse, slot_index: int) -> float:
     if candidate_bounds.left < 0 or candidate_bounds.top < 0 or candidate_bounds.right > artwork.width or candidate_bounds.bottom > artwork.height:
         return 1_000_000.0
@@ -335,7 +368,10 @@ def _score_slot(kind: LayoutKind, candidate_bounds: Bounds, colliders: list[Draw
 
 def _choose_placement(kind: LayoutKind, bounds: Bounds, artwork: ArtworkResponse, zones: LayoutZones) -> PlacementChoice:
     colliders = _colliders(artwork)
-    slots = _slot_positions(kind, bounds, artwork, zones)
+    slots: list[tuple[float, float]] = []
+    if _current_position_fits_kind(kind, bounds, artwork, zones):
+        slots.append((bounds.left, bounds.top))
+    slots.extend(_slot_positions(kind, bounds, artwork, zones))
     choices = [
         PlacementChoice(
             left=left,
@@ -404,7 +440,7 @@ def _place_group(objects: list[dict[str, Any]], artwork: ArtworkResponse, zones:
 
 
 def _contextualized_add_operations(operations: list[OperationRequest], artwork: ArtworkResponse, *, avoid_generic_overlap: bool) -> list[OperationRequest]:
-    zones = _infer_layout_zones(artwork)
+    virtual_artwork = artwork.model_copy(deep=True)
     next_operations: list[OperationRequest] = []
     index = 0
     while index < len(operations):
@@ -415,6 +451,13 @@ def _contextualized_add_operations(operations: list[OperationRequest], artwork: 
             continue
 
         obj = dict(operation.payload["object"])
+        if _is_planned_scaffold(obj):
+            next_operations.append(operation)
+            virtual_artwork.objects.append(_virtual_drawing_object(obj, f"planned-{index}"))
+            index += 1
+            continue
+
+        zones = _infer_layout_zones(virtual_artwork)
         group_id = obj.get("group_id")
         if group_id and _classify_object(obj) != "generic":
             group_ops: list[OperationRequest] = []
@@ -427,21 +470,33 @@ def _contextualized_add_operations(operations: list[OperationRequest], artwork: 
                 group_ops.append(candidate)
                 group_objects.append(dict(candidate_obj))
                 index += 1
-            placed = _place_group(group_objects, artwork, zones)
-            unique_group_id = _unique_group_id(str(group_id), artwork)
+            placed = _place_group(group_objects, virtual_artwork, zones)
+            unique_group_id = _unique_group_id(str(group_id), virtual_artwork)
             for source_operation, placed_object in zip(group_ops, placed, strict=True):
                 placed_object["group_id"] = unique_group_id
                 next_operations.append(source_operation.model_copy(update={"payload": {"object": placed_object}}))
+                virtual_artwork.objects.append(_virtual_drawing_object(placed_object, f"planned-{len(virtual_artwork.objects)}"))
             continue
 
-        placed_obj = _place_single_object(obj, artwork, zones, avoid_generic_overlap=avoid_generic_overlap)
+        placed_obj = _place_single_object(obj, virtual_artwork, zones, avoid_generic_overlap=avoid_generic_overlap)
         next_operations.append(operation.model_copy(update={"payload": {"object": placed_obj}}))
+        virtual_artwork.objects.append(_virtual_drawing_object(placed_obj, f"planned-{len(virtual_artwork.objects)}"))
         index += 1
     return next_operations
 
 
+def _is_open_vector_scene_plan(plan: CommandPlan) -> bool:
+    if plan.scene_plan is None:
+        return False
+    if plan.scene_plan.intent == "compose_open_scene":
+        return True
+    return any(step.target.get("domain") == "open_vector_scene" for step in plan.scene_plan.steps)
+
+
 def adjust_plan_for_existing_artwork(plan: CommandPlan, artwork: ArtworkResponse) -> CommandPlan:
-    if not artwork.objects or not any(operation.operation_type == "add_object" for operation in plan.operations):
+    if not any(operation.operation_type == "add_object" for operation in plan.operations):
+        return plan
+    if not artwork.objects and not _is_open_vector_scene_plan(plan):
         return plan
     adjusted = plan.model_copy(deep=True)
     avoid_generic_overlap = any(keyword in plan.normalized_text for keyword in FOLLOW_UP_HINTS)

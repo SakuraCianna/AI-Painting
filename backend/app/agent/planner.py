@@ -368,6 +368,12 @@ def _has_open_scene_item(text: str, *keywords: str) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+def _has_person_scene_item(text: str) -> bool:
+    if any(keyword in text for keyword in ("一个人", "一位人", "有人", "小人", "人物", "行人")):
+        return True
+    return re.search(r"[一二两三四五六七八九十\d]+\s*(?:个|位)?\s*人", text) is not None
+
+
 def _open_scene_item_kinds(text: str) -> set[str]:
     kinds: set[str] = set()
     if _has_open_scene_item(text, "草地", "草坪"):
@@ -390,6 +396,8 @@ def _open_scene_item_kinds(text: str) -> set[str]:
         kinds.add("flower")
     if _has_open_scene_item(text, "房子", "小屋"):
         kinds.add("house")
+    if _has_person_scene_item(text):
+        kinds.add("person")
     return kinds
 
 
@@ -513,6 +521,78 @@ def _cloud_objects() -> list[AgentSceneObject]:
     ]
 
 
+def _person_objects(index: int, x: int, y: int) -> list[AgentSceneObject]:
+    group_id = f"person-{index}"
+    base_z = 62 + index * 6
+    return [
+        _object(
+            f"{group_id}-head",
+            "circle",
+            f"人物头部{index}",
+            {"cx": x + 34, "cy": y + 24, "radius": 20},
+            "#fde2c8",
+            stroke="#7c2d12",
+            stroke_width=3,
+            layer_id="foreground",
+            group_id=group_id,
+            semantic_tags=["person", "person.head", "landscape"],
+            z_index=base_z,
+        ),
+        _object(
+            f"{group_id}-body",
+            "line",
+            f"人物身体{index}",
+            {"x1": x + 34, "y1": y + 44, "x2": x + 34, "y2": y + 100},
+            "transparent",
+            stroke="#1d4ed8",
+            stroke_width=8,
+            layer_id="foreground",
+            group_id=group_id,
+            semantic_tags=["person", "person.body", "landscape"],
+            z_index=base_z + 1,
+        ),
+        _object(
+            f"{group_id}-arms",
+            "line",
+            f"人物手臂{index}",
+            {"x1": x + 4, "y1": y + 64, "x2": x + 64, "y2": y + 64},
+            "transparent",
+            stroke="#1d4ed8",
+            stroke_width=6,
+            layer_id="foreground",
+            group_id=group_id,
+            semantic_tags=["person", "person.arm", "landscape"],
+            z_index=base_z + 2,
+        ),
+        _object(
+            f"{group_id}-left-leg",
+            "line",
+            f"人物左腿{index}",
+            {"x1": x + 34, "y1": y + 100, "x2": x + 12, "y2": y + 138},
+            "transparent",
+            stroke="#111827",
+            stroke_width=6,
+            layer_id="foreground",
+            group_id=group_id,
+            semantic_tags=["person", "person.leg", "landscape"],
+            z_index=base_z + 3,
+        ),
+        _object(
+            f"{group_id}-right-leg",
+            "line",
+            f"人物右腿{index}",
+            {"x1": x + 34, "y1": y + 100, "x2": x + 56, "y2": y + 138},
+            "transparent",
+            stroke="#111827",
+            stroke_width=6,
+            layer_id="foreground",
+            group_id=group_id,
+            semantic_tags=["person", "person.leg", "landscape"],
+            z_index=base_z + 4,
+        ),
+    ]
+
+
 def _open_composition_scene_graph(text: str) -> AgentSceneGraph | None:
     if not any(keyword in text for keyword in ("画", "创建", "生成")):
         return None
@@ -540,7 +620,8 @@ def _open_composition_scene_graph(text: str) -> AgentSceneGraph | None:
     ]
     relations: list[AgentSceneRelation] = []
 
-    if _has_open_scene_item(text, "草地", "草坪"):
+    has_ground_subject = bool(item_kinds.intersection({"house", "tree", "person", "bench", "flower"}))
+    if _has_open_scene_item(text, "草地", "草坪") or has_ground_subject:
         objects.append(
             _object(
                 "open-grass",
@@ -577,6 +658,7 @@ def _open_composition_scene_graph(text: str) -> AgentSceneGraph | None:
                 stroke="#fde68a",
                 stroke_width=0,
                 layer_id="background",
+                group_id="open-sun",
                 semantic_tags=["sun", "sun.glow", "sky"],
                 z_index=1,
             )
@@ -591,6 +673,7 @@ def _open_composition_scene_graph(text: str) -> AgentSceneGraph | None:
                 stroke="#f29900",
                 stroke_width=4,
                 layer_id="background",
+                group_id="open-sun",
                 semantic_tags=["sun", "sky"],
                 z_index=2,
             )
@@ -744,6 +827,13 @@ def _open_composition_scene_graph(text: str) -> AgentSceneGraph | None:
             ]
         )
 
+    if _has_person_scene_item(text):
+        person_count = _open_scene_count(text, "人", default=1, max_count=4)
+        person_positions = [(520, 500), (640, 505), (410, 512), (760, 510)]
+        for index in range(person_count):
+            x, y = person_positions[index]
+            objects.extend(_person_objects(index + 1, x, y))
+        relations.append(AgentSceneRelation(subject="person-1-body", relation="on", target="open-grass", note="人物站在地面上"))
     if len(objects) <= 1:
         return None
 

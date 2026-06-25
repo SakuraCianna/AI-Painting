@@ -1956,7 +1956,12 @@ def parse_command(text: str) -> CommandPlan:
         return _portrait_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("温馨的小屋", "温馨小屋")) and "树" in normalized and ("路" in normalized or "小路" in normalized):
         return _cozy_cabin_scene_plan(text, normalized)
-    elif ("房子" in normalized or "小屋" in normalized) and "云" in normalized and any(keyword in normalized for keyword in ("还有", "再", "加", "添加")):
+    elif (
+        "场景" not in normalized
+        and ("房子" in normalized or "小屋" in normalized)
+        and "云" in normalized
+        and any(keyword in normalized for keyword in ("还有", "再", "加", "添加"))
+    ):
         return _house_cloud_followup_plan(text, normalized)
     elif (
         "场景" not in normalized

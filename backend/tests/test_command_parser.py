@@ -614,6 +614,15 @@ def test_parse_object_query_dsl_selectors() -> None:
     assert group_target["include_group_members"] is True
 
 
+def test_parse_complete_outdoor_scene_uses_scene_planner_instead_of_house_cloud_followup() -> None:
+    plan = parse_command("画一个户外场景，有蓝天白云、太阳、房子，还有一棵树，还有一个人。")
+
+    assert plan.requires_confirmation is True
+    assert plan.operations == []
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "clarify_scene"
+
+
 def test_parse_cozy_cabin_scene_as_executable_plan() -> None:
     plan = parse_command("画一个温馨的小屋 左边有两棵树 右边有一条弯曲小路 天空有三朵云")
     assert plan.requires_confirmation is False

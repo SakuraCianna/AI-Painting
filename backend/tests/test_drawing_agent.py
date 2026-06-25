@@ -1,12 +1,73 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
 from app.agent.planner import DrawingAgentError
 from app.agent.scene_graph import AgentSceneGraph, AgentSceneObject, AgentStyle
-from app.schemas import CommandPlan, OperationRequest
+from app.context_layout import adjust_plan_for_existing_artwork
+from app.schemas import ArtworkResponse, CommandPlan, OperationRequest
+
+
+def _object_bounds(obj: dict[str, Any]) -> tuple[float, float, float, float]:
+    geometry = obj["geometry"]
+    object_type = obj["type"]
+    if object_type == "circle":
+        radius = float(geometry["radius"])
+        return (
+            float(geometry["cx"]) - radius,
+            float(geometry["cy"]) - radius,
+            float(geometry["cx"]) + radius,
+            float(geometry["cy"]) + radius,
+        )
+    if object_type == "ellipse":
+        return (
+            float(geometry["cx"]) - float(geometry["rx"]),
+            float(geometry["cy"]) - float(geometry["ry"]),
+            float(geometry["cx"]) + float(geometry["rx"]),
+            float(geometry["cy"]) + float(geometry["ry"]),
+        )
+    if object_type == "triangle" and "size" in geometry:
+        size = float(geometry["size"])
+        height = size * 0.86
+        return (
+            float(geometry["x"]) - size / 2,
+            float(geometry["y"]) - height / 2,
+            float(geometry["x"]) + size / 2,
+            float(geometry["y"]) + height / 2,
+        )
+    if {"x1", "y1", "x2", "y2"}.issubset(geometry):
+        x1 = float(geometry["x1"])
+        y1 = float(geometry["y1"])
+        x2 = float(geometry["x2"])
+        y2 = float(geometry["y2"])
+        return min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)
+    return (
+        float(geometry["x"]),
+        float(geometry["y"]),
+        float(geometry["x"]) + float(geometry["width"]),
+        float(geometry["y"]) + float(geometry["height"]),
+    )
+
+
+def _group_bounds(objects: list[dict[str, Any]], semantic_tag: str) -> tuple[float, float, float, float]:
+    matches = [obj for obj in objects if any(tag == semantic_tag or tag.startswith(f"{semantic_tag}.") for tag in obj["semantic_tags"])]
+    assert matches
+    bounds = [_object_bounds(obj) for obj in matches]
+    return min(item[0] for item in bounds), min(item[1] for item in bounds), max(item[2] for item in bounds), max(item[3] for item in bounds)
+
+
+def _overlap_share(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    left = max(a[0], b[0])
+    top = max(a[1], b[1])
+    right = min(a[2], b[2])
+    bottom = min(a[3], b[3])
+    area = max(0.0, right - left) * max(0.0, bottom - top)
+    a_area = max(1.0, (a[2] - a[0]) * (a[3] - a[1]))
+    b_area = max(1.0, (b[2] - b[0]) * (b[3] - b[1]))
+    return area / min(a_area, b_area)
 
 
 def test_build_command_plan_uses_agent_for_unclear_complex_command(monkeypatch) -> None:
@@ -242,7 +303,9 @@ def test_agent_open_composition_builds_mixed_scene_without_mimo(monkeypatch) -> 
     assert result.plan.scene_plan.intent == "compose_open_scene"
     assert result.plan.scene_plan.expected_object_count is not None
     assert result.plan.scene_plan.expected_object_count >= 10
-    objects = [operation.payload["object"] for operation in result.plan.operations]
+    artwork = ArtworkResponse(id="test", title="test", width=1024, height=768, background="#ffffff", objects=[], created_at="", updated_at="")
+    adjusted_plan = adjust_plan_for_existing_artwork(result.plan, artwork)
+    objects = [operation.payload["object"] for operation in adjusted_plan.operations]
     semantic_tags = {tag for obj in objects for tag in obj["semantic_tags"]}
     assert {"scene.grass", "sun", "tree", "path", "bench"}.issubset(semantic_tags)
     assert any(obj["name"] == "太阳光芒" and obj["type"] == "star" for obj in objects)
@@ -255,6 +318,30 @@ def test_agent_open_composition_builds_mixed_scene_without_mimo(monkeypatch) -> 
     assert result.plan.requires_confirmation is False
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
+
+
+def test_agent_open_composition_places_house_tree_and_person_without_subject_overlap(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    result = asyncio.run(main.build_command_plan_with_metrics("画一个户外场景，有蓝天白云、太阳、房子，还有一棵树，还有一个人。"))
+
+    assert result.plan.planner_source == "agent"
+    assert result.plan.scene_plan is not None
+    assert result.plan.scene_plan.intent == "compose_open_scene"
+    artwork = ArtworkResponse(id="test", title="test", width=1024, height=768, background="#ffffff", objects=[], created_at="", updated_at="")
+    adjusted_plan = adjust_plan_for_existing_artwork(result.plan, artwork)
+    objects = [operation.payload["object"] for operation in adjusted_plan.operations]
+    semantic_tags = {tag for obj in objects for tag in obj["semantic_tags"]}
+    assert {"cloud", "grass", "house", "person", "sun", "tree"}.issubset(semantic_tags)
+
+    house_bounds = _group_bounds(objects, "house")
+    tree_bounds = _group_bounds(objects, "tree")
+    person_bounds = _group_bounds(objects, "person")
+    assert _overlap_share(tree_bounds, house_bounds) < 0.05
+    assert _overlap_share(person_bounds, house_bounds) < 0.05
 
 
 def test_agent_edit_planner_builds_semantic_multi_step_edit(monkeypatch) -> None:
