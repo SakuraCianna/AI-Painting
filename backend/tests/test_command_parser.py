@@ -653,6 +653,9 @@ def test_parse_canvas_style_transfer_as_image_to_image_polish() -> None:
         ("把当前画面转换为像素画风", "像素画风"),
         ("把这个图处理成水彩效果", "水彩效果"),
         ("把当前画面改成像素风格", "像素风格"),
+        ("把这幅照片换成我的世界风格的。", "我的世界风格"),
+        ("把这幅照片换成Minecraft风格的。", "Minecraft风格"),
+        ("把这张照片处理成像素效果", "像素效果"),
     ],
 )
 def test_parse_canvas_style_transfer_from_common_image_phrases(text: str, expected_prompt: str) -> None:
