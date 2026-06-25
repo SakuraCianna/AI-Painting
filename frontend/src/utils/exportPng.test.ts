@@ -98,6 +98,19 @@ describe("exportPng", () => {
     expect(click).toHaveBeenCalledTimes(1);
   });
 
+  it("does not download PNG when the export signal is aborted", async () => {
+    appendSvg();
+    const controller = new AbortController();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    const exportPromise = exportSvgAsPng("voice-canvas-svg", "作品.png", controller.signal);
+    controller.abort();
+
+    await expect(exportPromise).rejects.toMatchObject({ name: "AbortError" });
+    expect(click).not.toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:voice-canvas");
+  });
+
   it("downloads serialized SVG with the requested filename", () => {
     appendSvg();
     const clickedLinks: HTMLAnchorElement[] = [];

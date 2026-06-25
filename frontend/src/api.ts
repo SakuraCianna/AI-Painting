@@ -42,9 +42,15 @@ export function fetchArtwork(artworkId: string): Promise<Artwork> {
   return requestJson<Artwork>(`/api/artworks/${artworkId}`);
 }
 
-export function submitVoiceCommand(artworkId: string, text: string, canvasImageDataUrl?: string): Promise<CommandExecutionResponse> {
+export function submitVoiceCommand(
+  artworkId: string,
+  text: string,
+  canvasImageDataUrl?: string,
+  signal?: AbortSignal
+): Promise<CommandExecutionResponse> {
   return requestJson<CommandExecutionResponse>(`/api/artworks/${artworkId}/commands`, {
     method: "POST",
+    signal,
     body: JSON.stringify({
       text,
       ...(canvasImageDataUrl ? { canvas_image_data_url: canvasImageDataUrl } : {})
@@ -60,9 +66,10 @@ export function createAsrStreamSocket(): WebSocket {
   return new WebSocket(ASR_STREAM_URL);
 }
 
-export function transcribeAudio(audioDataUrl: string, language = "zh"): Promise<AsrTranscriptionResponse> {
+export function transcribeAudio(audioDataUrl: string, language = "zh", signal?: AbortSignal): Promise<AsrTranscriptionResponse> {
   return requestJson<AsrTranscriptionResponse>("/api/asr/transcribe", {
     method: "POST",
+    signal,
     body: JSON.stringify({
       audio_data_url: audioDataUrl,
       language
@@ -70,9 +77,10 @@ export function transcribeAudio(audioDataUrl: string, language = "zh"): Promise<
   });
 }
 
-export function synthesizeSpeech(text: string): Promise<TtsSynthesisResponse> {
+export function synthesizeSpeech(text: string, signal?: AbortSignal): Promise<TtsSynthesisResponse> {
   return requestJson<TtsSynthesisResponse>("/api/tts/synthesize", {
     method: "POST",
+    signal,
     body: JSON.stringify({ text })
   });
 }

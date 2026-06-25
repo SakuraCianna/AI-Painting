@@ -143,6 +143,10 @@ function getEndToEndLatency(commandMetrics: CommandExecutionMetrics | null, asrM
   return commandMs + (asrMs ?? 0);
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 function shouldAttachCanvasImage(text: string): boolean {
   return /精修|丰富|润色|美化|增强|提升质感|重新渲染|风格化/.test(text)
     && /图片|图像|画面|作品|画布|生成图|生成的|生成出来|照片|肖像|头像|人物|局部|部分|区域|背景|天空|眼睛|脸|头发|衣服|海报/.test(text);
@@ -166,16 +170,16 @@ function getExportFormat(plan: CommandPlan): ExportFormat | null {
   return "png";
 }
 
-async function runArtworkExport(format: ExportFormat, exportArtwork: Artwork): Promise<void> {
+async function runArtworkExport(format: ExportFormat, exportArtwork: Artwork, signal?: AbortSignal): Promise<void> {
   if (format === "svg") {
-    exportSvgFile("voice-canvas-svg", `${exportArtwork.title}.svg`);
+    exportSvgFile("voice-canvas-svg", `${exportArtwork.title}.svg`, signal);
     return;
   }
   if (format === "json") {
-    exportArtworkJson(exportArtwork, `${exportArtwork.title}.json`);
+    exportArtworkJson(exportArtwork, `${exportArtwork.title}.json`, signal);
     return;
   }
-  await exportSvgAsPng("voice-canvas-svg", `${exportArtwork.title}.png`);
+  await exportSvgAsPng("voice-canvas-svg", `${exportArtwork.title}.png`, signal);
 }
 
 function WorkspaceApp() {
@@ -188,6 +192,8 @@ function WorkspaceApp() {
   const [latestAsrMetrics, setLatestAsrMetrics] = useState<AsrTranscriptionMetrics | null>(null);
   const hasCreatedArtworkRef = useRef(false);
   const feedbackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const commandAbortRef = useRef<AbortController | null>(null);
+  const commandRunIdRef = useRef(0);
 
   useEffect(() => {
     if (hasCreatedArtworkRef.current) {
@@ -204,16 +210,43 @@ function WorkspaceApp() {
       });
   }, []);
 
-  const playFeedback = useCallback(async (message: string) => {
+  const playFeedback = useCallback(async (message: string, signal?: AbortSignal) => {
     try {
-      const speech = await synthesizeSpeech(message);
+      if (signal?.aborted) {
+        return;
+      }
+      const speech = await synthesizeSpeech(message, signal);
+      if (signal?.aborted) {
+        return;
+      }
       feedbackAudioRef.current?.pause();
       const audio = new Audio(speech.audio_data_url);
       feedbackAudioRef.current = audio;
       await audio.play();
-    } catch {
+    } catch (error: unknown) {
+      if (isAbortError(error)) {
+        return;
+      }
       feedbackAudioRef.current = null;
     }
+  }, []);
+
+  const cancelCurrentVoiceFlow = useCallback((message = "已取消上一条语音指令，重新监听") => {
+    commandRunIdRef.current += 1;
+    commandAbortRef.current?.abort();
+    commandAbortRef.current = null;
+    feedbackAudioRef.current?.pause();
+    feedbackAudioRef.current = null;
+    setIsBusy(false);
+    setStatusMessage(message);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      commandRunIdRef.current += 1;
+      commandAbortRef.current?.abort();
+      feedbackAudioRef.current?.pause();
+    };
   }, []);
 
   const handleFinalTranscript = useCallback(
@@ -226,17 +259,29 @@ function WorkspaceApp() {
         return;
       }
 
+      commandAbortRef.current?.abort();
+      const commandAbort = new AbortController();
+      const runId = commandRunIdRef.current + 1;
+      commandRunIdRef.current = runId;
+      commandAbortRef.current = commandAbort;
+      const isCurrentRun = () => commandRunIdRef.current === runId && !commandAbort.signal.aborted;
       setIsBusy(true);
       setStatusMessage("正在解析语音指令");
       setLatestAsrMetrics(asrMetrics);
       try {
-        const canvasImageDataUrl = shouldAttachCanvasImage(text) ? await svgToPngDataUrl("voice-canvas-svg") : undefined;
+        const canvasImageDataUrl = shouldAttachCanvasImage(text) ? await svgToPngDataUrl("voice-canvas-svg", commandAbort.signal) : undefined;
+        if (!isCurrentRun()) {
+          return;
+        }
         if (canvasImageDataUrl) {
           setStatusMessage("正在精修当前画布");
         } else if (shouldShowImageGenerationState(text)) {
           setStatusMessage("正在生成图片");
         }
-        const response = await submitVoiceCommand(artwork.id, text, canvasImageDataUrl);
+        const response = await submitVoiceCommand(artwork.id, text, canvasImageDataUrl, commandAbort.signal);
+        if (!isCurrentRun()) {
+          return;
+        }
         setLatestPlan(response.plan);
         setLatestCommandMetrics(response.metrics);
         if (response.artwork) {
@@ -244,7 +289,10 @@ function WorkspaceApp() {
         }
         const exportFormat = getExportFormat(response.plan);
         if (exportFormat) {
-          await runArtworkExport(exportFormat, response.artwork ?? artwork);
+          await runArtworkExport(exportFormat, response.artwork ?? artwork, commandAbort.signal);
+          if (!isCurrentRun()) {
+            return;
+          }
         }
         setTimeline((items) => [
           {
@@ -258,8 +306,11 @@ function WorkspaceApp() {
           ...items
         ].slice(0, 12));
         setStatusMessage(response.message);
-        void playFeedback(response.message);
+        void playFeedback(response.message, commandAbort.signal);
       } catch (error: unknown) {
+        if (isAbortError(error) || commandAbort.signal.aborted || commandRunIdRef.current !== runId) {
+          return;
+        }
         const message = error instanceof Error ? error.message : "语音指令执行失败";
         setLatestPlan(null);
         setLatestCommandMetrics(null);
@@ -275,9 +326,12 @@ function WorkspaceApp() {
           ...items
         ].slice(0, 12));
         setStatusMessage(message);
-        void playFeedback(message);
+        void playFeedback(message, commandAbort.signal);
       } finally {
-        setIsBusy(false);
+        if (commandRunIdRef.current === runId) {
+          commandAbortRef.current = null;
+          setIsBusy(false);
+        }
       }
     },
     [artwork, isBusy, playFeedback]
@@ -339,6 +393,7 @@ function WorkspaceApp() {
               data-tooltip="重新监听"
               disabled={!voice.isSupported}
               onClick={() => {
+                cancelCurrentVoiceFlow();
                 voice.stop();
                 window.setTimeout(() => voice.start(), 160);
               }}

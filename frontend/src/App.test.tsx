@@ -226,12 +226,14 @@ describe("App", () => {
       });
     });
 
-    await waitFor(() => expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith("artwork-1", "画一个蓝色圆形", undefined));
+    await waitFor(() =>
+      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith("artwork-1", "画一个蓝色圆形", undefined, expect.any(AbortSignal))
+    );
     await waitFor(() => expect(screen.getAllByText("已添加蓝色圆形").length).toBeGreaterThan(0));
     expect(screen.getByText("添加一个蓝色圆形")).toBeInTheDocument();
     expect(screen.getByText("画一个蓝色圆形")).toBeInTheDocument();
     expect(screen.getByText("1 个对象")).toBeInTheDocument();
-    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
+    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形", expect.any(AbortSignal));
     expect(audioPlay).toHaveBeenCalledTimes(1);
   });
 
@@ -261,7 +263,7 @@ describe("App", () => {
       await finalTranscriptPromise;
     });
 
-    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形");
+    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("已添加蓝色圆形", expect.any(AbortSignal));
     expect(audioPlay).toHaveBeenCalledTimes(1);
   });
 
@@ -369,7 +371,7 @@ describe("App", () => {
 
     expect(apiMocks.submitVoiceCommand).toHaveBeenCalledTimes(6);
     expect(exportMocks.exportSvgAsPng).toHaveBeenCalledTimes(1);
-    expect(exportMocks.exportSvgAsPng).toHaveBeenCalledWith("voice-canvas-svg", "语音验收.png");
+    expect(exportMocks.exportSvgAsPng).toHaveBeenCalledWith("voice-canvas-svg", "语音验收.png", expect.any(AbortSignal));
     expect(screen.getByText("导出 PNG")).toBeInTheDocument();
     expect(screen.getAllByText("已准备导出").length).toBeGreaterThan(0);
   });
@@ -405,6 +407,55 @@ describe("App", () => {
     await act(async () => {
       await firstTranscriptPromise;
     });
+  });
+
+  it("cancels the in-flight voice command flow when restarting listening", async () => {
+    let resolveCommand: (response: CommandExecutionResponse) => void = () => undefined;
+    const pendingCommand = new Promise<CommandExecutionResponse>((resolve) => {
+      resolveCommand = resolve;
+    });
+    apiMocks.submitVoiceCommand.mockReturnValue(pendingCommand);
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    let firstTranscriptPromise: void | Promise<void>;
+    await act(async () => {
+      firstTranscriptPromise = voiceRuntime.onFinalTranscript?.("再加一个考试", null);
+    });
+    await waitFor(() => expect(apiMocks.submitVoiceCommand).toHaveBeenCalledTimes(1));
+    const requestSignal = apiMocks.submitVoiceCommand.mock.calls[0][3] as AbortSignal;
+
+    fireEvent.click(screen.getByRole("button", { name: "重新监听" }));
+
+    expect(requestSignal.aborted).toBe(true);
+    expect(voiceRuntime.stop).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCommand({
+        message: "已更新 PlantUML 图表",
+        plan: makePlan({ operations: [{ operation_type: "edit_plantuml", payload: {} }] }),
+        artwork: makeArtwork([
+          {
+            id: "plantuml-1",
+            type: "plantuml",
+            name: "学生管理系统ER图",
+            layer_id: "middle",
+            group_id: null,
+            semantic_tags: ["diagram.plantuml"],
+            transform: {},
+            geometry: { x: 0, y: 0, width: 400, height: 300 },
+            style: {},
+            z_index: 0,
+          },
+        ]),
+        metrics: makeMetrics(),
+      });
+      await firstTranscriptPromise;
+    });
+
+    expect(screen.getByText("0 个对象")).toBeInTheDocument();
+    expect(screen.queryByText("已更新 PlantUML 图表")).not.toBeInTheDocument();
+    expect(apiMocks.synthesizeSpeech).not.toHaveBeenCalled();
   });
 
   it("shows an image generation state while an artistic image command is pending", async () => {
@@ -468,9 +519,14 @@ describe("App", () => {
     });
 
     await waitFor(() =>
-      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith("artwork-1", "精修我的图片", "data:image/png;base64,canvas")
+      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith(
+        "artwork-1",
+        "精修我的图片",
+        "data:image/png;base64,canvas",
+        expect.any(AbortSignal)
+      )
     );
-    expect(exportMocks.svgToPngDataUrl).toHaveBeenCalledWith("voice-canvas-svg");
+    expect(exportMocks.svgToPngDataUrl).toHaveBeenCalledWith("voice-canvas-svg", expect.any(AbortSignal));
     await waitFor(() => expect(screen.getAllByText("已精修图片").length).toBeGreaterThan(0));
   });
 
@@ -493,7 +549,12 @@ describe("App", () => {
     });
 
     await waitFor(() =>
-      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith("artwork-1", "把人物肖像的眼睛精修一下", "data:image/png;base64,canvas")
+      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith(
+        "artwork-1",
+        "把人物肖像的眼睛精修一下",
+        "data:image/png;base64,canvas",
+        expect.any(AbortSignal)
+      )
     );
   });
 
@@ -510,7 +571,9 @@ describe("App", () => {
     await act(async () => {
       await voiceRuntime.onFinalTranscript?.("导出作品", null);
     });
-    await waitFor(() => expect(exportMocks.exportSvgAsPng).toHaveBeenCalledWith("voice-canvas-svg", "语音绘图作品.png"));
+    await waitFor(() =>
+      expect(exportMocks.exportSvgAsPng).toHaveBeenCalledWith("voice-canvas-svg", "语音绘图作品.png", expect.any(AbortSignal))
+    );
 
     fireEvent.click(screen.getAllByRole("button", { name: "导出 PNG" })[0]);
     await waitFor(() => expect(exportMocks.exportSvgAsPng).toHaveBeenCalledTimes(2));
@@ -530,7 +593,7 @@ describe("App", () => {
     await act(async () => {
       await voiceRuntime.onFinalTranscript?.("导出 SVG", null);
     });
-    await waitFor(() => expect(exportMocks.exportSvgFile).toHaveBeenCalledWith("voice-canvas-svg", "语音绘图作品.svg"));
+    await waitFor(() => expect(exportMocks.exportSvgFile).toHaveBeenCalledWith("voice-canvas-svg", "语音绘图作品.svg", expect.any(AbortSignal)));
 
     apiMocks.submitVoiceCommand.mockResolvedValueOnce({
       message: "已准备导出项目 JSON",
@@ -542,7 +605,7 @@ describe("App", () => {
     await act(async () => {
       await voiceRuntime.onFinalTranscript?.("导出项目 JSON", null);
     });
-    await waitFor(() => expect(exportMocks.exportArtworkJson).toHaveBeenCalledWith(makeArtwork(), "语音绘图作品.json"));
+    await waitFor(() => expect(exportMocks.exportArtworkJson).toHaveBeenCalledWith(makeArtwork(), "语音绘图作品.json", expect.any(AbortSignal)));
     expect(exportMocks.exportSvgAsPng).not.toHaveBeenCalled();
   });
 
@@ -556,6 +619,6 @@ describe("App", () => {
     });
 
     await waitFor(() => expect(screen.getAllByText("后端执行失败").length).toBeGreaterThan(0));
-    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("后端执行失败");
+    expect(apiMocks.synthesizeSpeech).toHaveBeenCalledWith("后端执行失败", expect.any(AbortSignal));
   });
 });

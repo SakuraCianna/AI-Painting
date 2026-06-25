@@ -183,13 +183,19 @@ function getAudioErrorMessage(error: unknown): string {
   return "麦克风或后端 ASR 不可用";
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOptions) {
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const shouldListenRef = useRef(false);
+  const listenRunIdRef = useRef(0);
   const providerRef = useRef<VoiceProvider>("none");
   const providerCapabilitiesRef = useRef<Record<string, AsrProviderCapability>>({});
   const isUploadingRef = useRef(false);
+  const restTranscriptionAbortRef = useRef<AbortController | null>(null);
   const streamSocketRef = useRef<WebSocket | null>(null);
   const streamReadyRef = useRef(false);
   const streamSentBytesRef = useRef(0);
@@ -221,18 +227,43 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     onFinalTranscriptRef.current = onFinalTranscript;
   }, [onFinalTranscript]);
 
+  const isActiveListenRun = useCallback((listenRunId: number) => {
+    return shouldListenRef.current && listenRunIdRef.current === listenRunId;
+  }, []);
+
   const closeAsrStream = useCallback(() => {
     const socket = streamSocketRef.current;
     streamSocketRef.current = null;
     streamReadyRef.current = false;
     streamSentBytesRef.current = 0;
     pendingStreamFinalizeRef.current = null;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+    }
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.close();
     }
   }, []);
 
+  const stopWebSpeechRecognition = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) {
+      return;
+    }
+    recognition.onstart = null;
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onresult = null;
+    recognitionRef.current = null;
+    recognition.stop();
+  }, []);
+
   const stopBackendAudio = useCallback(() => {
+    restTranscriptionAbortRef.current?.abort();
+    restTranscriptionAbortRef.current = null;
     processorRef.current?.disconnect();
     processorRef.current = null;
     sourceRef.current?.disconnect();
@@ -253,7 +284,10 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     closeAsrStream();
   }, [closeAsrStream]);
 
-  const startWebSpeechFallback = useCallback(() => {
+  const startWebSpeechFallback = useCallback((listenRunId: number) => {
+    if (!isActiveListenRun(listenRunId)) {
+      return;
+    }
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) {
       providerRef.current = "none";
@@ -266,36 +300,56 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       return;
     }
 
-    const recognition = recognitionRef.current ?? new Recognition();
+    stopWebSpeechRecognition();
+    const recognition = new Recognition();
     recognition.lang = "zh-CN";
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      if (recognitionRef.current !== recognition || !isActiveListenRun(listenRunId)) {
+        return;
+      }
       setIsListening(true);
       setIsSupported(true);
       setError(null);
     };
 
     recognition.onend = () => {
+      if (recognitionRef.current !== recognition || !isActiveListenRun(listenRunId)) {
+        return;
+      }
       setIsListening(false);
       if (shouldListenRef.current && providerRef.current === "web_speech") {
-        window.setTimeout(() => startWebSpeechFallback(), 350);
+        window.setTimeout(() => {
+          if (recognitionRef.current === recognition && isActiveListenRun(listenRunId)) {
+            startWebSpeechFallback(listenRunId);
+          }
+        }, 350);
       }
     };
 
     recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition || !isActiveListenRun(listenRunId)) {
+        return;
+      }
       setError(event.message || event.error || "语音识别失败");
     };
 
     recognition.onresult = (event) => {
+      if (recognitionRef.current !== recognition || !isActiveListenRun(listenRunId)) {
+        return;
+      }
       let interim = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
         const transcript = result[0]?.transcript.trim() ?? "";
         if (!transcript) {
           continue;
+        }
+        if (!isActiveListenRun(listenRunId)) {
+          return;
         }
         if (result.isFinal) {
           setLastFinalTranscript(transcript);
@@ -317,12 +371,11 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     setProviderLabel("Web Speech API");
     setProviderCapability(providerCapabilitiesRef.current[WEB_SPEECH_PROVIDER] ?? DEFAULT_WEB_SPEECH_CAPABILITY);
     try {
-      shouldListenRef.current = true;
       recognition.start();
     } catch {
       // 浏览器在已监听状态重复 start 会抛异常, 这里保持当前监听状态即可。
     }
-  }, []);
+  }, [isActiveListenRun, stopWebSpeechRecognition]);
 
   const finalizeRestTranscript = useCallback(
     async (chunks: Float32Array[], inputSampleRate: number) => {
@@ -331,12 +384,19 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       }
       isUploadingRef.current = true;
       setInterimTranscript("正在识别...");
+      const listenRunId = listenRunIdRef.current;
+      restTranscriptionAbortRef.current?.abort();
+      const transcriptionAbort = new AbortController();
+      restTranscriptionAbortRef.current = transcriptionAbort;
       try {
         const merged = mergeChunks(chunks);
         const samples = downsampleBuffer(merged, inputSampleRate, TARGET_SAMPLE_RATE);
         const wavBytes = encodeWav(samples, TARGET_SAMPLE_RATE);
         const audioDataUrl = `data:audio/wav;base64,${bytesToBase64(wavBytes)}`;
-        const response = await transcribeAudio(audioDataUrl, "zh");
+        const response = await transcribeAudio(audioDataUrl, "zh", transcriptionAbort.signal);
+        if (transcriptionAbort.signal.aborted || !isActiveListenRun(listenRunId)) {
+          return;
+        }
         const text = response.text.trim();
         if (!text) {
           throw new Error("ASR 没有返回文本");
@@ -348,19 +408,31 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         setInterimTranscript("");
         onFinalTranscriptRef.current(text, response.metrics);
       } catch (backendError) {
+        if (isAbortError(backendError) || transcriptionAbort.signal.aborted) {
+          return;
+        }
+        if (!isActiveListenRun(listenRunId)) {
+          return;
+        }
         setError(`后端 ASR 不可用, 已切换到 Web Speech API: ${getAudioErrorMessage(backendError)}`);
         stopBackendAudio();
         if (shouldListenRef.current) {
-          startWebSpeechFallback();
+          startWebSpeechFallback(listenRunId);
         }
       } finally {
-        isUploadingRef.current = false;
+        if (restTranscriptionAbortRef.current === transcriptionAbort) {
+          restTranscriptionAbortRef.current = null;
+          isUploadingRef.current = false;
+        }
       }
     },
-    [startWebSpeechFallback, stopBackendAudio]
+    [isActiveListenRun, startWebSpeechFallback, stopBackendAudio]
   );
 
-  const handleAsrStreamFinal = useCallback((payload: Record<string, unknown>) => {
+  const handleAsrStreamFinal = useCallback((payload: Record<string, unknown>, listenRunId: number) => {
+    if (!isActiveListenRun(listenRunId)) {
+      return;
+    }
     const text = typeof payload.text === "string" ? payload.text.trim() : "";
     if (!text) {
       setError("ASR 流式通道没有返回文本");
@@ -378,10 +450,13 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
     setLastFinalTranscript(text);
     setInterimTranscript("");
     onFinalTranscriptRef.current(text, metrics);
-  }, [providerLabel]);
+  }, [isActiveListenRun, providerLabel]);
 
   const handleAsrStreamMessage = useCallback(
-    (event: MessageEvent) => {
+    (event: MessageEvent, listenRunId: number) => {
+      if (!isActiveListenRun(listenRunId)) {
+        return;
+      }
       let payload: unknown;
       try {
         payload = JSON.parse(String(event.data));
@@ -394,10 +469,13 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       }
       const typedPayload = payload as Record<string, unknown>;
       if (typedPayload.type === "final") {
-        handleAsrStreamFinal(typedPayload);
+        handleAsrStreamFinal(typedPayload, listenRunId);
         return;
       }
       if (typedPayload.type === "recognizing") {
+        if (!isActiveListenRun(listenRunId)) {
+          return;
+        }
         setInterimTranscript("正在识别...");
         return;
       }
@@ -413,26 +491,41 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         }
       }
     },
-    [finalizeRestTranscript, handleAsrStreamFinal]
+    [finalizeRestTranscript, handleAsrStreamFinal, isActiveListenRun]
   );
 
   const openAsrStream = useCallback(
     (sampleRate: number) => {
       try {
+        const listenRunId = listenRunIdRef.current;
         const socket = createAsrStreamSocket();
         socket.binaryType = "arraybuffer";
         socket.onopen = () => {
+          if (streamSocketRef.current !== socket || !isActiveListenRun(listenRunId)) {
+            return;
+          }
           streamReadyRef.current = true;
           socket.send(JSON.stringify({ type: "start", language: "zh", sample_rate: sampleRate }));
         };
-        socket.onmessage = handleAsrStreamMessage;
+        socket.onmessage = (event) => {
+          if (streamSocketRef.current !== socket || !isActiveListenRun(listenRunId)) {
+            return;
+          }
+          handleAsrStreamMessage(event, listenRunId);
+        };
         socket.onerror = () => {
+          if (streamSocketRef.current !== socket || !isActiveListenRun(listenRunId)) {
+            return;
+          }
           streamReadyRef.current = false;
           setError("ASR 流式通道不可用, 将回退到整段提交");
         };
         socket.onclose = () => {
+          if (streamSocketRef.current !== socket) {
+            return;
+          }
           streamReadyRef.current = false;
-          if (streamSocketRef.current === socket) {
+          if (isActiveListenRun(listenRunId)) {
             streamSocketRef.current = null;
           }
         };
@@ -442,7 +535,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         streamSocketRef.current = null;
       }
     },
-    [handleAsrStreamMessage]
+    [handleAsrStreamMessage, isActiveListenRun]
   );
 
   const finalizeBackendTranscript = useCallback(
@@ -560,17 +653,17 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
   );
 
   const startBackendAudio = useCallback(
-    async (label: string, providerName: string) => {
+    async (label: string, providerName: string, listenRunId: number) => {
       const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
       if (!navigator.mediaDevices?.getUserMedia || !AudioContextClass) {
         setError("浏览器不支持麦克风录音, 已切换到 Web Speech API");
-        startWebSpeechFallback();
+        startWebSpeechFallback(listenRunId);
         return;
       }
 
       try {
         stopBackendAudio();
-        recognitionRef.current?.stop();
+        stopWebSpeechRecognition();
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             channelCount: 1,
@@ -578,7 +671,7 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
             noiseSuppression: true,
           },
         });
-        if (!shouldListenRef.current) {
+        if (!isActiveListenRun(listenRunId)) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -610,43 +703,53 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
         setIsListening(true);
         setError(null);
       } catch (audioError) {
+        if (!isActiveListenRun(listenRunId)) {
+          return;
+        }
         setError(`后端 ASR 录音失败, 已切换到 Web Speech API: ${getAudioErrorMessage(audioError)}`);
         stopBackendAudio();
-        startWebSpeechFallback();
+        startWebSpeechFallback(listenRunId);
       }
     },
-    [handleAudioFrame, openAsrStream, startWebSpeechFallback, stopBackendAudio]
+    [handleAudioFrame, isActiveListenRun, openAsrStream, startWebSpeechFallback, stopBackendAudio, stopWebSpeechRecognition]
   );
 
-  const startPreferredRecognition = useCallback(async () => {
-    shouldListenRef.current = true;
+  const startPreferredRecognition = useCallback(async (listenRunId: number) => {
     setError(null);
     try {
       const status = await fetchAsrProviders();
+      if (!isActiveListenRun(listenRunId)) {
+        return;
+      }
       providerCapabilitiesRef.current = status.provider_capabilities ?? {};
       const primaryProvider = status.primary_provider ?? status.providers[0];
       if (primaryProvider) {
         const label = status.provider_labels[primaryProvider] ?? "后端 ASR";
-        await startBackendAudio(label, primaryProvider);
+        await startBackendAudio(label, primaryProvider, listenRunId);
         return;
       }
     } catch {
+      if (!isActiveListenRun(listenRunId)) {
+        return;
+      }
       setError("无法读取后端 ASR 配置, 已切换到 Web Speech API");
     }
-    startWebSpeechFallback();
-  }, [startBackendAudio, startWebSpeechFallback]);
+    startWebSpeechFallback(listenRunId);
+  }, [isActiveListenRun, startBackendAudio, startWebSpeechFallback]);
 
   const start = useCallback(() => {
     shouldListenRef.current = true;
-    void startPreferredRecognition();
+    listenRunIdRef.current += 1;
+    void startPreferredRecognition(listenRunIdRef.current);
   }, [startPreferredRecognition]);
 
   const stop = useCallback(() => {
     shouldListenRef.current = false;
-    recognitionRef.current?.stop();
+    listenRunIdRef.current += 1;
+    stopWebSpeechRecognition();
     stopBackendAudio();
     setIsListening(false);
-  }, [stopBackendAudio]);
+  }, [stopBackendAudio, stopWebSpeechRecognition]);
 
   useEffect(() => {
     fetchAsrProviders()
@@ -675,10 +778,11 @@ export function useVoiceRecognition({ onFinalTranscript }: UseVoiceRecognitionOp
       });
     return () => {
       shouldListenRef.current = false;
-      recognitionRef.current?.stop();
+      listenRunIdRef.current += 1;
+      stopWebSpeechRecognition();
       stopBackendAudio();
     };
-  }, [stopBackendAudio]);
+  }, [stopBackendAudio, stopWebSpeechRecognition]);
 
   return {
     isSupported,

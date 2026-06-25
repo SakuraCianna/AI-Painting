@@ -373,6 +373,41 @@ describe("useVoiceRecognition", () => {
     expect(result.current.interimTranscript).toBe("");
   });
 
+  it("ignores stale Web Speech final results after listening restarts", async () => {
+    vi.mocked(fetchAsrProviders).mockResolvedValue({
+      providers: [],
+      provider_labels: { web_speech: "Web Speech API" },
+      primary_provider: null,
+      fallback_provider: "web_speech",
+    });
+    const onFinalTranscript = vi.fn();
+    const { result } = renderHook(() => useVoiceRecognition({ onFinalTranscript }));
+
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(result.current.provider).toBe("web_speech"));
+    const staleRecognition = recognitionInstance;
+
+    act(() => {
+      result.current.stop();
+    });
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(recognitionInstance).not.toBe(staleRecognition));
+
+    act(() => {
+      staleRecognition?.onresult?.(speechEvent("旧的语音结果"));
+    });
+    expect(onFinalTranscript).not.toHaveBeenCalled();
+
+    act(() => {
+      recognitionInstance?.onresult?.(speechEvent("新的语音结果"));
+    });
+    await waitFor(() => expect(onFinalTranscript).toHaveBeenCalledWith("新的语音结果", null));
+  });
+
   it("shows an unsupported error when neither backend nor Web Speech is available", async () => {
     vi.unstubAllGlobals();
     apiMocks.fetchAsrProviders.mockResolvedValue({
@@ -474,6 +509,187 @@ describe("useVoiceRecognition", () => {
     });
     expect(stopTrack).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores stale ASR stream final results after listening restarts", async () => {
+    const socket1 = new FakeWebSocket();
+    const socket2 = new FakeWebSocket();
+    const onFinalTranscript = vi.fn();
+
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        sampleRate = 16000;
+        destination = {};
+        close = vi.fn().mockResolvedValue(undefined);
+
+        createMediaStreamSource() {
+          return { connect: vi.fn(), disconnect: vi.fn() };
+        }
+
+        createScriptProcessor() {
+          return { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null } as unknown as ScriptProcessorNode;
+        }
+      }
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      mediaDevices: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() }],
+        }),
+      },
+    });
+    vi.mocked(fetchAsrProviders).mockResolvedValue({
+      providers: ["xiaomi"],
+      provider_labels: { xiaomi: "小米 MiMo ASR", web_speech: "Web Speech API" },
+      provider_capabilities: {
+        xiaomi: {
+          mode: "segment",
+          streaming_supported: false,
+          interim_results_supported: false,
+          websocket_transport_supported: true,
+          partial_transcript_supported: false,
+          segment_submission: true,
+          silence_stop_ms: 1500,
+          description: "流式上传后整段识别",
+        },
+      },
+      primary_provider: "xiaomi",
+      fallback_provider: "web_speech",
+    });
+    vi.mocked(createAsrStreamSocket).mockReturnValueOnce(socket1 as unknown as WebSocket).mockReturnValueOnce(socket2 as unknown as WebSocket);
+    const { result } = renderHook(() => useVoiceRecognition({ onFinalTranscript }));
+
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(createAsrStreamSocket).toHaveBeenCalledTimes(1));
+    act(() => {
+      socket1.open();
+    });
+
+    act(() => {
+      result.current.stop();
+    });
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(createAsrStreamSocket).toHaveBeenCalledTimes(2));
+    act(() => {
+      socket2.open();
+    });
+
+    act(() => {
+      socket1.receive({
+        type: "final",
+        text: "旧的流式识别",
+        provider: "xiaomi",
+        provider_label: "小米 MiMo ASR",
+      });
+    });
+    expect(onFinalTranscript).not.toHaveBeenCalled();
+
+    act(() => {
+      socket2.receive({
+        type: "final",
+        text: "新的流式识别",
+        provider: "xiaomi",
+        provider_label: "小米 MiMo ASR",
+      });
+    });
+    await waitFor(() => expect(onFinalTranscript).toHaveBeenCalledWith("新的流式识别", null));
+  });
+
+  it("aborts a pending REST ASR transcription when listening stops", async () => {
+    let now = 0;
+    let processor: ScriptProcessorNode | null = null;
+    let resolveTranscription: (response: Awaited<ReturnType<typeof transcribeAudio>>) => void = () => undefined;
+    const pendingTranscription = new Promise<Awaited<ReturnType<typeof transcribeAudio>>>((resolve) => {
+      resolveTranscription = resolve;
+    });
+    const stopTrack = vi.fn();
+    const close = vi.fn().mockResolvedValue(undefined);
+    const onFinalTranscript = vi.fn();
+
+    vi.spyOn(window.performance, "now").mockImplementation(() => now);
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        sampleRate = 16000;
+        destination = {};
+        close = close;
+
+        createMediaStreamSource() {
+          return { connect: vi.fn(), disconnect: vi.fn() };
+        }
+
+        createScriptProcessor() {
+          processor = { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null } as unknown as ScriptProcessorNode;
+          return processor;
+        }
+      }
+    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      mediaDevices: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: stopTrack }],
+        }),
+      },
+    });
+    apiMocks.fetchAsrProviders.mockResolvedValue({
+      providers: ["xiaomi"],
+      provider_labels: { xiaomi: "小米 MiMo ASR", web_speech: "Web Speech API" },
+      primary_provider: "xiaomi",
+      fallback_provider: "web_speech",
+    });
+    vi.mocked(transcribeAudio).mockReturnValue(pendingTranscription);
+    const { result } = renderHook(() => useVoiceRecognition({ onFinalTranscript }));
+
+    await act(async () => {
+      result.current.start();
+    });
+    await waitFor(() => expect(result.current.provider).toBe("backend"));
+
+    act(() => {
+      now = 0;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0.08, 0.09, 0.07])));
+      now = 600;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0.08, 0.09, 0.07])));
+      now = 2201;
+      processor?.onaudioprocess?.(audioEvent(new Float32Array([0, 0, 0])));
+    });
+
+    await waitFor(() => expect(transcribeAudio).toHaveBeenCalledTimes(1));
+    const transcriptionSignal = vi.mocked(transcribeAudio).mock.calls[0][2] as AbortSignal;
+
+    act(() => {
+      result.current.stop();
+    });
+
+    expect(transcriptionSignal.aborted).toBe(true);
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveTranscription({
+        text: "不应继续执行",
+        provider: "xiaomi",
+        provider_label: "小米 MiMo ASR",
+        attempts: [],
+        metrics: {
+          total_ms: 800,
+          audio_bytes: 3200,
+          attempt_count: 1,
+          successful_provider: "xiaomi",
+          fallback_count: 0,
+        },
+      });
+      await pendingTranscription;
+    });
+
+    expect(onFinalTranscript).not.toHaveBeenCalled();
   });
 
   it("ignores a short noise spike before the silence window", async () => {
