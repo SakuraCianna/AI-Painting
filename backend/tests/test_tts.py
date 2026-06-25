@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,7 +72,7 @@ def test_synthesize_with_xiaomi_success_and_http_error(monkeypatch: pytest.Monke
         _FakeTtsResponse(200, {"choices": [{"message": {"audio": {"data": encoded}}}]}),
         _FakeTtsResponse(429, {"error": "rate limited"}),
     ]
-    calls: list[dict[str, object]] = []
+    calls: list[dict[str, Any]] = []
 
     class FakeAsyncClient:
         def __init__(self, timeout: float) -> None:

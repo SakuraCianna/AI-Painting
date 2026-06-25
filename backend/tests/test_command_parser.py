@@ -153,6 +153,35 @@ def test_parse_boolean_shape_presets(text: str, expected_preset: str) -> None:
     assert f"shape.boolean.{expected_preset}" in obj["semantic_tags"]
 
 
+def test_parse_follow_up_tree_as_executable_scene_objects() -> None:
+    plan = parse_command("再加一棵树")
+
+    assert not plan.requires_confirmation
+    assert [operation.operation_type for operation in plan.operations] == ["add_object", "add_object"]
+    tags = [operation.payload["object"]["semantic_tags"] for operation in plan.operations]
+    assert all("tree" in item for item in tags)
+    assert {operation.payload["object"]["group_id"] for operation in plan.operations} == {"tree"}
+
+
+def test_parse_follow_up_sun_as_executable_sky_object() -> None:
+    plan = parse_command("再加一个太阳")
+
+    assert not plan.requires_confirmation
+    obj = plan.operations[0].payload["object"]
+    assert obj["type"] == "circle"
+    assert "sun" in obj["semantic_tags"]
+
+
+def test_parse_follow_up_tree_and_flower_keeps_separate_semantic_tags() -> None:
+    plan = parse_command("再加一棵树和一朵花")
+
+    objects = [operation.payload["object"] for operation in plan.operations]
+    tree_parts = [obj for obj in objects if "tree" in obj["semantic_tags"]]
+    flower = next(obj for obj in objects if "shape.boolean.flower" in obj["semantic_tags"])
+    assert len(tree_parts) == 2
+    assert "tree" not in flower["semantic_tags"]
+
+
 def test_parse_pink_five_petal_flower() -> None:
     plan = parse_command("画一个粉色五瓣花")
 
@@ -592,6 +621,35 @@ def test_parse_cozy_cabin_scene_as_executable_plan() -> None:
     assert plan.scene_plan is not None
     assert plan.scene_plan.expected_object_count == 14
     assert [operation.operation_type for operation in plan.operations] == ["add_object"] * 14
+
+
+def test_parse_canvas_style_transfer_as_image_to_image_polish() -> None:
+    plan = parse_command("把这个画换成Minecraft风格的图片")
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert "Minecraft风格" in payload["prompt"]
+    assert "保留当前画布的主体构图和对象位置" in payload["prompt"]
+    assert payload["target"] is None
+    assert plan.scene_plan is not None
+    assert plan.scene_plan.intent == "polish_artwork"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_prompt"),
+    [
+        ("把这张图片换成Minecraft风格", "Minecraft风格"),
+        ("把这张图换成Minecraft风格图片", "Minecraft风格"),
+        ("把当前画面改成像素风格", "像素风格"),
+    ],
+)
+def test_parse_canvas_style_transfer_from_common_image_phrases(text: str, expected_prompt: str) -> None:
+    plan = parse_command(text)
+
+    assert plan.operations[0].operation_type == "polish_image_asset"
+    payload = plan.operations[0].payload
+    assert expected_prompt in payload["prompt"]
+    assert "保留当前画布的主体构图和对象位置" in payload["prompt"]
+    assert payload["target"] is None
 
 
 def test_parse_layer_move_many() -> None:

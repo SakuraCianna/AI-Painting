@@ -738,6 +738,7 @@ def test_agent_template_extracts_custom_er_entities_and_relationships(monkeypatc
     assert 'entity "图书"' in source
     assert 'entity "借阅记录"' in source
     assert 'entity "馆员"' in source
+    assert result.plan.explanation is not None
     assert "读者借阅图书" in result.plan.explanation
     assert "馆员管理图书" in result.plan.explanation
 
@@ -807,6 +808,7 @@ def test_agent_template_extracts_custom_org_chart_names(monkeypatch) -> None:
         "后端工程师",
     ]:
         assert label in source
+    assert result.plan.explanation is not None
     assert "产品经理" in result.plan.explanation
     assert "后端工程师" in result.plan.explanation
 
@@ -901,6 +903,7 @@ def test_agent_template_extracts_custom_swimlane_step_names(monkeypatch) -> None
     source = result.plan.operations[0].payload["object"]["geometry"]["source"]
     for step_name in ["需求评审", "原型设计", "开发联调", "验收发布"]:
         assert step_name in source
+    assert result.plan.explanation is not None
     assert "需求评审" in result.plan.explanation
     assert "验收发布" in result.plan.explanation
 

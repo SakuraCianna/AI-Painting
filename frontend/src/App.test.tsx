@@ -558,6 +558,34 @@ describe("App", () => {
     );
   });
 
+  it("attaches the current canvas image when converting the whole canvas to an image style", async () => {
+    apiMocks.submitVoiceCommand.mockResolvedValue({
+      message: "已生成 Minecraft 风格图片",
+      plan: makePlan({
+        raw_text: "把这个画换成Minecraft风格的图片",
+        normalized_text: "把这个画换成minecraft风格的图片",
+        operations: [{ operation_type: "polish_image_asset", payload: {} }],
+      }),
+      artwork: makeArtwork(),
+      metrics: makeMetrics(),
+    });
+    render(<App />);
+    await screen.findByText("语音画布已准备");
+
+    await act(async () => {
+      await voiceRuntime.onFinalTranscript?.("把这个画换成Minecraft风格的图片", null);
+    });
+
+    await waitFor(() =>
+      expect(apiMocks.submitVoiceCommand).toHaveBeenCalledWith(
+        "artwork-1",
+        "把这个画换成Minecraft风格的图片",
+        "data:image/png;base64,canvas",
+        expect.any(AbortSignal)
+      )
+    );
+  });
+
   it("runs PNG export from command results and from the toolbar", async () => {
     apiMocks.submitVoiceCommand.mockResolvedValue({
       message: "已准备导出",

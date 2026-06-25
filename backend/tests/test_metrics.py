@@ -7,7 +7,7 @@ from app.metrics import percentile, summarize_latency_rows
 
 
 def test_percentile_uses_nearest_rank_for_small_samples() -> None:
-    values = [400, 100, 300, 200]
+    values = [400.0, 100.0, 300.0, 200.0]
 
     assert percentile(values, 50) == 200
     assert percentile(values, 75) == 300

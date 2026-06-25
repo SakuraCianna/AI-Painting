@@ -25,6 +25,67 @@ def _seed_drawing_object(artwork_id: str, obj: dict) -> None:
         apply_operation(connection, artwork_id, OperationRequest(operation_type="add_object", payload={"object": obj}))
 
 
+def _seed_outdoor_scaffold(artwork_id: str) -> None:
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "天空",
+            "layer_id": "background",
+            "semantic_tags": ["sky", "scene.background"],
+            "geometry": {"x": 0, "y": 0, "width": 1024, "height": 470},
+            "style": {"fill": "#7dd3fc", "stroke": "#7dd3fc", "strokeWidth": 0, "opacity": 1},
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "草地",
+            "layer_id": "background",
+            "semantic_tags": ["grass", "scene.grass"],
+            "geometry": {"x": 0, "y": 470, "width": 1024, "height": 298},
+            "style": {"fill": "#15803d", "stroke": "#15803d", "strokeWidth": 0, "opacity": 1},
+        },
+    )
+
+
+def _bounds_for_test_object(obj: dict) -> tuple[float, float, float, float]:
+    geometry = obj["geometry"]
+    if "cx" in geometry and "radius" in geometry:
+        radius = float(geometry["radius"])
+        return (
+            float(geometry["cx"]) - radius,
+            float(geometry["cy"]) - radius,
+            float(geometry["cx"]) + radius,
+            float(geometry["cy"]) + radius,
+        )
+    if "cx" in geometry and "rx" in geometry and "ry" in geometry:
+        return (
+            float(geometry["cx"]) - float(geometry["rx"]),
+            float(geometry["cy"]) - float(geometry["ry"]),
+            float(geometry["cx"]) + float(geometry["rx"]),
+            float(geometry["cy"]) + float(geometry["ry"]),
+        )
+    if {"x", "y", "width", "height"}.issubset(geometry):
+        return (
+            float(geometry["x"]),
+            float(geometry["y"]),
+            float(geometry["x"]) + float(geometry["width"]),
+            float(geometry["y"]) + float(geometry["height"]),
+        )
+    return (0.0, 0.0, 0.0, 0.0)
+
+
+def _overlap_ratio_for_test(obj: dict, other: dict) -> float:
+    left_a, top_a, right_a, bottom_a = _bounds_for_test_object(obj)
+    left_b, top_b, right_b, bottom_b = _bounds_for_test_object(other)
+    overlap_width = max(0.0, min(right_a, right_b) - max(left_a, left_b))
+    overlap_height = max(0.0, min(bottom_a, bottom_b) - max(top_a, top_b))
+    area = max(1.0, (right_a - left_a) * (bottom_a - top_a))
+    return overlap_width * overlap_height / area
+
+
 def test_create_artwork_and_execute_voice_command(client: TestClient) -> None:
     create_response = client.post("/api/artworks", json={"title": "语音练习", "width": 1024, "height": 768, "background": "#ffffff"})
     assert create_response.status_code == 200
@@ -76,6 +137,194 @@ def test_execute_parameterized_moon_voice_command(client: TestClient) -> None:
     assert obj["geometry"]["preset"] == "moon"
     assert obj["geometry"]["phase"] == 0.5
     assert "shape.boolean.moon" in obj["semantic_tags"]
+
+
+def test_follow_up_cloud_uses_sky_position_in_existing_outdoor_scene(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "户外场景"}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "天空",
+            "layer_id": "background",
+            "semantic_tags": ["sky", "scene.background"],
+            "geometry": {"x": 0, "y": 0, "width": 1024, "height": 470},
+            "style": {"fill": "#7dd3fc", "stroke": "#7dd3fc", "strokeWidth": 0, "opacity": 1},
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "草地",
+            "layer_id": "background",
+            "semantic_tags": ["grass", "scene.grass"],
+            "geometry": {"x": 0, "y": 470, "width": 1024, "height": 298},
+            "style": {"fill": "#15803d", "stroke": "#15803d", "strokeWidth": 0, "opacity": 1},
+        },
+    )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再加一朵白云"})
+
+    assert response.status_code == 200
+    cloud = response.json()["artwork"]["objects"][-1]
+    assert "cloud" in cloud["semantic_tags"]
+    assert cloud["layer_id"] == "background"
+    assert cloud["geometry"]["y"] < 210
+    assert cloud["z_index"] < 20
+
+
+def test_follow_up_house_avoids_covering_existing_house_in_scene(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "房子场景"}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "已有房子主体",
+            "layer_id": "middle",
+            "group_id": "house",
+            "semantic_tags": ["house", "house.body", "shape.rect"],
+            "geometry": {"x": 350, "y": 330, "width": 320, "height": 240, "radius": 6},
+            "style": {"fill": "#faf7ed", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+        },
+    )
+    first_body = client.get(f"/api/artworks/{artwork_id}").json()["objects"][0]
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再画一个房子"})
+
+    assert response.status_code == 200
+    house_bodies = [obj for obj in response.json()["artwork"]["objects"] if "house.body" in obj["semantic_tags"]]
+    assert len(house_bodies) >= 2
+    second_body = house_bodies[-1]
+    assert second_body["geometry"]["x"] != first_body["geometry"]["x"]
+    assert second_body["geometry"]["y"] >= 390
+    assert second_body["geometry"]["x"] + second_body["geometry"]["width"] <= 1024
+    assert second_body["group_id"] != first_body["group_id"]
+
+
+def test_follow_up_adds_house_and_cloud_from_compound_scene_phrase(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "户外组合追加"}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "天空",
+            "layer_id": "background",
+            "semantic_tags": ["sky", "scene.background"],
+            "geometry": {"x": 0, "y": 0, "width": 1024, "height": 470},
+            "style": {"fill": "#7dd3fc", "stroke": "#7dd3fc", "strokeWidth": 0, "opacity": 1},
+        },
+    )
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "草地",
+            "layer_id": "background",
+            "semantic_tags": ["grass", "scene.grass"],
+            "geometry": {"x": 0, "y": 470, "width": 1024, "height": 298},
+            "style": {"fill": "#15803d", "stroke": "#15803d", "strokeWidth": 0, "opacity": 1},
+        },
+    )
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "还有房子和白云"})
+
+    assert response.status_code == 200
+    objects = response.json()["artwork"]["objects"]
+    assert any("house.body" in obj["semantic_tags"] for obj in objects)
+    cloud = next(obj for obj in objects if "cloud" in obj["semantic_tags"])
+    assert cloud["geometry"]["y"] < 210
+    assert cloud["layer_id"] == "background"
+
+
+def test_follow_up_ground_objects_use_open_ground_slots(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "地面追加场景"}).json()["id"]
+    _seed_outdoor_scaffold(artwork_id)
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "中心房子",
+            "layer_id": "middle",
+            "group_id": "house",
+            "semantic_tags": ["house", "house.body", "shape.rect"],
+            "geometry": {"x": 352, "y": 330, "width": 320, "height": 240, "radius": 6},
+            "style": {"fill": "#faf7ed", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+        },
+    )
+    house = client.get(f"/api/artworks/{artwork_id}").json()["objects"][-1]
+
+    response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再加一棵树和一朵花"})
+
+    assert response.status_code == 200
+    objects = response.json()["artwork"]["objects"]
+    tree_parts = [obj for obj in objects if "tree" in obj["semantic_tags"]]
+    flower = next(obj for obj in objects if "shape.boolean.flower" in obj["semantic_tags"])
+    assert len(tree_parts) >= 2
+    assert all(_bounds_for_test_object(obj)[1] >= 360 for obj in tree_parts)
+    assert _bounds_for_test_object(flower)[1] >= 470
+    assert all(_overlap_ratio_for_test(obj, house) < 0.12 for obj in tree_parts)
+    assert _overlap_ratio_for_test(flower, house) < 0.12
+
+
+def test_follow_up_celestial_objects_use_sky_slots(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "天空追加场景"}).json()["id"]
+    _seed_outdoor_scaffold(artwork_id)
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "中心房子",
+            "layer_id": "middle",
+            "group_id": "house",
+            "semantic_tags": ["house", "house.body", "shape.rect"],
+            "geometry": {"x": 352, "y": 330, "width": 320, "height": 240, "radius": 6},
+            "style": {"fill": "#faf7ed", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+        },
+    )
+
+    sun_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再加一个太阳"})
+    moon_response = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再加一个月亮"})
+
+    assert sun_response.status_code == 200
+    assert moon_response.status_code == 200
+    objects = moon_response.json()["artwork"]["objects"]
+    sun = next(obj for obj in objects if "sun" in obj["semantic_tags"])
+    moon = next(obj for obj in objects if "shape.boolean.moon" in obj["semantic_tags"])
+    assert _bounds_for_test_object(sun)[3] <= 320
+    assert _bounds_for_test_object(moon)[3] <= 320
+    assert sun["layer_id"] == "background"
+    assert moon["layer_id"] == "background"
+    assert sun["z_index"] < 20
+    assert moon["z_index"] < 20
+
+
+def test_follow_up_basic_shape_avoids_existing_subject_without_overriding_plain_draw(client: TestClient) -> None:
+    artwork_id = client.post("/api/artworks", json={"title": "普通形状追加"}).json()["id"]
+    _seed_drawing_object(
+        artwork_id,
+        {
+            "type": "rect",
+            "name": "中心主体",
+            "layer_id": "middle",
+            "semantic_tags": ["main.subject", "shape.rect"],
+            "geometry": {"x": 412, "y": 284, "width": 200, "height": 200, "radius": 8},
+            "style": {"fill": "#f8fafc", "stroke": "#111827", "strokeWidth": 3, "opacity": 1},
+        },
+    )
+    subject = client.get(f"/api/artworks/{artwork_id}").json()["objects"][-1]
+
+    follow_up = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "再加一个红色圆形"})
+    plain = client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个蓝色圆形"})
+
+    assert follow_up.status_code == 200
+    assert plain.status_code == 200
+    objects = plain.json()["artwork"]["objects"]
+    red_circle = next(obj for obj in objects if obj["type"] == "circle" and obj["style"]["fill"] == "#dc2626")
+    blue_circle = next(obj for obj in objects if obj["type"] == "circle" and obj["style"]["fill"] == "#2563eb")
+    assert _overlap_ratio_for_test(red_circle, subject) < 0.12
+    assert blue_circle["geometry"]["cx"] == 512
+    assert blue_circle["geometry"]["cy"] == 384
 
 
 def test_latency_metrics_api_summarizes_voice_command_logs(client: TestClient) -> None:
@@ -1328,6 +1577,27 @@ def test_polish_image_placeholder_uses_canvas_snapshot(client: TestClient, monke
     assert image_object["type"] == "image"
     assert image_object["name"] == "精修版本"
     assert image_object["geometry"]["provider"] == "placeholder"
+    assert "polished.image" in image_object["semantic_tags"]
+
+
+def test_style_transfer_canvas_to_image_uses_canvas_snapshot(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("AI_PAINTING_IMAGE_EDIT_PROVIDER", "placeholder")
+    artwork_id = client.post("/api/artworks", json={}).json()["id"]
+    client.post(f"/api/artworks/{artwork_id}/commands", json={"text": "画一个蓝色圆形"})
+
+    response = client.post(
+        f"/api/artworks/{artwork_id}/commands",
+        json={"text": "把这个画换成Minecraft风格的图片", "canvas_image_data_url": SAMPLE_PNG_DATA_URL},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["operations"][0]["operation_type"] == "add_object"
+    image_object = body["artwork"]["objects"][-1]
+    assert image_object["type"] == "image"
+    assert image_object["geometry"]["provider"] == "placeholder"
+    assert "Minecraft风格" in image_object["geometry"]["prompt"]
+    assert "保留当前画布的主体构图和对象位置" in image_object["geometry"]["prompt"]
     assert "polished.image" in image_object["semantic_tags"]
 
 

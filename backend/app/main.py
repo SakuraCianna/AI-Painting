@@ -15,6 +15,7 @@ from .asr import AsrProvidersUnavailable, get_asr_provider_status, transcribe_au
 from .asr_stream import StreamingAsrProtocolError, StreamingAsrSession
 from .command_parser import normalize_text, parse_command, repair_asr_command_text
 from .config import load_env_file
+from .context_layout import adjust_plan_for_existing_artwork
 from .database import get_db, init_db
 from .drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
 from .image_generation import ImageGenerationError, generate_image_object, polish_image_object
@@ -708,6 +709,7 @@ async def api_execute_command(
     message = "未执行任何操作"
     execute_started_at = perf_counter()
     try:
+        plan = adjust_plan_for_existing_artwork(plan, current_artwork)
         plan = await _resolve_generated_image_operations(
             plan,
             db=db,

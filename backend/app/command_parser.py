@@ -332,13 +332,14 @@ def normalize_text(text: str) -> str:
 
 
 def repair_asr_command_text(text: str) -> str:
+    original = text.strip(" \t\r\n.,!?;:，。！？；：")
     normalized = normalize_text(text).strip(" \t\r\n.,!?;:，。！？；：")
     if not normalized:
         return normalized
     if not any(keyword in normalized for keyword in ("画", "创建", "生成", "写")):
-        return normalized
+        return original
     if any(keyword in normalized for keyword in DIAGRAM_TYPE_KEYWORDS):
-        return normalized
+        return original
     for suffix in ASR_ER_SUFFIX_CONFUSIONS:
         if normalized.endswith(suffix):
             base = normalized[: -len(suffix)].rstrip(" 的")
@@ -346,7 +347,7 @@ def repair_asr_command_text(text: str) -> str:
                 return f"{base}的ER图"
     if normalized.endswith("系统的"):
         return f"{normalized.rstrip('的')}的ER图"
-    return normalized
+    return original
 
 
 def _looks_like_er_repair_context(text: str) -> bool:
@@ -567,8 +568,30 @@ def _scene_clarification_plan(raw_text: str, normalized_text: str) -> CommandPla
     )
 
 
+CANVAS_STYLE_TRANSFER_TARGETS = (
+    "这个画",
+    "这幅画",
+    "这张画",
+    "当前画",
+    "当前画面",
+    "当前画布",
+    "这张图片",
+    "这张图",
+    "当前图片",
+    "当前图像",
+    "当前图",
+    "画面",
+    "作品",
+    "画布",
+)
+
+
 def _is_image_polish_request(normalized_text: str, render_mode: str) -> bool:
     if render_mode == "image_polish":
+        return True
+    has_style_transfer_target = any(keyword in normalized_text for keyword in CANVAS_STYLE_TRANSFER_TARGETS)
+    has_style_transfer_action = any(keyword in normalized_text for keyword in ("换成", "改成", "变成", "转成", "转换成"))
+    if has_style_transfer_target and has_style_transfer_action and "风格" in normalized_text:
         return True
     has_polish_hint = any(keyword in normalized_text for keyword in IMAGE_POLISH_HINTS)
     if has_polish_hint:
@@ -999,6 +1022,86 @@ def _offset_object_for_repetition(obj: dict[str, Any], index: int, count: int, g
     return obj
 
 
+def _sun_object(text: str) -> dict[str, Any]:
+    x, y = _position(text)
+    return _decorate_object(
+        text,
+        {
+            "type": "circle",
+            "name": "太阳",
+            "geometry": {"cx": x, "cy": y, "radius": _extract_number(text, "半径", 72)},
+            "style": {"fill": _find_color(text, "#facc15"), "stroke": "#f97316", "strokeWidth": 3, "opacity": 1},
+            "semantic_tags": ["sun", "shape.circle"],
+        },
+    )
+
+
+def _tree_objects(text: str) -> list[dict[str, Any]]:
+    x, y = _position(text)
+    group_id = "tree"
+    trunk = _decorate_object(
+        text,
+        {
+            "type": "rect",
+            "name": "树干",
+            "group_id": group_id,
+            "geometry": {"x": x - 18, "y": y + 64, "width": 36, "height": 90, "radius": 8},
+            "style": {"fill": "#92400e", "stroke": "#78350f", "strokeWidth": 2, "opacity": 1},
+            "semantic_tags": ["tree", "tree.trunk", "shape.rect"],
+        },
+    )
+    crown = _decorate_object(
+        text,
+        {
+            "type": "circle",
+            "name": "树冠",
+            "group_id": group_id,
+            "geometry": {"cx": x, "cy": y + 28, "radius": 55},
+            "style": {"fill": _find_color(text, "#16a34a"), "stroke": "#15803d", "strokeWidth": 2, "opacity": 1},
+            "semantic_tags": ["tree", "tree.crown", "shape.circle"],
+        },
+    )
+    return [trunk, crown]
+
+
+def _add_object_plan(raw_text: str, normalized_text: str, objects: list[dict[str, Any]], *, summary: str) -> CommandPlan:
+    operations = [OperationRequest(operation_type="add_object", payload={"object": obj}) for obj in objects]
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="extend_scene",
+            summary=summary,
+            steps=[
+                ScenePlanStep(
+                    step_id=f"add-object-{index + 1}",
+                    title=f"添加{obj.get('name') or '对象'}",
+                    intent="add_object",
+                    operation_indexes=[index],
+                )
+                for index, obj in enumerate(objects)
+            ],
+            expected_object_count=len(objects),
+        ),
+        confidence=0.86,
+    )
+
+
+def _scene_object_followup_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    objects: list[dict[str, Any]] = []
+    if "树" in normalized_text:
+        objects.extend(_tree_objects(normalized_text))
+    if "花" in normalized_text:
+        flower_text = re.sub(r"树[^，。,.、和]*[和、]?", "", normalized_text) or "花"
+        objects.append(_make_object(flower_text, "flower"))
+    if "太阳" in normalized_text:
+        objects.append(_sun_object(normalized_text))
+    if "月" in normalized_text and "月亮" in normalized_text or any(keyword in normalized_text for keyword in ("上弦月", "下弦月", "满月", "圆月", "新月")):
+        objects.append(_make_object(normalized_text, "moon"))
+    return _add_object_plan(raw_text, normalized_text, objects, summary="追加场景物件并交给布局约束系统放置")
+
+
 def _multi_shape_plan(raw_text: str, normalized_text: str, shape: str) -> CommandPlan:
     count = _extract_draw_count(normalized_text, 1)
     gap = 170 if count <= 4 else 110
@@ -1160,6 +1263,28 @@ def _house_plan(raw_text: str, normalized_text: str) -> CommandPlan:
             expected_object_count=5,
         ),
         confidence=0.9,
+    )
+
+
+def _house_cloud_followup_plan(raw_text: str, normalized_text: str) -> CommandPlan:
+    operations = list(_house_plan(raw_text, normalized_text).operations)
+    cloud = _make_object("白云" if "白云" in normalized_text else normalized_text, "cloud")
+    cloud["name"] = "白云" if "白云" in normalized_text else "云朵"
+    operations.append(OperationRequest(operation_type="add_object", payload={"object": cloud}))
+    return CommandPlan(
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        operations=operations,
+        scene_plan=ScenePlan(
+            intent="extend_scene",
+            summary="在当前场景中追加房子和云朵",
+            steps=[
+                ScenePlanStep(step_id="add-house", title="追加房子结构", intent="add_group", operation_indexes=list(range(5))),
+                ScenePlanStep(step_id="add-cloud", title="追加天空云朵", intent="add_object", operation_indexes=[5]),
+            ],
+            expected_object_count=len(operations),
+        ),
+        confidence=0.86,
     )
 
 
@@ -1520,7 +1645,7 @@ def _image_target_selector(text: str, *, target_region: str | None = None, targe
 
 
 def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
-    style_prompt = normalized_text
+    style_prompt = raw_text.strip() or normalized_text
     replacements = {
         "精修我的图片": "精修当前画布, 保留主要构图, 丰富细节, 提升质感",
         "精修当前图片": "精修当前画布, 保留主要构图, 丰富细节, 提升质感",
@@ -1529,14 +1654,19 @@ def _polish_image_plan(raw_text: str, normalized_text: str) -> CommandPlan:
         "丰富当前图片": "丰富当前画布, 保留主要构图, 增加细节和层次",
         "美化当前图片": "美化当前画布, 保留主要构图, 提升视觉完成度",
     }
+    rewritten = False
     for source, replacement in replacements.items():
-        style_prompt = style_prompt.replace(source, replacement)
-    if style_prompt == normalized_text:
-        style_prompt = f"{normalized_text}, 保留当前画布的主体构图和对象位置"
+        if source in normalized_text:
+            style_prompt = replacement
+            rewritten = True
+            break
+    if not rewritten:
+        style_prompt = f"{style_prompt}, 保留当前画布的主体构图和对象位置"
     target_region = _find_image_region_target(normalized_text)
     target_subject = _find_image_subject_target(normalized_text)
     adjustment = _find_image_adjustment(normalized_text)
-    target = _image_target_selector(normalized_text, target_region=target_region, target_subject=target_subject)
+    uses_canvas_snapshot = any(keyword in normalized_text for keyword in CANVAS_STYLE_TRANSFER_TARGETS) and not target_region and not target_subject
+    target = None if uses_canvas_snapshot else _image_target_selector(normalized_text, target_region=target_region, target_subject=target_subject)
     if target_subject:
         style_prompt = f"{style_prompt}, 目标对象: {target_subject}"
     if target_region:
@@ -1804,10 +1934,23 @@ def parse_command(text: str) -> CommandPlan:
         return _portrait_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("温馨的小屋", "温馨小屋")) and "树" in normalized and ("路" in normalized or "小路" in normalized):
         return _cozy_cabin_scene_plan(text, normalized)
+    elif ("房子" in normalized or "小屋" in normalized) and "云" in normalized and any(keyword in normalized for keyword in ("还有", "再", "加", "添加")):
+        return _house_cloud_followup_plan(text, normalized)
+    elif (
+        "场景" not in normalized
+        and "太阳" in normalized
+        and "云" in normalized
+        and any(keyword in normalized for keyword in ("画", "创建", "添加", "加", "还有", "再"))
+    ):
+        return _sun_cloud_plan(text, normalized)
+    elif (
+        "场景" not in normalized
+        and any(keyword in normalized for keyword in ("树", "太阳"))
+        and any(keyword in normalized for keyword in ("画", "创建", "添加", "加", "还有", "再"))
+    ):
+        return _scene_object_followup_plan(text, normalized)
     elif _needs_scene_planner(normalized):
         return _scene_clarification_plan(text, normalized)
-    elif "太阳" in normalized and "云" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
-        return _sun_cloud_plan(text, normalized)
     elif "房子" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
         return _house_plan(text, normalized)
     elif "星" in normalized and _extract_count(normalized, 1) > 1:
