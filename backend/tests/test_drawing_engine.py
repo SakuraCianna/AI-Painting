@@ -914,3 +914,76 @@ def test_tree_trunk_coloring_skip(tmp_path: Path) -> None:
         trunk_obj = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == trunk_id)
         assert trunk_obj.style["fill"] == "#000000"
 
+
+def test_spatial_selector_for_complex_shapes(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        # Left path (center_x around 130)
+        left_path_id = _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "path",
+                "name": "左侧云朵",
+                "semantic_tags": ["cloud"],
+                "geometry": {
+                    "commands": [
+                        {"cmd": "M", "x": 100, "y": 100},
+                        {"cmd": "C", "x1": 120, "y1": 80, "x2": 140, "y2": 80, "x": 160, "y": 100}
+                    ]
+                },
+                "style": {"fill": "#ffffff"},
+            }
+        )
+        # Right path (center_x around 530)
+        right_path_id = _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "path",
+                "name": "右侧云朵",
+                "semantic_tags": ["cloud"],
+                "geometry": {
+                    "commands": [
+                        {"cmd": "M", "x": 500, "y": 100},
+                        {"cmd": "C", "x1": 520, "y1": 80, "x2": 540, "y2": 80, "x": 560, "y": 100}
+                    ]
+                },
+                "style": {"fill": "#ffffff"},
+            }
+        )
+
+        # Query leftmost cloud
+        left_matches = find_objects(
+            connection,
+            artwork_id,
+            {"selector": "all", "semantic_tag": "cloud", "position": "leftmost"}
+        )
+        assert [obj.name for obj in left_matches] == ["左侧云朵"]
+
+        # Query rightmost cloud
+        right_matches = find_objects(
+            connection,
+            artwork_id,
+            {"selector": "all", "semantic_tag": "cloud", "position": "rightmost"}
+        )
+        assert [obj.name for obj in right_matches] == ["右侧云朵"]
+
+
+def test_empty_plan_preserves_redo_stack(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        _add_object(
+            connection,
+            artwork_id,
+            {"type": "circle", "name": "圆形", "geometry": {"cx": 512, "cy": 384, "radius": 64}, "style": {"fill": "#2563eb"}},
+        )
+        assert undo_last_operation(connection, artwork_id).objects == []
+
+        apply_operation_plan(connection, artwork_id, [])
+
+        redone = redo_last_operation(connection, artwork_id)
+        assert [obj.type for obj in redone.objects] == ["circle"]
+
+
+

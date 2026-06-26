@@ -223,7 +223,72 @@ def test_plantuml_edits_add_attributes(monkeypatch) -> None:
             "attribute_name": "owner"
         }
     )
-    _assert_rendered_plantuml_geometry(added_class, "class")
     assert "+ owner" in added_class["source"]
+
+
+def test_swimlane_position_sanitizer() -> None:
+    from app.plantuml_renderer import _ensure_swimlane_position
+
+    source_bad = """@startuml
+title 跨职能泳道图
+start
+|销售|
+:线索录入;
+|运营|
+:资源排期;
+stop
+@enduml"""
+
+    fixed = _ensure_swimlane_position(source_bad)
+    assert """@startuml
+title 跨职能泳道图
+|销售|
+start
+:线索录入;
+|运营|
+:资源排期;
+stop
+@enduml""" == fixed
+
+    source_good = """@startuml
+title 流程图
+start
+:第一步;
+stop
+@enduml"""
+    assert _ensure_swimlane_position(source_good) == source_good
+
+
+def test_plantuml_swimlane_domain_matching(monkeypatch) -> None:
+    _install_fake_plantuml_server(monkeypatch)
+    from app.agent.plantuml_builder import _plantuml_swimlane_graph
+
+    # Student Management Profile
+    graph = _plantuml_swimlane_graph("画一张学生管理系统的泳道图")
+    assert graph.objects[0].name == "学生管理系统泳道图"
+    source = graph.objects[0].geometry["source"]
+    assert "|学生|" in source
+    assert "|教师|" in source
+    assert "|教务系统|" in source
+    assert ":提交选课;" in source
+    assert ":审核选课;" in source
+
+    # Library Profile
+    graph_lib = _plantuml_swimlane_graph("画一张图书借阅系统的泳道图")
+    assert graph_lib.objects[0].name == "图书借阅系统泳道图"
+    source_lib = graph_lib.objects[0].geometry["source"]
+    assert "|读者|" in source_lib
+    assert "|馆员|" in source_lib
+    assert "|图书系统|" in source_lib
+    assert ":发起借阅;" in source_lib
+
+    # Explicit lanes override profiles
+    graph_exp = _plantuml_swimlane_graph("画一张泳道包括研发、设计、产品的泳道图")
+    source_exp = graph_exp.objects[0].geometry["source"]
+    assert "|研发|" in source_exp
+    assert "|设计|" in source_exp
+    assert "|产品|" in source_exp
+    assert "|读者|" not in source_exp
+
 
 

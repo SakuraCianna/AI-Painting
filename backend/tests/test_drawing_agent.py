@@ -1034,3 +1034,21 @@ def test_agent_model_scene_graph_runs_through_graph(monkeypatch) -> None:
     assert result.metrics.agent_attempted is True
     assert result.metrics.agent_succeeded is True
     assert result.metrics.agent_planner_ms == result.metrics.llm_planner_ms
+
+
+def test_agent_edit_planner_door_color_changes(monkeypatch) -> None:
+    from app import main
+
+    monkeypatch.setenv("AI_PAINTING_ENABLE_AGENT_PLANNER", "true")
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+
+    for command in ("把门换成蓝色", "把门涂成蓝色", "把门画成蓝色", "把门改成天蓝"):
+        result = asyncio.run(main.build_command_plan_with_metrics(command))
+        assert result.plan.planner_source == "agent"
+        assert len(result.plan.operations) == 1
+        assert result.plan.operations[0].operation_type == "set_style_many"
+        target = result.plan.operations[0].payload["target"]
+        style = result.plan.operations[0].payload["style"]
+        assert target["semantic_tag"] == "house.door"
+        assert style["fill"] in ("#2563eb", "#7dd3fc")
+

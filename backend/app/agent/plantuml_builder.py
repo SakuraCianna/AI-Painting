@@ -111,6 +111,51 @@ SWIMLANE_STEP_NAMES = {
     "开发": "开发实现",
     "测试": "测试验收",
 }
+
+
+class SwimlaneProfile(NamedTuple):
+    keywords: tuple[str, ...]
+    lanes: tuple[str, ...]
+    steps: tuple[tuple[str, str], ...]
+
+
+SWIMLANE_PROFILES = (
+    SwimlaneProfile(
+        ("学生管理", "选课", "学籍", "成绩管理", "教务", "学生", "班级管理"),
+        ("学生", "教师", "教务系统"),
+        (("学生", "提交选课"), ("教师", "审核选课"), ("教务系统", "安排课程"), ("学生", "确认课表")),
+    ),
+    SwimlaneProfile(
+        ("图书管理", "图书馆", "借阅", "图书"),
+        ("读者", "馆员", "图书系统"),
+        (("读者", "发起借阅"), ("馆员", "审核借阅"), ("图书系统", "更新库存"), ("读者", "确认取书")),
+    ),
+    SwimlaneProfile(
+        ("医院", "挂号", "门诊", "诊疗", "就诊", "医疗", "患者"),
+        ("患者", "医生", "挂号系统"),
+        (("患者", "提交挂号"), ("挂号系统", "分配医生"), ("医生", "进行诊疗"), ("患者", "缴费取药")),
+    ),
+    SwimlaneProfile(
+        ("酒店", "客房", "预订", "入住", "民宿"),
+        ("住客", "前台", "系统"),
+        (("住客", "提交预订"), ("系统", "确认订单"), ("前台", "办理入住"), ("住客", "入住客房")),
+    ),
+    SwimlaneProfile(
+        ("电商", "商城", "购物", "商品", "订单", "支付"),
+        ("买家", "商家", "支付平台"),
+        (("买家", "提交订单"), ("支付平台", "扣除款项"), ("商家", "发货处理"), ("买家", "确认收货")),
+    ),
+)
+SWIMLANE_FALLBACK_PROFILE = SwimlaneProfile(
+    (),
+    SWIMLANE_DEFAULT_LANES,
+    (
+        ("销售", "线索录入"),
+        ("运营", "资源排期"),
+        ("交付", "交付验收"),
+        ("销售", "方案确认"),
+    ),
+)
 ORG_CHART_DEFAULT_TOP_ROLE = "负责人"
 ORG_CHART_DEFAULT_MIDDLE_ROLES = ("产品组", "设计组", "研发组")
 ORG_CHART_DEFAULT_BOTTOM_ROLES = ("用户研究", "交互设计", "前端开发", "后端开发")
@@ -347,7 +392,8 @@ def _split_short_chinese_list(raw_items: str, *, max_items: int) -> list[str]:
     for raw_item in re.split(r"[、,，/和与及]+", raw_items):
         item = raw_item.strip(" 。；;:：")
         item = re.sub(r"^(分别是|分别为|包括|包含|有|为|是)", "", item).strip(" 。；;:：")
-        item = re.sub(r"(泳道|部门|角色|节点|步骤|任务|里程碑|这些|等等|等)$", "", item).strip(" 。；;:：")
+        item = re.sub(r"(泳道图|泳道|部门|角色|节点|步骤|任务|里程碑|这些|等等|等|图)$", "", item).strip(" 。；;:：")
+        item = re.sub(r"的$", "", item).strip(" 。；;:：")
         if 1 <= len(item) <= 12 and item not in items:
             items.append(item)
     return items[:max_items]
@@ -388,9 +434,9 @@ def _extract_org_chart_roles(text: str) -> tuple[str, list[str], list[str]]:
 def _extract_swimlane_names(text: str) -> list[str]:
     match = re.search(r"(?:泳道(?:包括|包含|有|为|是)|包括|包含|有)([^。,.，；;]+)", text)
     if match is None:
-        return list(SWIMLANE_DEFAULT_LANES)
+        return []
     names = _split_short_chinese_list(match.group(1), max_items=4)
-    return names if len(names) >= 2 else list(SWIMLANE_DEFAULT_LANES)
+    return names if len(names) >= 2 else []
 
 
 def _extract_swimlane_step_names(text: str) -> list[str]:
@@ -534,12 +580,29 @@ def _plantuml_gantt_graph(text: str) -> AgentSceneGraph:
 def _plantuml_swimlane_graph(text: str) -> AgentSceneGraph:
     lane_names = _extract_swimlane_names(text)
     custom_step_names = _extract_swimlane_step_names(text)
-    steps: list[tuple[str, str]] = []
-    for index in range(4):
-        lane_name = lane_names[min(index, len(lane_names) - 1)] if len(lane_names) <= 2 else lane_names[index % len(lane_names)]
-        step_name = custom_step_names[index] if index < len(custom_step_names) else _swimlane_step_name(lane_name, index)
-        steps.append((lane_name, step_name))
-    title = "跨职能泳道图"
+    
+    if not lane_names and not custom_step_names:
+        profile = next(
+            (p for p in SWIMLANE_PROFILES if any(kw in text for kw in p.keywords)),
+            SWIMLANE_FALLBACK_PROFILE
+        )
+        lane_names = list(profile.lanes)
+        steps = list(profile.steps)
+    else:
+        if not lane_names:
+            lane_names = list(SWIMLANE_DEFAULT_LANES)
+        steps = []
+        for index in range(4):
+            lane_name = lane_names[min(index, len(lane_names) - 1)] if len(lane_names) <= 2 else lane_names[index % len(lane_names)]
+            step_name = custom_step_names[index] if index < len(custom_step_names) else _swimlane_step_name(lane_name, index)
+            steps.append((lane_name, step_name))
+
+    title = _extract_title(text, ("泳道图", "泳道"), "跨职能泳道图")
+    if title.endswith("的泳道图"):
+        title = title[:-4] + "泳道图"
+    elif title.endswith("的泳道"):
+        title = title[:-3] + "泳道"
+
     lines = [
         "@startuml",
         "' AI Painting generated PlantUML swimlane activity diagram",
@@ -549,11 +612,17 @@ def _plantuml_swimlane_graph(text: str) -> AgentSceneGraph:
             "skinparam ActivityBorderColor #5F6368",
         ),
         f"title {title}",
-        "start",
     ]
-    for lane_name, step_name in steps:
-        lines.append(f"|{lane_name}|")
-        lines.append(f":{step_name};")
+    if steps:
+        first_lane, first_step = steps[0]
+        lines.append(f"|{first_lane}|")
+        lines.append("start")
+        lines.append(f":{first_step};")
+        for lane_name, step_name in steps[1:]:
+            lines.append(f"|{lane_name}|")
+            lines.append(f":{step_name};")
+    else:
+        lines.append("start")
     lines.extend(["stop", "@enduml"])
     lane_summary = "、".join(lane_names)
     step_summary = "、".join(step_name for _, step_name in steps)

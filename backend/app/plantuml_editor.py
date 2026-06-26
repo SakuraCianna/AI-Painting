@@ -77,6 +77,8 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
     else:
         raise PlantUMLEditError(f"不支持的 PlantUML 编辑动作: {action}")
 
+    from .plantuml_renderer import _ensure_swimlane_position
+    next_source = _ensure_swimlane_position(next_source)
     result = render_plantuml_source(next_source)
     from .agent.plantuml_builder import _fit_plantuml_box
     x, y, width, height, display_scale = _fit_plantuml_box(result.width, result.height)

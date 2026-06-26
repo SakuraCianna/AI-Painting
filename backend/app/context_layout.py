@@ -530,14 +530,8 @@ def _find_matching_objects_in_list(objects: list[DrawingObject], selector: dict[
     position = selector.get("position")
     if position and matched:
         def get_center(obj: DrawingObject):
-            geom = obj.geometry
-            if "cx" in geom or "cy" in geom:
-                return float(geom.get("cx", 0)), float(geom.get("cy", 0))
-            if "x" in geom or "y" in geom:
-                w = float(geom.get("width", geom.get("size", 0)))
-                h = float(geom.get("height", geom.get("size", 0)))
-                return float(geom.get("x", 0)) + w / 2, float(geom.get("y", 0)) + h / 2
-            return 0.0, 0.0
+            bounds = _bounds_for_object(obj)
+            return bounds.center_x, bounds.center_y
         if position in {"left", "leftmost"}:
             matched = [min(matched, key=lambda o: get_center(o)[0])]
         elif position in {"right", "rightmost"}:

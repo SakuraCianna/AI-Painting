@@ -8,7 +8,8 @@ from ..schemas import CommandPlan, OperationRequest, ScenePlan, ScenePlanStep
 from .plantuml_edit_planner import build_plantuml_edit_plan
 
 
-EDIT_KEYWORDS = ("改成", "换成", "变成", "设为", "设置为", "移动", "往", "向", "放大", "缩小", "变大", "变小", "改大", "改小", "加粗")
+COLOR_EDIT_KEYWORDS = ("改成", "换成", "变成", "设为", "设置为", "设置成", "改为", "变为", "涂成", "刷成", "画成", "修改为", "修改成")
+EDIT_KEYWORDS = COLOR_EDIT_KEYWORDS + ("移动", "往", "向", "放大", "缩小", "变大", "变小", "改大", "改小", "加粗")
 CREATE_KEYWORDS = ("画", "创建", "生成", "新建", "添加")
 CLAUSE_SPLIT_PATTERN = re.compile(r"(?:，|,|。|；|;|并且|同时|然后|接着|并)")
 NUMBER_PATTERN = re.compile(r"([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:像素|px)?")
@@ -81,7 +82,7 @@ def _find_shape(text: str) -> str | None:
 
 
 def _find_replacement_shape(text: str) -> str | None:
-    link_positions = [(text.rfind(link_word), link_word) for link_word in ("改成", "换成", "变成") if link_word in text]
+    link_positions = [(text.rfind(link_word), link_word) for link_word in COLOR_EDIT_KEYWORDS if link_word in text]
     if not link_positions:
         return None
     position, link_word = sorted(link_positions)[-1]
@@ -260,7 +261,7 @@ def _target_is_specific(target: dict[str, Any] | None) -> bool:
 def _build_style_operation(clause: str, target: dict[str, Any]) -> OperationRequest | None:
     style: dict[str, Any] = {}
     color = _find_color(clause)
-    if color and any(keyword in clause for keyword in ("改成", "换成", "变成", "设为", "设置为", "涂成", "刷成")):
+    if color and any(keyword in clause for keyword in COLOR_EDIT_KEYWORDS):
         style["fill"] = color
         style["stroke"] = color
     if "加粗" in clause:
@@ -308,7 +309,14 @@ def build_local_edit_plan(raw_text: str, normalized_text: str) -> CommandPlan | 
     if plantuml_plan is not None:
         return plantuml_plan
 
-    if any(keyword in normalized_text for keyword in CREATE_KEYWORDS):
+    has_create = False
+    for keyword in CREATE_KEYWORDS:
+        if keyword in normalized_text:
+            if keyword == "画" and ("画成" in normalized_text or "画为" in normalized_text):
+                continue
+            has_create = True
+            break
+    if has_create:
         return None
     if not any(keyword in normalized_text for keyword in EDIT_KEYWORDS):
         return None

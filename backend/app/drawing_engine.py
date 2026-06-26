@@ -593,8 +593,10 @@ def apply_operation(
 
 
 def apply_operation_plan(connection: sqlite3.Connection, artwork_id: str, operations: list[OperationRequest]) -> str:
+    if not operations:
+        return "未执行任何操作"
     messages: list[str] = []
-    command_group_id = new_id() if operations else None
+    command_group_id = new_id()
     try:
         clear_redo_stack(connection, artwork_id, commit=False)
         for operation_index, operation in enumerate(operations):

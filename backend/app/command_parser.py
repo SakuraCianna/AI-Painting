@@ -79,6 +79,7 @@ ASR_ER_CONTEXT_HINTS = (
     "用户",
 )
 COLOR_LINK_WORDS = ("是", "为", "设为", "设置为", "设置成", "改为", "改成", "变为", "变成", "用", "使用", "涂成", "刷成", "画成")
+COLOR_EDIT_KEYWORDS = ("改成", "换成", "变成", "设为", "设置为", "设置成", "改为", "变为", "涂成", "刷成", "画成", "修改为", "修改成")
 POSITION_RANK_PATTERN = re.compile(r"第?\s*([0-9]+|[零一二两三四五六七八九十百]+)\s*(?:个|棵|扇|座|条|张|块|只|件)")
 LAYER_MAP: dict[str, str] = {
     "背景层": "background",
@@ -456,7 +457,7 @@ def _find_house_body_color(text: str, default: str) -> str:
 
 
 def _find_replacement_shape(text: str) -> str | None:
-    link_positions = [(text.rfind(link_word), link_word) for link_word in ("改成", "换成", "变成") if link_word in text]
+    link_positions = [(text.rfind(link_word), link_word) for link_word in COLOR_EDIT_KEYWORDS if link_word in text]
     if not link_positions:
         return None
     position, link_word = sorted(link_positions)[-1]
@@ -2039,7 +2040,7 @@ def parse_command(text: str) -> CommandPlan:
         target = _target_selector(normalized, include_layer=False)
         operation_type = "set_metadata_many" if _is_many_target(target) else "set_metadata"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "layer_id": _extract_layer_id(normalized)}))
-    elif "所有" in normalized and any(keyword in normalized for keyword in ("改成", "换成")):
+    elif "所有" in normalized and any(keyword in normalized for keyword in COLOR_EDIT_KEYWORDS):
         colors = _find_all_colors(normalized)
         source_color = colors[0][1] if colors else None
         target_color = colors[1][1] if len(colors) > 1 else _find_color(normalized)
@@ -2059,14 +2060,14 @@ def parse_command(text: str) -> CommandPlan:
             dy = amount if "下" in normalized else -amount if "上" in normalized else 0
             operations.append(OperationRequest(operation_type="move_many", payload={"target": {"selector": "all"}, "dx": dx, "dy": dy}))
     elif (
-        any(keyword in normalized for keyword in ("改成", "换成", "变成"))
+        any(keyword in normalized for keyword in COLOR_EDIT_KEYWORDS)
         and (replacement_shape := _find_replacement_shape(normalized))
         and "画" not in normalized
     ):
         target = _target_selector(normalized, include_color=False)
         operation_type = "replace_shape_many" if _is_many_target(target) else "replace_shape"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "shape": replacement_shape}))
-    elif any(keyword in normalized for keyword in ("改成", "换成", "加粗")):
+    elif any(keyword in normalized for keyword in COLOR_EDIT_KEYWORDS) or "加粗" in normalized:
         style: dict[str, Any] = {}
         if any(color in normalized for color in COLOR_MAP):
             style["fill"] = _find_color(normalized)

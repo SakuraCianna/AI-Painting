@@ -43,7 +43,8 @@ class PlantUMLRenderError(ValueError):
 
 def render_plantuml_source(source: str) -> PlantUMLRenderResult:
     clean_source = validate_plantuml_source(source)
-    render_source = _with_default_font(clean_source)
+    fixed_source = _ensure_swimlane_position(clean_source)
+    render_source = _with_default_font(fixed_source)
     return _render_plantuml_cached(
         render_source,
         _resolve_plantuml_jar_path(),
@@ -304,3 +305,25 @@ def _read_int_env(name: str, default: int) -> int:
     except ValueError:
         return default
     return max(1000, value)
+
+
+def _ensure_swimlane_position(source: str) -> str:
+    if "start" not in source.lower():
+        return source
+    lines = source.splitlines()
+    first_start_idx = -1
+    first_lane_idx = -1
+    lane_text = ""
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.lower() == "start" and first_start_idx == -1:
+            first_start_idx = idx
+        elif stripped.startswith("|") and stripped.endswith("|") and len(stripped) > 2 and first_lane_idx == -1:
+            first_lane_idx = idx
+            lane_text = stripped
+    if first_start_idx != -1 and first_lane_idx != -1 and first_lane_idx > first_start_idx:
+        lines.pop(first_lane_idx)
+        lines.insert(first_start_idx, lane_text)
+        return "\n".join(lines)
+    return source
+
