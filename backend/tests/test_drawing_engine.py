@@ -827,14 +827,7 @@ def test_plantuml_fallback_and_scale(tmp_path: Path) -> None:
         assert len(matches) == 1
         assert matches[0].id == plantuml_id
 
-        apply_operation(
-            connection,
-            artwork_id,
-            OperationRequest(
-                operation_type="scale_object",
-                payload={"target": {"object_id": plantuml_id}, "factor": 2.0}
-            )
-        )
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload={"target": {"object_id": plantuml_id}, "factor": 2.0}))
 
         obj = get_artwork(connection, artwork_id).objects[0]
         assert obj.geometry["width"] == 400
@@ -842,14 +835,7 @@ def test_plantuml_fallback_and_scale(tmp_path: Path) -> None:
         assert obj.geometry["displayScale"] == 2.0
         assert obj.geometry["isDownscaled"] is False
 
-        apply_operation(
-            connection,
-            artwork_id,
-            OperationRequest(
-                operation_type="scale_object",
-                payload={"target": {"object_id": plantuml_id}, "factor": 0.25}
-            )
-        )
+        apply_operation(connection, artwork_id, OperationRequest(operation_type="scale_object", payload={"target": {"object_id": plantuml_id}, "factor": 0.25}))
         obj = get_artwork(connection, artwork_id).objects[0]
         assert obj.geometry["width"] == 100
         assert obj.geometry["displayScale"] == 0.5
@@ -885,13 +871,7 @@ def test_tree_trunk_coloring_skip(tmp_path: Path) -> None:
         apply_operation(
             connection,
             artwork_id,
-            OperationRequest(
-                operation_type="set_style_many",
-                payload={
-                    "target": {"semantic_tag": "tree"},
-                    "style": {"fill": "#22c55e", "stroke": "#15803d"}
-                }
-            )
+            OperationRequest(operation_type="set_style_many", payload={"target": {"semantic_tag": "tree"}, "style": {"fill": "#22c55e", "stroke": "#15803d"}}),
         )
 
         trunk_obj = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == trunk_id)
@@ -903,13 +883,7 @@ def test_tree_trunk_coloring_skip(tmp_path: Path) -> None:
         apply_operation(
             connection,
             artwork_id,
-            OperationRequest(
-                operation_type="set_style",
-                payload={
-                    "target": {"semantic_tag": "tree.trunk"},
-                    "style": {"fill": "#000000"}
-                }
-            )
+            OperationRequest(operation_type="set_style", payload={"target": {"semantic_tag": "tree.trunk"}, "style": {"fill": "#000000"}}),
         )
         trunk_obj = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == trunk_id)
         assert trunk_obj.style["fill"] == "#000000"
@@ -919,54 +893,36 @@ def test_spatial_selector_for_complex_shapes(tmp_path: Path) -> None:
     with _connection(tmp_path) as connection:
         artwork_id = _create_artwork(connection)
         # Left path (center_x around 130)
-        left_path_id = _add_object(
+        _add_object(
             connection,
             artwork_id,
             {
                 "type": "path",
                 "name": "左侧云朵",
                 "semantic_tags": ["cloud"],
-                "geometry": {
-                    "commands": [
-                        {"cmd": "M", "x": 100, "y": 100},
-                        {"cmd": "C", "x1": 120, "y1": 80, "x2": 140, "y2": 80, "x": 160, "y": 100}
-                    ]
-                },
+                "geometry": {"commands": [{"cmd": "M", "x": 100, "y": 100}, {"cmd": "C", "x1": 120, "y1": 80, "x2": 140, "y2": 80, "x": 160, "y": 100}]},
                 "style": {"fill": "#ffffff"},
-            }
+            },
         )
         # Right path (center_x around 530)
-        right_path_id = _add_object(
+        _add_object(
             connection,
             artwork_id,
             {
                 "type": "path",
                 "name": "右侧云朵",
                 "semantic_tags": ["cloud"],
-                "geometry": {
-                    "commands": [
-                        {"cmd": "M", "x": 500, "y": 100},
-                        {"cmd": "C", "x1": 520, "y1": 80, "x2": 540, "y2": 80, "x": 560, "y": 100}
-                    ]
-                },
+                "geometry": {"commands": [{"cmd": "M", "x": 500, "y": 100}, {"cmd": "C", "x1": 520, "y1": 80, "x2": 540, "y2": 80, "x": 560, "y": 100}]},
                 "style": {"fill": "#ffffff"},
-            }
+            },
         )
 
         # Query leftmost cloud
-        left_matches = find_objects(
-            connection,
-            artwork_id,
-            {"selector": "all", "semantic_tag": "cloud", "position": "leftmost"}
-        )
+        left_matches = find_objects(connection, artwork_id, {"selector": "all", "semantic_tag": "cloud", "position": "leftmost"})
         assert [obj.name for obj in left_matches] == ["左侧云朵"]
 
         # Query rightmost cloud
-        right_matches = find_objects(
-            connection,
-            artwork_id,
-            {"selector": "all", "semantic_tag": "cloud", "position": "rightmost"}
-        )
+        right_matches = find_objects(connection, artwork_id, {"selector": "all", "semantic_tag": "cloud", "position": "rightmost"})
         assert [obj.name for obj in right_matches] == ["右侧云朵"]
 
 
@@ -984,6 +940,3 @@ def test_empty_plan_preserves_redo_stack(tmp_path: Path) -> None:
 
         redone = redo_last_operation(connection, artwork_id)
         assert [obj.type for obj in redone.objects] == ["circle"]
-
-
-

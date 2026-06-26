@@ -326,4 +326,3 @@ def _ensure_swimlane_position(source: str) -> str:
         lines.insert(first_start_idx, lane_text)
         return "\n".join(lines)
     return source
-

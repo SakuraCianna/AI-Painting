@@ -2005,17 +2005,10 @@ def parse_command(text: str) -> CommandPlan:
         and _has_draw_or_create_keyword(normalized, include_addition=True)
     ):
         return _house_cloud_followup_plan(text, normalized)
-    elif (
-        "场景" not in normalized
-        and "太阳" in normalized
-        and "云" in normalized
-        and _has_draw_or_create_keyword(normalized, include_addition=True)
-    ):
+    elif "场景" not in normalized and "太阳" in normalized and "云" in normalized and _has_draw_or_create_keyword(normalized, include_addition=True):
         return _sun_cloud_plan(text, normalized)
     elif (
-        "场景" not in normalized
-        and any(keyword in normalized for keyword in ("树", "太阳"))
-        and _has_draw_or_create_keyword(normalized, include_addition=True)
+        "场景" not in normalized and any(keyword in normalized for keyword in ("树", "太阳")) and _has_draw_or_create_keyword(normalized, include_addition=True)
     ):
         return _scene_object_followup_plan(text, normalized)
     elif _needs_scene_planner(normalized):
@@ -2030,7 +2023,9 @@ def parse_command(text: str) -> CommandPlan:
         and _has_draw_or_create_keyword(latest_create_clause, include_addition=False)
     ):
         return _multi_shape_plan(text, latest_create_clause, repeated_shape)
-    elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not (any(keyword in normalized for keyword in ("新建", "保存")) or _has_draw_or_create_keyword(normalized, include_addition=False)):
+    elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not (
+        any(keyword in normalized for keyword in ("新建", "保存")) or _has_draw_or_create_keyword(normalized, include_addition=False)
+    ):
         object_name = _extract_object_name(normalized)
         if object_name:
             target = {"selector": "latest"} if "它" in normalized else _target_selector(normalized, include_layer=False, include_color=False)
@@ -2060,9 +2055,7 @@ def parse_command(text: str) -> CommandPlan:
             dy = amount if "下" in normalized else -amount if "上" in normalized else 0
             operations.append(OperationRequest(operation_type="move_many", payload={"target": {"selector": "all"}, "dx": dx, "dy": dy}))
     elif (
-        any(keyword in normalized for keyword in COLOR_EDIT_KEYWORDS)
-        and (replacement_shape := _find_replacement_shape(normalized))
-        and "画" not in normalized
+        any(keyword in normalized for keyword in COLOR_EDIT_KEYWORDS) and (replacement_shape := _find_replacement_shape(normalized)) and "画" not in normalized
     ):
         target = _target_selector(normalized, include_color=False)
         operation_type = "replace_shape_many" if _is_many_target(target) else "replace_shape"
@@ -2080,14 +2073,15 @@ def parse_command(text: str) -> CommandPlan:
     elif any(keyword in normalized for keyword in ("移动到", "移到", "放到", "置于")) and not any(keyword in normalized for keyword in ("层", "图层")):
         dest = _extract_destination_position(normalized)
         if dest:
-            clean_text = re.sub(r"(?:移动到|移到|放到|置于)\s*(?:画面的|画布的)?(?:左上|右上|左下|右下|左边|左侧|右边|右侧|顶部|上方|底部|下方|中间|中央|中间区域)(?:角|区域|位置)?", "", normalized)
+            clean_text = re.sub(
+                r"(?:移动到|移到|放到|置于)\s*(?:画面的|画布的)?(?:左上|右上|左下|右下|左边|左侧|右边|右侧|顶部|上方|底部|下方|中间|中央|中间区域)(?:角|区域|位置)?",
+                "",
+                normalized,
+            )
             clean_text = re.sub(r"移动|移|放|置", "", clean_text)
             target = _target_selector(clean_text)
             operation_type = "move_many" if _is_many_target(target) else "move_object"
-            operations.append(OperationRequest(
-                operation_type=operation_type,
-                payload={"target": target, "dx": 0, "dy": 0, "destination": dest}
-            ))
+            operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "dx": 0, "dy": 0, "destination": dest}))
     elif "移动" in normalized or "往" in normalized or "向" in normalized:
         amount = _extract_movement_amount(normalized)
         dx = amount if "右" in normalized else -amount if "左" in normalized else 0

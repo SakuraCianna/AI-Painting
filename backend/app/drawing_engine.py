@@ -182,7 +182,26 @@ def _validated_canvas_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _target_object_id(connection: sqlite3.Connection, artwork_id: str, target: dict[str, Any] | None) -> str:
     if target and target.get("object_id"):
         return str(target["object_id"])
-    if target and (any(key in target for key in ("name", "semantic_tag", "semantic_tags", "group_id", "layer_id", "color", "selector", "name_contains", "prompt_contains", "color_group", "size_class", "position", "corner"))):
+    if target and (
+        any(
+            key in target
+            for key in (
+                "name",
+                "semantic_tag",
+                "semantic_tags",
+                "group_id",
+                "layer_id",
+                "color",
+                "selector",
+                "name_contains",
+                "prompt_contains",
+                "color_group",
+                "size_class",
+                "position",
+                "corner",
+            )
+        )
+    ):
         objs = find_objects(connection, artwork_id, target)
         if objs:
             return objs[-1].id

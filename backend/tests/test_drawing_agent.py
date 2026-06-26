@@ -1051,4 +1051,3 @@ def test_agent_edit_planner_door_color_changes(monkeypatch) -> None:
         style = result.plan.operations[0].payload["style"]
         assert target["semantic_tag"] == "house.door"
         assert style["fill"] in ("#2563eb", "#7dd3fc")
-

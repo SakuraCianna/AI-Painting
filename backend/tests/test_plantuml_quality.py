@@ -203,26 +203,12 @@ def test_plantuml_edits_add_attributes(monkeypatch) -> None:
     _install_fake_plantuml_server(monkeypatch)
 
     er_geometry = _plantuml_geometry_for("画一个学校选课ER图，包含学生、课程、选课记录、教师")
-    added_er = edit_plantuml_geometry(
-        er_geometry,
-        {
-            "action": "add_attribute",
-            "entity_name": "学生",
-            "attribute_name": "性别"
-        }
-    )
+    added_er = edit_plantuml_geometry(er_geometry, {"action": "add_attribute", "entity_name": "学生", "attribute_name": "性别"})
     _assert_rendered_plantuml_geometry(added_er, "er")
     assert "-- 性别" in added_er["source"]
 
     class_geometry = _plantuml_geometry_for("画一个绘图 Agent UML 类图")
-    added_class = edit_plantuml_geometry(
-        class_geometry,
-        {
-            "action": "add_attribute",
-            "entity_name": "Artwork",
-            "attribute_name": "owner"
-        }
-    )
+    added_class = edit_plantuml_geometry(class_geometry, {"action": "add_attribute", "entity_name": "Artwork", "attribute_name": "owner"})
     assert "+ owner" in added_class["source"]
 
 
@@ -240,7 +226,8 @@ stop
 @enduml"""
 
     fixed = _ensure_swimlane_position(source_bad)
-    assert """@startuml
+    assert (
+        """@startuml
 title 跨职能泳道图
 |销售|
 start
@@ -248,7 +235,9 @@ start
 |运营|
 :资源排期;
 stop
-@enduml""" == fixed
+@enduml"""
+        == fixed
+    )
 
     source_good = """@startuml
 title 流程图
@@ -289,6 +278,3 @@ def test_plantuml_swimlane_domain_matching(monkeypatch) -> None:
     assert "|设计|" in source_exp
     assert "|产品|" in source_exp
     assert "|读者|" not in source_exp
-
-
-

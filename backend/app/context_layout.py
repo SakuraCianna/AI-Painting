@@ -529,9 +529,11 @@ def _find_matching_objects_in_list(objects: list[DrawingObject], selector: dict[
         matched = [obj for obj in matched if obj.group_id == group_id]
     position = selector.get("position")
     if position and matched:
+
         def get_center(obj: DrawingObject):
             bounds = _bounds_for_object(obj)
             return bounds.center_x, bounds.center_y
+
         if position in {"left", "leftmost"}:
             matched = [min(matched, key=lambda o: get_center(o)[0])]
         elif position in {"right", "rightmost"}:

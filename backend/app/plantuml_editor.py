@@ -36,11 +36,7 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
     elif action == "add_er_entity":
         next_source = _add_er_entity(source, str(payload.get("entity_name") or ""))
     elif action == "add_attribute":
-        next_source = _add_attribute(
-            source,
-            str(payload.get("entity_name") or ""),
-            str(payload.get("attribute_name") or "")
-        )
+        next_source = _add_attribute(source, str(payload.get("entity_name") or ""), str(payload.get("attribute_name") or ""))
     elif action == "delete_node":
         next_source = _delete_node(source, str(payload.get("node_text") or ""))
     elif action == "delete_gantt_task":
@@ -78,9 +74,11 @@ def edit_plantuml_geometry(geometry: dict[str, Any], payload: dict[str, Any]) ->
         raise PlantUMLEditError(f"不支持的 PlantUML 编辑动作: {action}")
 
     from .plantuml_renderer import _ensure_swimlane_position
+
     next_source = _ensure_swimlane_position(next_source)
     result = render_plantuml_source(next_source)
     from .agent.plantuml_builder import _fit_plantuml_box
+
     x, y, width, height, display_scale = _fit_plantuml_box(result.width, result.height)
     updated = dict(geometry)
     updated.update(
@@ -211,7 +209,7 @@ def _alias_for_entity(source: str, entity: str) -> str:
     label = _safe_label(entity)
     matched = next((alias for name, alias in aliases.items() if _label_matches(name, label)), None)
     if matched is None:
-        if re.search(rf'\b(?:entity|class|component|database|queue)\s+{re.escape(label)}\b', source, re.IGNORECASE):
+        if re.search(rf"\b(?:entity|class|component|database|queue)\s+{re.escape(label)}\b", source, re.IGNORECASE):
             return label
         raise PlantUMLEditError(f"没有找到 PlantUML 关系端点: {label}")
     return matched
@@ -616,34 +614,27 @@ def _add_attribute(source: str, entity_name: str, attribute_name: str) -> str:
 
     alias = _alias_for_entity(source, entity)
 
-    braces_pattern = re.compile(
-        rf'((?:entity|class)\s+(?:"[^"]+"\s+as\s+|){re.escape(alias)}\s*\{{)([^}}]*)\}}',
-        re.IGNORECASE | re.DOTALL
-    )
+    braces_pattern = re.compile(rf'((?:entity|class)\s+(?:"[^"]+"\s+as\s+|){re.escape(alias)}\s*\{{)([^}}]*)\}}', re.IGNORECASE | re.DOTALL)
     braces_match = braces_pattern.search(source)
     if braces_match:
         body = braces_match.group(2)
-        if re.search(rf'\b{re.escape(attr)}\b', body, re.IGNORECASE):
+        if re.search(rf"\b{re.escape(attr)}\b", body, re.IGNORECASE):
             raise PlantUMLEditError(f"属性 {attr} 在 {entity} 中已存在")
 
         def repl(match):
             header = match.group(1)
             content = match.group(2)
-            if content and not content.endswith('\n'):
-                content += '\n'
-            return f'{header}{content}{prefix}{attr}\n}}'
+            if content and not content.endswith("\n"):
+                content += "\n"
+            return f"{header}{content}{prefix}{attr}\n}}"
 
         return braces_pattern.sub(repl, source, count=1)
     else:
-        simple_pattern = re.compile(
-            rf'((?:entity|class)\s+(?:"[^"]+"\s+as\s+|){re.escape(alias)}\b)(?!\s*\{{)',
-            re.IGNORECASE | re.DOTALL
-        )
+        simple_pattern = re.compile(rf'((?:entity|class)\s+(?:"[^"]+"\s+as\s+|){re.escape(alias)}\b)(?!\s*\{{)', re.IGNORECASE | re.DOTALL)
         if not simple_pattern.search(source):
             raise PlantUMLEditError(f"没有找到 PlantUML 节点: {entity}")
 
         def repl_simple(match):
-            return f'{match.group(1)} {{\n{prefix}{attr}\n}}'
+            return f"{match.group(1)} {{\n{prefix}{attr}\n}}"
 
         return simple_pattern.sub(repl_simple, source, count=1)
-

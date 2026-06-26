@@ -580,12 +580,9 @@ def _plantuml_gantt_graph(text: str) -> AgentSceneGraph:
 def _plantuml_swimlane_graph(text: str) -> AgentSceneGraph:
     lane_names = _extract_swimlane_names(text)
     custom_step_names = _extract_swimlane_step_names(text)
-    
+
     if not lane_names and not custom_step_names:
-        profile = next(
-            (p for p in SWIMLANE_PROFILES if any(kw in text for kw in p.keywords)),
-            SWIMLANE_FALLBACK_PROFILE
-        )
+        profile = next((p for p in SWIMLANE_PROFILES if any(kw in text for kw in p.keywords)), SWIMLANE_FALLBACK_PROFILE)
         lane_names = list(profile.lanes)
         steps = list(profile.steps)
     else:

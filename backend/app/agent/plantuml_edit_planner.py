@@ -430,11 +430,7 @@ def _add_attribute_payload(text: str, diagram_type: str | None) -> dict[str, Any
     attribute_name = _clean_added_item(after)
     attribute_name = re.sub(r"(字段|属性)$", "", attribute_name).strip(" ，,。；;:：、 ")
     if entity_name and attribute_name:
-        return {
-            "action": "add_attribute",
-            "entity_name": entity_name,
-            "attribute_name": attribute_name
-        }
+        return {"action": "add_attribute", "entity_name": entity_name, "attribute_name": attribute_name}
     return None
 
 

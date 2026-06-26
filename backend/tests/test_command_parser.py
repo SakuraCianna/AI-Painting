@@ -697,5 +697,3 @@ def test_parse_move_sun_right_relative() -> None:
     assert "position" not in op.payload["target"]
     assert op.payload["dx"] > 0
     assert op.payload["dy"] == 0
-
-
