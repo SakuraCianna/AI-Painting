@@ -182,6 +182,10 @@ def _validated_canvas_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _target_object_id(connection: sqlite3.Connection, artwork_id: str, target: dict[str, Any] | None) -> str:
     if target and target.get("object_id"):
         return str(target["object_id"])
+    if target and (any(key in target for key in ("name", "semantic_tag", "semantic_tags", "group_id", "layer_id", "color", "selector", "name_contains", "prompt_contains", "color_group", "size_class", "position", "corner"))):
+        objs = find_objects(connection, artwork_id, target)
+        if objs:
+            return objs[-1].id
     object_type = target.get("type") if target else None
     return find_latest_object(connection, artwork_id, object_type).id
 
@@ -284,6 +288,9 @@ def _scale_geometry(geometry: dict[str, Any], factor: float) -> dict[str, Any]:
             center_x = (min(xs) + max(xs)) / 2
             center_y = (min(ys) + max(ys)) / 2
             scaled["commands"] = [_scale_coordinate_dict(command, factor, center_x, center_y) for command in scaled["commands"]]
+    if "displayScale" in scaled and "intrinsicWidth" in scaled and float(scaled["intrinsicWidth"]) > 0:
+        scaled["displayScale"] = round(float(scaled["width"]) / float(scaled["intrinsicWidth"]), 4)
+        scaled["isDownscaled"] = scaled["displayScale"] < 1
     return scaled
 
 
@@ -386,6 +393,23 @@ def _apply_metadata_updates(connection: sqlite3.Connection, artwork_id: str, obj
     update_object(connection, artwork_id, object_id, **kwargs, commit=commit)
 
 
+def _is_explicit_trunk_target(target: Any) -> bool:
+    if not isinstance(target, dict):
+        return False
+    if target.get("semantic_tag") == "tree.trunk":
+        return True
+    tags = target.get("semantic_tags")
+    if isinstance(tags, list) and "tree.trunk" in tags:
+        return True
+    if isinstance(tags, str) and tags == "tree.trunk":
+        return True
+    for key in ("name", "name_contains", "prompt_contains"):
+        val = target.get(key)
+        if val and "树干" in str(val):
+            return True
+    return False
+
+
 def apply_operation(
     connection: sqlite3.Connection,
     artwork_id: str,
@@ -429,8 +453,12 @@ def apply_operation(
         current_object = _target_object(connection, artwork_id, payload.get("target"))
         object_id = current_object.id
         style_updates = _validated_style(payload.get("style", {}))
-        inverse_payload = {"target": {"object_id": object_id}, "style": {key: current_object.style.get(key) for key in style_updates}}
-        update_object(connection, artwork_id, object_id, style=style_updates, commit=commit)
+        obj_style_updates = dict(style_updates)
+        if "tree.trunk" in current_object.semantic_tags and not _is_explicit_trunk_target(payload.get("target")):
+            obj_style_updates.pop("fill", None)
+            obj_style_updates.pop("stroke", None)
+        inverse_payload = {"target": {"object_id": object_id}, "style": {key: current_object.style.get(key) for key in obj_style_updates}}
+        update_object(connection, artwork_id, object_id, style=obj_style_updates, commit=commit)
         message = "已更新样式"
     elif operation_type == "set_metadata":
         current = _target_object(connection, artwork_id, payload.get("target"))
@@ -443,10 +471,16 @@ def apply_operation(
         if not targets:
             raise KeyError("No matching drawing objects exist")
         style_updates = _validated_style(payload.get("style", {}))
-        inverse_payload = {"items": [{"object_id": obj.id, "style": {key: obj.style.get(key) for key in style_updates}} for obj in targets]}
-        payload["target"] = {"object_ids": [obj.id for obj in targets]}
+        items = []
         for obj in targets:
-            update_object(connection, artwork_id, obj.id, style=style_updates, commit=commit)
+            obj_style_updates = dict(style_updates)
+            if "tree.trunk" in obj.semantic_tags and not _is_explicit_trunk_target(payload.get("target")):
+                obj_style_updates.pop("fill", None)
+                obj_style_updates.pop("stroke", None)
+            update_object(connection, artwork_id, obj.id, style=obj_style_updates, commit=commit)
+            items.append({"object_id": obj.id, "style": {key: obj.style.get(key) for key in obj_style_updates}})
+        inverse_payload = {"items": items}
+        payload["target"] = {"object_ids": [obj.id for obj in targets]}
         message = f"已更新 {len(targets)} 个对象的样式"
     elif operation_type == "set_metadata_many":
         targets = find_objects(connection, artwork_id, payload.get("target"))

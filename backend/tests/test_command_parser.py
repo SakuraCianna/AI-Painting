@@ -680,3 +680,22 @@ def test_parse_rename_latest_object() -> None:
     assert plan.operations[0].operation_type == "set_metadata"
     assert plan.operations[0].payload["target"] == {"selector": "latest"}
     assert plan.operations[0].payload["name"] == "太阳"
+
+
+def test_parse_move_sun_to_top_right() -> None:
+    plan = parse_command("把太阳移动到画面的右上角")
+    assert len(plan.operations) == 1
+    assert plan.operations[0].operation_type in ("move_object", "move_many")
+
+
+def test_parse_move_sun_right_relative() -> None:
+    plan = parse_command("把太阳往右边移动")
+    assert len(plan.operations) == 1
+    op = plan.operations[0]
+    assert op.operation_type == "move_many"
+    assert op.payload["target"]["semantic_tag"] == "sun"
+    assert "position" not in op.payload["target"]
+    assert op.payload["dx"] > 0
+    assert op.payload["dy"] == 0
+
+

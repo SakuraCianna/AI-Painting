@@ -555,7 +555,11 @@ def test_group_query_recolors_second_tree_group(client: TestClient, monkeypatch)
     assert body["plan"]["planner_source"] == "agent"
     edited_left_tree = [obj for obj in body["artwork"]["objects"] if obj["group_id"] == "tree-left"]
     edited_far_tree = [obj for obj in body["artwork"]["objects"] if obj["group_id"] == "tree-far"]
-    assert all(obj["style"]["fill"] == "#facc15" for obj in edited_left_tree)
+    left_crowns = [obj for obj in edited_left_tree if obj["type"] == "circle"]
+    left_trunks = [obj for obj in edited_left_tree if obj["type"] == "rect"]
+    assert len(left_crowns) > 0
+    assert all(obj["style"]["fill"] == "#facc15" for obj in left_crowns)
+    assert all(obj["style"]["fill"] != "#facc15" for obj in left_trunks)
     assert any(obj["style"]["fill"] != "#facc15" for obj in edited_far_tree)
 
     undo_response = client.post(f"/api/artworks/{artwork_id}/undo")
@@ -1274,11 +1278,11 @@ def test_voice_command_edits_tree_near_door(client: TestClient) -> None:
             "style": {"fill": "#2563eb", "stroke": "#1e3a8a", "strokeWidth": 2},
         },
     )
-    for name, group_id, object_type, geometry in [
-        ("近树树干", "tree-near", "rect", {"x": 620, "y": 430, "width": 35, "height": 110}),
-        ("近树树冠", "tree-near", "circle", {"cx": 638, "cy": 385, "radius": 70}),
-        ("远树树干", "tree-far", "rect", {"x": 100, "y": 450, "width": 30, "height": 90}),
-        ("远树树冠", "tree-far", "circle", {"cx": 115, "cy": 405, "radius": 55}),
+    for name, group_id, object_type, tags, geometry in [
+        ("近树树干", "tree-near", "rect", ["tree", "tree.trunk"], {"x": 620, "y": 430, "width": 35, "height": 110}),
+        ("近树树冠", "tree-near", "circle", ["tree", "tree.crown"], {"cx": 638, "cy": 385, "radius": 70}),
+        ("远树树干", "tree-far", "rect", ["tree", "tree.trunk"], {"x": 100, "y": 450, "width": 30, "height": 90}),
+        ("远树树冠", "tree-far", "circle", ["tree", "tree.crown"], {"cx": 115, "cy": 405, "radius": 55}),
     ]:
         _seed_drawing_object(
             artwork_id,
@@ -1286,7 +1290,7 @@ def test_voice_command_edits_tree_near_door(client: TestClient) -> None:
                 "type": object_type,
                 "name": name,
                 "group_id": group_id,
-                "semantic_tags": ["tree"],
+                "semantic_tags": tags,
                 "geometry": geometry,
                 "style": {"fill": "#16a34a", "stroke": "#166534", "strokeWidth": 2},
             },
@@ -1296,7 +1300,7 @@ def test_voice_command_edits_tree_near_door(client: TestClient) -> None:
 
     assert response.status_code == 200
     objects_by_name = {obj["name"]: obj for obj in response.json()["artwork"]["objects"]}
-    assert objects_by_name["近树树干"]["style"]["fill"] == "#facc15"
+    assert objects_by_name["近树树干"]["style"]["fill"] == "#16a34a"
     assert objects_by_name["近树树冠"]["style"]["fill"] == "#facc15"
     assert objects_by_name["远树树干"]["style"]["fill"] == "#16a34a"
     assert objects_by_name["远树树冠"]["style"]["fill"] == "#16a34a"

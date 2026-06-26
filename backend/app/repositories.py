@@ -261,6 +261,16 @@ def find_latest_object(connection: sqlite3.Connection, artwork_id: str, object_t
             """,
             (artwork_id, object_type),
         ).fetchone()
+        if row is None and object_type == "image":
+            row = connection.execute(
+                """
+                SELECT * FROM drawing_objects
+                WHERE artwork_id = ? AND type = 'plantuml'
+                ORDER BY z_index DESC, created_at DESC
+                LIMIT 1
+                """,
+                (artwork_id,),
+            ).fetchone()
     else:
         row = connection.execute(
             """
@@ -305,6 +315,15 @@ def find_objects(connection: sqlite3.Connection, artwork_id: str, selector: dict
             """,
             (artwork_id, object_type),
         ).fetchall()
+        if not rows and object_type == "image":
+            rows = connection.execute(
+                """
+                SELECT * FROM drawing_objects
+                WHERE artwork_id = ? AND type = 'plantuml'
+                ORDER BY z_index ASC, created_at ASC
+                """,
+                (artwork_id,),
+            ).fetchall()
     else:
         rows = connection.execute(
             """

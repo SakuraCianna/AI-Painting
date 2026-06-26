@@ -121,6 +121,12 @@ def _operation_payload_for_text(text: str) -> dict[str, Any] | None:
         return None
     diagram_type = _diagram_type_for_text(text)
     looks_like_gantt_task_update = _looks_like_gantt_task_update(text)
+    add_attr_payload = _add_attribute_payload(text, diagram_type)
+    if add_attr_payload:
+        target = {"selector": "all", "type": "plantuml"}
+        if diagram_type:
+            target["semantic_tag"] = f"plantuml.{diagram_type}"
+        return {"target": target, **add_attr_payload}
     if diagram_type is None and not any(keyword in text for keyword in ("plantuml", "图表")) and not looks_like_gantt_task_update:
         generic_rename_payload = _generic_label_rename_payload(text)
         if generic_rename_payload:
@@ -409,6 +415,29 @@ def _update_relation_payload(text: str) -> dict[str, Any] | None:
     return payload
 
 
+def _add_attribute_payload(text: str, diagram_type: str | None) -> dict[str, Any] | None:
+    if not any(kw in text for kw in ("字段", "属性")):
+        return None
+    matches = [(text.rfind(word), word) for word in ADD_WORDS if word in text]
+    if not matches:
+        return None
+    position, word = sorted(matches)[-1]
+    before = text[:position]
+    after = text[position + len(word) :]
+    entity_name = _clean_fragment(before)
+    entity_name = re.sub(r"(节点|实体|类|名|里|里面|中|内|的)$", "", entity_name).strip(" ，,。；;:：、 ")
+    entity_name = _clean_fragment(entity_name)
+    attribute_name = _clean_added_item(after)
+    attribute_name = re.sub(r"(字段|属性)$", "", attribute_name).strip(" ，,。；;:：、 ")
+    if entity_name and attribute_name:
+        return {
+            "action": "add_attribute",
+            "entity_name": entity_name,
+            "attribute_name": attribute_name
+        }
+    return None
+
+
 def _extract_after_add_word(text: str) -> str | None:
     matches = [(text.rfind(word), word) for word in ADD_WORDS if word in text]
     if not matches:
@@ -492,6 +521,8 @@ def _action_title(payload: dict[str, Any]) -> str:
     action = payload.get("action")
     if action == "rename":
         return f"把 {payload.get('old_text')} 改成 {payload.get('new_text')}"
+    if action == "add_attribute":
+        return f"在 {payload.get('entity_name')} 中增加属性 {payload.get('attribute_name')}"
     if action == "add_gantt_task":
         return f"增加甘特任务 {payload.get('task_name')}"
     if action == "update_gantt_task":

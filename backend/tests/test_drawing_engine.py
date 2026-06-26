@@ -6,7 +6,7 @@ import pytest
 
 from app.database import connect_db, init_db
 from app.drawing_engine import apply_operation, apply_operation_plan, redo_last_operation, undo_last_operation
-from app.repositories import create_artwork, find_objects, get_artwork
+from app.repositories import create_artwork, find_latest_object, find_objects, get_artwork
 from app.schemas import ArtworkCreateRequest, OperationRequest
 
 
@@ -795,3 +795,122 @@ def test_scale_and_replace_shape_reject_invalid_payload_without_mutating_object(
         assert obj.geometry["radius"] == 64
         operations = connection.execute("SELECT operation_type FROM operations WHERE artwork_id = ? ORDER BY rowid", (artwork_id,)).fetchall()
         assert [row["operation_type"] for row in operations] == ["add_object"]
+
+
+def test_plantuml_fallback_and_scale(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        plantuml_id = _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "plantuml",
+                "name": "时序图",
+                "geometry": {
+                    "x": 100,
+                    "y": 100,
+                    "width": 200,
+                    "height": 200,
+                    "displayScale": 1.0,
+                    "isDownscaled": False,
+                    "intrinsicWidth": 200,
+                    "intrinsicHeight": 200,
+                },
+                "style": {"fill": "transparent", "stroke": "#dadce0"},
+            },
+        )
+
+        latest = find_latest_object(connection, artwork_id, "image")
+        assert latest.id == plantuml_id
+
+        matches = find_objects(connection, artwork_id, {"type": "image"})
+        assert len(matches) == 1
+        assert matches[0].id == plantuml_id
+
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(
+                operation_type="scale_object",
+                payload={"target": {"object_id": plantuml_id}, "factor": 2.0}
+            )
+        )
+
+        obj = get_artwork(connection, artwork_id).objects[0]
+        assert obj.geometry["width"] == 400
+        assert obj.geometry["height"] == 400
+        assert obj.geometry["displayScale"] == 2.0
+        assert obj.geometry["isDownscaled"] is False
+
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(
+                operation_type="scale_object",
+                payload={"target": {"object_id": plantuml_id}, "factor": 0.25}
+            )
+        )
+        obj = get_artwork(connection, artwork_id).objects[0]
+        assert obj.geometry["width"] == 100
+        assert obj.geometry["displayScale"] == 0.5
+        assert obj.geometry["isDownscaled"] is True
+
+
+def test_tree_trunk_coloring_skip(tmp_path: Path) -> None:
+    with _connection(tmp_path) as connection:
+        artwork_id = _create_artwork(connection)
+        trunk_id = _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "rect",
+                "name": "树干",
+                "semantic_tags": ["tree", "tree.trunk"],
+                "geometry": {"x": 100, "y": 100, "width": 20, "height": 80},
+                "style": {"fill": "#92400e", "stroke": "#7c2d12"},
+            },
+        )
+        crown_id = _add_object(
+            connection,
+            artwork_id,
+            {
+                "type": "circle",
+                "name": "树冠",
+                "semantic_tags": ["tree", "tree.crown"],
+                "geometry": {"cx": 110, "cy": 60, "radius": 50},
+                "style": {"fill": "#16a34a", "stroke": "#15803d"},
+            },
+        )
+
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(
+                operation_type="set_style_many",
+                payload={
+                    "target": {"semantic_tag": "tree"},
+                    "style": {"fill": "#22c55e", "stroke": "#15803d"}
+                }
+            )
+        )
+
+        trunk_obj = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == trunk_id)
+        assert trunk_obj.style["fill"] == "#92400e"
+
+        crown_obj = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == crown_id)
+        assert crown_obj.style["fill"] == "#22c55e"
+
+        apply_operation(
+            connection,
+            artwork_id,
+            OperationRequest(
+                operation_type="set_style",
+                payload={
+                    "target": {"semantic_tag": "tree.trunk"},
+                    "style": {"fill": "#000000"}
+                }
+            )
+        )
+        trunk_obj = next(obj for obj in get_artwork(connection, artwork_id).objects if obj.id == trunk_id)
+        assert trunk_obj.style["fill"] == "#000000"
+

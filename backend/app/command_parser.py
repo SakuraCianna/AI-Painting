@@ -53,7 +53,7 @@ VOICE_NOISE_STRIP_PATTERN = re.compile(r"[\s\.,!?;:，。！？；：、“”�
 CONTENT_PATTERN = re.compile(r"(?:写|内容是|文字是|文本是)(.+)$")
 TITLE_PATTERN = re.compile(r"(?:名字叫|命名为|叫)([\u4e00-\u9fa5a-zA-Z0-9_-]+)")
 OBJECT_NAME_PATTERN = re.compile(r"(?:名字叫|命名为|叫)\s*([\u4e00-\u9fa5a-zA-Z0-9_-]{1,16})")
-CREATE_VERB_PATTERN = re.compile(r"(?:再\s*)?(?:画|创建|添加|生成|新建|加)")
+CREATE_VERB_PATTERN = re.compile(r"(?:再\s*)?(?:画(?!面|布|笔|风|像|框|册|作|卷)|创建|添加|生成|新建|(?<!更)加(?!粗|工|强|班|减|乘|除))")
 DIAGRAM_TYPE_KEYWORDS = ("er图", "er 图", "实体关系图", "架构图", "结构图", "流程图", "时序图", "序列图", "类图", "uml", "甘特图", "泳道图", "组织结构图")
 ASR_ER_SUFFIX_CONFUSIONS = ("的一样", "的一项", "的一氧", "的一样的", "的一张", "的一二", "的er", "的e r", "一样", "一项", "一氧")
 ASR_ER_CONTEXT_HINTS = (
@@ -368,6 +368,41 @@ def is_voice_noise_input(text: str) -> bool:
     if re.fullmatch(r"(?:h+m+|u+h+|u+m+|e+r+|e+m+|a+h+|o+h+)", compact):
         return True
     return False
+
+
+def _has_draw_or_create_keyword(text: str, include_addition: bool = True) -> bool:
+    if "创建" in text or "添加" in text or "新建" in text or "生成" in text:
+        return True
+    if re.search(r"画(?!面|布|笔|风|像|框|册|作|卷)", text):
+        return True
+    if include_addition:
+        if "还有" in text or "再" in text:
+            return True
+        if re.search(r"(?<!更)加(?!粗|工|强|班|减|乘|除)", text):
+            return True
+    return False
+
+
+def _extract_destination_position(text: str) -> str | None:
+    if "左上" in text:
+        return "top_left"
+    if "右上" in text:
+        return "top_right"
+    if "左下" in text:
+        return "bottom_left"
+    if "右下" in text:
+        return "bottom_right"
+    if "左边" in text or "左侧" in text:
+        return "left"
+    if "右边" in text or "右侧" in text:
+        return "right"
+    if "顶部" in text or "上方" in text:
+        return "top"
+    if "底部" in text or "下方" in text:
+        return "bottom"
+    if "中间" in text or "中央" in text:
+        return "center"
+    return None
 
 
 def _voice_noise_clarification_plan(raw_text: str, normalized_text: str) -> CommandPlan:
@@ -702,6 +737,8 @@ def _target_selector(text: str, *, include_layer: bool = True, include_color: bo
     elif len(relation_selectors) > 1:
         target["selector"] = "all"
         target["relative_to_all"] = relation_selectors
+    if target.get("semantic_tag") in {"house", "sun", "tree"}:
+        target["include_group_members"] = True
     return target
 
 
@@ -1956,7 +1993,7 @@ def parse_command(text: str) -> CommandPlan:
         and any(keyword in normalized for keyword in ("图片", "图像", "照片", "肖像", "头像", "背景", "素材"))
     ):
         return _generated_image_plan(text, normalized)
-    elif any(keyword in normalized for keyword in ("人物肖像", "肖像", "头像")) and any(keyword in normalized for keyword in ("画", "创建", "添加")):
+    elif any(keyword in normalized for keyword in ("人物肖像", "肖像", "头像")) and _has_draw_or_create_keyword(normalized, include_addition=False):
         return _portrait_plan(text, normalized)
     elif any(keyword in normalized for keyword in ("温馨的小屋", "温馨小屋")) and "树" in normalized and ("路" in normalized or "小路" in normalized):
         return _cozy_cabin_scene_plan(text, normalized)
@@ -1964,35 +2001,35 @@ def parse_command(text: str) -> CommandPlan:
         "场景" not in normalized
         and ("房子" in normalized or "小屋" in normalized)
         and "云" in normalized
-        and any(keyword in normalized for keyword in ("还有", "再", "加", "添加"))
+        and _has_draw_or_create_keyword(normalized, include_addition=True)
     ):
         return _house_cloud_followup_plan(text, normalized)
     elif (
         "场景" not in normalized
         and "太阳" in normalized
         and "云" in normalized
-        and any(keyword in normalized for keyword in ("画", "创建", "添加", "加", "还有", "再"))
+        and _has_draw_or_create_keyword(normalized, include_addition=True)
     ):
         return _sun_cloud_plan(text, normalized)
     elif (
         "场景" not in normalized
         and any(keyword in normalized for keyword in ("树", "太阳"))
-        and any(keyword in normalized for keyword in ("画", "创建", "添加", "加", "还有", "再"))
+        and _has_draw_or_create_keyword(normalized, include_addition=True)
     ):
         return _scene_object_followup_plan(text, normalized)
     elif _needs_scene_planner(normalized):
         return _scene_clarification_plan(text, normalized)
-    elif "房子" in normalized and any(keyword in normalized for keyword in ("画", "创建", "添加")):
+    elif "房子" in normalized and _has_draw_or_create_keyword(normalized, include_addition=False):
         return _house_plan(text, normalized)
     elif "星" in normalized and _extract_count(normalized, 1) > 1:
         return _multi_star_plan(text, normalized)
     elif (
         (repeated_shape := _find_shape(latest_create_clause))
         and _extract_draw_count(latest_create_clause, 1) > 1
-        and any(keyword in normalized for keyword in ("画", "创建", "添加"))
+        and _has_draw_or_create_keyword(latest_create_clause, include_addition=False)
     ):
         return _multi_shape_plan(text, latest_create_clause, repeated_shape)
-    elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not any(keyword in normalized for keyword in ("画", "创建", "新建", "保存")):
+    elif any(keyword in normalized for keyword in ("命名为", "名字叫")) and not (any(keyword in normalized for keyword in ("新建", "保存")) or _has_draw_or_create_keyword(normalized, include_addition=False)):
         object_name = _extract_object_name(normalized)
         if object_name:
             target = {"selector": "latest"} if "它" in normalized else _target_selector(normalized, include_layer=False, include_color=False)
@@ -2039,11 +2076,24 @@ def parse_command(text: str) -> CommandPlan:
             target = _target_selector(normalized)
             operation_type = "set_style_many" if _is_many_target(target) else "set_style"
             operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "style": style}))
+    elif any(keyword in normalized for keyword in ("移动到", "移到", "放到", "置于")) and not any(keyword in normalized for keyword in ("层", "图层")):
+        dest = _extract_destination_position(normalized)
+        if dest:
+            clean_text = re.sub(r"(?:移动到|移到|放到|置于)\s*(?:画面的|画布的)?(?:左上|右上|左下|右下|左边|左侧|右边|右侧|顶部|上方|底部|下方|中间|中央|中间区域)(?:角|区域|位置)?", "", normalized)
+            clean_text = re.sub(r"移动|移|放|置", "", clean_text)
+            target = _target_selector(clean_text)
+            operation_type = "move_many" if _is_many_target(target) else "move_object"
+            operations.append(OperationRequest(
+                operation_type=operation_type,
+                payload={"target": target, "dx": 0, "dy": 0, "destination": dest}
+            ))
     elif "移动" in normalized or "往" in normalized or "向" in normalized:
         amount = _extract_movement_amount(normalized)
         dx = amount if "右" in normalized else -amount if "左" in normalized else 0
         dy = amount if "下" in normalized else -amount if "上" in normalized else 0
-        target = _target_selector(normalized)
+        clean_text = re.sub(r"(?:往|向|朝)\s*(?:左|右|上|下|东|西|南|北)\s*(?:边|侧|方|角)?", "", normalized)
+        clean_text = re.sub(r"移动|移|偏移", "", clean_text)
+        target = _target_selector(clean_text)
         operation_type = "move_many" if _is_many_target(target) else "move_object"
         operations.append(OperationRequest(operation_type=operation_type, payload={"target": target, "dx": dx, "dy": dy}))
     elif "放大" in normalized or "缩小" in normalized or "变大" in normalized or "变小" in normalized or "改大" in normalized or "改小" in normalized:

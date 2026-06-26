@@ -493,12 +493,94 @@ def _is_open_vector_scene_plan(plan: CommandPlan) -> bool:
     return any(step.target.get("domain") == "open_vector_scene" for step in plan.scene_plan.steps)
 
 
+ABS_POSITION_MAP = {
+    "top_left": (160, 140),
+    "top_right": (864, 140),
+    "bottom_left": (160, 628),
+    "bottom_right": (864, 628),
+    "left": (256, 384),
+    "right": (768, 384),
+    "top": (512, 160),
+    "bottom": (512, 608),
+    "center": (512, 384),
+}
+
+
+def _find_matching_objects_in_list(objects: list[DrawingObject], selector: dict[str, Any]) -> list[DrawingObject]:
+    matched = list(objects)
+    if selector.get("object_ids"):
+        ids = set(selector["object_ids"])
+        return [obj for obj in matched if obj.id in ids]
+    obj_type = selector.get("type")
+    if obj_type:
+        matched = [obj for obj in matched if obj.type == obj_type]
+    semantic_tag = selector.get("semantic_tag")
+    if semantic_tag:
+        matched = [obj for obj in matched if semantic_tag in obj.semantic_tags]
+    semantic_tags = selector.get("semantic_tags")
+    if semantic_tags:
+        wanted_tags = set(semantic_tags)
+        matched = [obj for obj in matched if wanted_tags.intersection(obj.semantic_tags)]
+    layer_id = selector.get("layer_id")
+    if layer_id:
+        matched = [obj for obj in matched if obj.layer_id == layer_id]
+    group_id = selector.get("group_id")
+    if group_id:
+        matched = [obj for obj in matched if obj.group_id == group_id]
+    position = selector.get("position")
+    if position and matched:
+        def get_center(obj: DrawingObject):
+            geom = obj.geometry
+            if "cx" in geom or "cy" in geom:
+                return float(geom.get("cx", 0)), float(geom.get("cy", 0))
+            if "x" in geom or "y" in geom:
+                w = float(geom.get("width", geom.get("size", 0)))
+                h = float(geom.get("height", geom.get("size", 0)))
+                return float(geom.get("x", 0)) + w / 2, float(geom.get("y", 0)) + h / 2
+            return 0.0, 0.0
+        if position in {"left", "leftmost"}:
+            matched = [min(matched, key=lambda o: get_center(o)[0])]
+        elif position in {"right", "rightmost"}:
+            matched = [max(matched, key=lambda o: get_center(o)[0])]
+        elif position in {"top", "topmost"}:
+            matched = [min(matched, key=lambda o: get_center(o)[1])]
+        elif position in {"bottom", "bottommost"}:
+            matched = [max(matched, key=lambda o: get_center(o)[1])]
+    if selector.get("selector") == "latest" and not position and matched:
+        matched = [matched[-1]]
+    if selector.get("include_group_members") and matched:
+        group_ids = {obj.group_id for obj in matched if obj.group_id}
+        if group_ids:
+            matched = [obj for obj in objects if obj.group_id in group_ids or obj in matched]
+    return matched
+
+
 def adjust_plan_for_existing_artwork(plan: CommandPlan, artwork: ArtworkResponse) -> CommandPlan:
-    if not any(operation.operation_type == "add_object" for operation in plan.operations):
-        return plan
-    if not artwork.objects and not _is_open_vector_scene_plan(plan):
+    if not any(operation.operation_type in {"add_object", "move_object", "move_many"} for operation in plan.operations):
         return plan
     adjusted = plan.model_copy(deep=True)
-    avoid_generic_overlap = any(keyword in plan.normalized_text for keyword in FOLLOW_UP_HINTS)
+    next_operations = []
+    for operation in adjusted.operations:
+        if operation.operation_type in {"move_object", "move_many"} and "destination" in operation.payload:
+            dest = operation.payload["destination"]
+            target_selector = operation.payload.get("target", {})
+            matching = _find_matching_objects_in_list(artwork.objects, target_selector)
+            if matching and dest in ABS_POSITION_MAP:
+                bounds = _group_bounds(matching)
+                target_x, target_y = ABS_POSITION_MAP[dest]
+                dx = int(target_x - bounds.center_x)
+                dy = int(target_y - bounds.center_y)
+                operation.payload["dx"] = dx
+                operation.payload["dy"] = dy
+        next_operations.append(operation)
+    adjusted.operations = next_operations
+
+    if not any(operation.operation_type == "add_object" for operation in adjusted.operations):
+        return adjusted
+
+    if not artwork.objects and not _is_open_vector_scene_plan(adjusted):
+        return adjusted
+
+    avoid_generic_overlap = any(keyword in adjusted.normalized_text for keyword in FOLLOW_UP_HINTS)
     adjusted.operations = _contextualized_add_operations(list(adjusted.operations), artwork, avoid_generic_overlap=avoid_generic_overlap)
     return adjusted

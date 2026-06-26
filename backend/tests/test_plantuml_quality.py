@@ -181,3 +181,49 @@ def test_plantuml_edits_keep_sources_renderable(monkeypatch) -> None:  # noqa: A
     )
     _assert_rendered_plantuml_geometry(reconnected_er, "er")
     assert "entity_1 ||--o{ entity_4 : 支付" in reconnected_er["source"]
+
+
+def test_plantuml_edits_recalculate_geometry(monkeypatch) -> None:
+    _install_fake_plantuml_server(monkeypatch, width=240, height=480)
+    flow_geometry = _plantuml_geometry_for("画一个语音绘图流程图，从用户语音到ASR，再到规划器，最后到画布执行")
+    assert flow_geometry["width"] == 240
+    assert flow_geometry["height"] == 480
+
+    _install_fake_plantuml_server(monkeypatch, width=2400, height=1200)
+    renamed_flow = edit_plantuml_geometry(flow_geometry, {"action": "rename", "old_text": "ASR识别", "new_text": "语音识别"})
+    assert renamed_flow["intrinsicWidth"] == 2400
+    assert renamed_flow["intrinsicHeight"] == 1200
+    assert renamed_flow["width"] == 928
+    assert renamed_flow["height"] == 464
+    assert renamed_flow["displayScale"] == 0.39
+    assert renamed_flow["isDownscaled"] is True
+
+
+def test_plantuml_edits_add_attributes(monkeypatch) -> None:
+    _install_fake_plantuml_server(monkeypatch)
+
+    er_geometry = _plantuml_geometry_for("画一个学校选课ER图，包含学生、课程、选课记录、教师")
+    added_er = edit_plantuml_geometry(
+        er_geometry,
+        {
+            "action": "add_attribute",
+            "entity_name": "学生",
+            "attribute_name": "性别"
+        }
+    )
+    _assert_rendered_plantuml_geometry(added_er, "er")
+    assert "-- 性别" in added_er["source"]
+
+    class_geometry = _plantuml_geometry_for("画一个绘图 Agent UML 类图")
+    added_class = edit_plantuml_geometry(
+        class_geometry,
+        {
+            "action": "add_attribute",
+            "entity_name": "Artwork",
+            "attribute_name": "owner"
+        }
+    )
+    _assert_rendered_plantuml_geometry(added_class, "class")
+    assert "+ owner" in added_class["source"]
+
+
